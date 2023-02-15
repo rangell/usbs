@@ -83,45 +83,14 @@ def fw(X, y, eps, max_steps):
         X = (1-eta)*X + eta*X_update_dir
     return X
 
-def fw_linesearch(X, y, eps, max_steps):
-    curvature_est_shinkage = 0.99
-    curvature_est_expansion = 2.0
-
-    for i in range(max_steps):
-        grad = C + A_adjoint(y) + A_adjoint(A_operator(X) - b)
-        _, min_eigvec = scipy.sparse.linalg.eigsh(grad, k=1, which="SA")
-        X_update_dir = (min_eigvec @ min_eigvec.T) - X
-        X_update_dir_norm = np.linalg.norm(X_update_dir, ord="fro")
-
-        # Set the initial local curvature estimate
-        if i == 0:
-            local_curve_est = np.linalg.norm(
-                A_adjoint(A_operator(X) - b) - A_adjoint(A_operator(X + eps*X_update_dir) - b))
-            local_curve_est = local_curve_est / (eps * X_update_dir_norm)
-
-        # Shrink local curvature estimate
-        local_curve_est = local_curve_est * curvature_est_shinkage
-
-        # Check convergence
-        obj_gap_lb = -1 * np.trace(grad @ X_update_dir)
-        if i > 0 and obj_gap_lb < eps:
-            break
-
-        # Line search
-        eta = min(obj_gap_lb / (local_curve_est * X_update_dir_norm**2), 1)
-        for j in range(10):
-            _a = aug_Lagrangian(X + eta*X_update_dir, y)
-            _b = (aug_Lagrangian(X, y) - eta*obj_gap_lb + 
-                  ((local_curve_est * eta**2 * X_update_dir_norm**2) / 2))
-            if _a < _b + eps:
-                break
-            local_curve_est = local_curve_est * curvature_est_expansion
-            eta = min(obj_gap_lb / (local_curve_est * X_update_dir_norm**2), 1)
-        if j > 8:
-            raise AssertionError("Limit reached")
-
-        X = X + eta*X_update_dir
-
+def cgal_primal_step(X, y, eps, t):
+    eta = 2.0 / (t + 2.0)
+    grad = C + A_adjoint(y) + A_adjoint(A_operator(X) - b)
+    _, min_eigvec = scipy.sparse.linalg.eigsh(grad, k=1, which="SA")
+    X_update_dir = min_eigvec @ min_eigvec.T
+    if i > 0 and np.trace(grad @ (X - X_update_dir)) < eps:
+        return X
+    X = (1-eta)*X + eta*X_update_dir
     return X
 
 eps = 1e-4
@@ -141,15 +110,15 @@ y = np.zeros_like(b)
 max_steps = int(1e6)
 for t in range(max_steps):
     # primal step
-    X = pgd(X, y, eps, max_steps)
+    #X = pgd(X, y, eps, max_steps)
     #X = fw(X, y, eps, max_steps)
-    #X = fw_linesearch(X, y, eps, max_steps)
+    X = cgal_primal_step(X, y, eps, t)
 
     # dual step
     y_prev = y
     y = y_prev + A_operator(X) - b
 
-    print(np.max(np.abs(y - y_prev)))
+    #print(np.max(np.abs(y - y_prev)))
 
     # check convergence
     if np.max(np.abs(y - y_prev)) < eps:
