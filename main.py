@@ -41,6 +41,7 @@ prob.solve(solver=cp.SCS)
 print("The optimal value is", prob.value)
 print("A solution X is")
 print(X.value)
+X_scs = X.value
 
 
 ### BEGIN AUGMENTED LAGRANGIAN METHODS ###
@@ -98,10 +99,9 @@ def spec_fw(X, y, k, eps, max_steps):
         grad = C + A_adjoint(y) + A_adjoint(A_operator(X) - b)
         _, V = scipy.sparse.linalg.eigsh(grad, k=k, which="SA")
 
-        # how should we initialize these?
         step_size = 0.1
-        S = np.zeros((k, k))
-        eta = 1
+        S = np.eye(k) / k
+        eta = 0
         for j in range(max_steps):
             grad_S = (V.T @ C @ V
                       + V.T @ A_adjoint(y) @ V
@@ -136,13 +136,6 @@ def spec_fw(X, y, k, eps, max_steps):
             if np.max(np.abs(S_new - S)) < eps and np.abs(eta - eta_new) < eps:
                 break
 
-            try:
-                assert np.isclose(np.trace(S_new) + eta_new, 1)
-            except:
-                print("ASSERTION THROWN!!!!")
-                embed()
-                exit()
-
             S = S_new
             eta = eta_new
         
@@ -154,8 +147,6 @@ def spec_fw(X, y, k, eps, max_steps):
         X = X_new
 
     return X
-
-
 
 
 eps = 1e-4
@@ -175,18 +166,20 @@ y = np.zeros_like(b)
 max_steps = int(1e6)
 for t in range(max_steps):
     # primal step
-    #X = pgd(X, y, eps, max_steps)
-    #X = fw(X, y, eps, max_steps)
+    X1 = pgd(X, y, eps, max_steps)
+    X2 = fw(X, y, eps, max_steps)
     #X = cgal_primal_step(X, y, eps, t)
 
     k = 2
-    X = spec_fw(X, y, k, eps, max_steps)
+    X3 = spec_fw(X, y, k, eps, max_steps)
+
+    X = X1
 
     # dual step
     y_prev = y
     y = y_prev + A_operator(X) - b
 
-    print(np.max(np.abs(y - y_prev)))
+    print(np.max(np.abs(y - y_prev)), np.mean(np.abs(y - y_prev)))
 
     # check convergence
     if np.max(np.abs(y - y_prev)) < eps:
