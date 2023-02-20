@@ -166,7 +166,20 @@ y = np.zeros_like(b)
 max_steps = int(1e6)
 for t in range(max_steps):
     # primal step
-    X1 = pgd(X, y, eps, max_steps)
+    X1 = pgd(X, y, eps*0.1, max_steps)
+
+    X = np.zeros((n, n))
+    X2 = pgd(X, y, eps*0.1, max_steps)
+
+    X = np.zeros((n, n))
+    X3 = fw(X, y, eps, max_steps)
+
+    X = np.zeros((n, n))
+    k = 2
+    X4 = spec_fw(X, y, k, eps*0.1, max_steps)
+    embed()
+    exit()
+
     X2 = fw(X, y, eps, max_steps)
     #X = cgal_primal_step(X, y, eps, t)
 
