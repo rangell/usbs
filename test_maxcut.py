@@ -51,6 +51,53 @@ def create_C_matvec(C: csc_matrix) -> Callable[[np.ndarray], np.ndarray]:
     return C_matvec
 
 
+def create_A_operator(n: int) -> Callable[[np.ndarray], np.ndarray]:
+    @nb.njit(parallel=True, fastmath=True)
+    def A_operator(X: np.ndarray) -> np.ndarray:
+        z = np.empty((n,))
+        for i in nb.prange(n):
+            z[i] = X[i, i]
+        return z
+    return A_operator
+
+
+def create_A_operator_slim(n: int) -> Callable[[np.ndarray], np.ndarray]:
+    @nb.njit(parallel=True, fastmath=True)
+    def A_operator_slim(u: np.ndarray) -> np.ndarray:
+        z = np.empty((n,))
+        for i in nb.prange(n):
+            z[i] = u[i]**2
+        return z
+    return A_operator_slim
+
+
+def create_A_adjoint(n: int) -> Callable[[np.ndarray], np.ndarray]:
+    @nb.njit(parallel=True, fastmath=True)
+    def A_adjoint(z: np.ndarray) -> np.ndarray:
+        Y = np.zeros((n,n))
+        for i in nb.prange(n):
+            Y[i, i] = z[i]
+        return Y
+    return A_adjoint
+
+
+def create_A_adjoint_slim(n: int) -> Callable[[np.ndarray, np.ndarray], np.ndarray]:
+    @nb.njit(parallel=True, fastmath=True)
+    def A_adjoint(z: np.ndarray, u: np.ndarray) -> np.ndarray:
+        v = np.empty((n,))
+        for i in nb.prange(n):
+            v[i] = z[i] * u[i]
+        return v
+    return A_adjoint
+
+
+def create_proj_K(n: int) -> Callable[[np.ndarray], np.ndarray]:
+    @nb.njit(parallel=True, fastmath=True)
+    def proj_K(z: np.ndarray) -> np.ndarray:
+        return np.ones((n,))
+    return proj_K
+
+
 if __name__ == "__main__":
     np.random.seed(0)
     MAT_PATH = "./data/maxcut/Gset/G1.mat"
@@ -64,6 +111,11 @@ if __name__ == "__main__":
     C_innerprod = create_C_innerprod(C)
     C_add = create_C_add(C)
     C_matvec = create_C_matvec(C)
+    A_operator = create_A_operator(C.shape[0])
+    A_operator_slim = create_A_operator_slim(C.shape[0])
+    A_adjoint = create_A_adjoint(C.shape[0])
+    A_adjoint_slim = create_A_adjoint_slim(C.shape[0])
+    proj_K = create_proj_K(C.shape[0])
 
     embed()
     exit()
