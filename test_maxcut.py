@@ -1,8 +1,14 @@
+import cvxpy as cp
 import numba as nb
 import numpy as np
+from pathlib import Path
+import pickle
+import scipy
 from scipy.io import loadmat
 from scipy.sparse import csc_matrix
 from typing import Callable
+
+import solver
 
 from IPython import embed
 
@@ -91,11 +97,26 @@ def create_A_adjoint_slim(n: int) -> Callable[[np.ndarray, np.ndarray], np.ndarr
     return A_adjoint
 
 
-def create_proj_K(n: int) -> Callable[[np.ndarray], np.ndarray]:
+def create_proj_K(n: int, SCALE_X: float) -> Callable[[np.ndarray], np.ndarray]:
     @nb.njit(parallel=True, fastmath=True)
     def proj_K(z: np.ndarray) -> np.ndarray:
-        return np.ones((n,))
+        return np.ones((n,)) * SCALE_X
     return proj_K
+
+
+def solve_scs(C: csc_matrix) -> np.ndarray:
+    n = C.shape[0]
+    X = cp.Variable((n,n), symmetric=True)
+    constraints = [X >> 0]
+    constraints += [cp.diag(X) == np.ones((n,))]
+    prob = cp.Problem(cp.Minimize(cp.trace(C @ X)), constraints)
+    prob.solve(solver=cp.SCS, verbose=True)
+
+    print("The optimal value is", prob.value)
+    print("A solution X is")
+    print(X.value)
+    X_scs = X.value
+    return X_scs
 
 
 if __name__ == "__main__":
@@ -103,19 +124,51 @@ if __name__ == "__main__":
     MAT_PATH = "./data/maxcut/Gset/G1.mat"
     problem = loadmat(MAT_PATH)
     C = problem["Problem"][0][0][1]
+    n = C.shape[0]
 
-    # create a random test matrix
-    X = np.random.randn(*C.shape)
-    u = np.random.randn(C.shape[0])
+    C = scipy.sparse.spdiags((C @ np.ones((n,1))).T, 0) - C
+    C = 0.5*(C + C.T)
+    C = -0.25*C
 
-    C_innerprod = create_C_innerprod(C)
-    C_add = create_C_add(C)
-    C_matvec = create_C_matvec(C)
-    A_operator = create_A_operator(C.shape[0])
-    A_operator_slim = create_A_operator_slim(C.shape[0])
-    A_adjoint = create_A_adjoint(C.shape[0])
-    A_adjoint_slim = create_A_adjoint_slim(C.shape[0])
-    proj_K = create_proj_K(C.shape[0])
+    SCALE_C = 1.0 / scipy.sparse.linalg.norm(C, ord="fro") 
+    SCALE_X = 1.0 / n
+
+    scs_soln_cache = str(Path(MAT_PATH).with_suffix("")) + "_scs_soln.pkl"
+    if Path(scs_soln_cache).is_file():
+        with open(scs_soln_cache, "rb") as f:
+            X_scs = pickle.load(f)
+    else:
+        X_scs = solve_scs(C)
+        with open(scs_soln_cache, "wb") as f:
+            pickle.dump(X_scs, f)
+
+    scaled_C = C * SCALE_C
+    C_innerprod = create_C_innerprod(scaled_C)
+    C_add = create_C_add(scaled_C)
+    C_matvec = create_C_matvec(scaled_C)
+    A_operator = create_A_operator(n)
+    A_operator_slim = create_A_operator_slim(n)
+    A_adjoint = create_A_adjoint(n)
+    A_adjoint_slim = create_A_adjoint_slim(n)
+    proj_K = create_proj_K(n, SCALE_X)
+
+    X, y = solver.al(
+       n=n,
+       m=n,
+       trace_ub=1.0,
+       C_innerprod=C_innerprod,
+       C_add=C_add,
+       C_matvec=C_matvec,
+       A_operator=A_operator,
+       A_operator_slim=A_operator_slim,
+       A_adjoint=A_adjoint,
+       A_adjoint_slim=A_adjoint_slim,
+       proj_K=proj_K,
+       SCALE_C=SCALE_C,
+       SCALE_X=SCALE_X,
+       eps=1e-3,
+       max_iters=500
+    )
 
     embed()
     exit()
