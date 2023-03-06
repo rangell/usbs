@@ -1,4 +1,7 @@
 import cvxpy as cp
+import jax
+import jax.numpy as jnp
+from jax import lax
 import numba as nb
 import numpy as np
 from pathlib import Path
@@ -13,57 +16,62 @@ import solver
 from IPython import embed
 
 
-def create_C_innerprod(C: csc_matrix) -> Callable[[np.ndarray], np.double]:
-    indptr = C.indptr
-    indices = C.indices
-    data = C.data
-    @nb.njit(parallel=True, fastmath=True)
-    def C_innerprod(X: np.ndarray) -> np.double:
+def create_C_innerprod(C: csc_matrix) -> Callable[[jnp.ndarray], jnp.float32]:
+    indptr = jnp.array(C.indptr)
+    indices = jnp.array(C.indices)
+    data = jnp.array(C.data)
+    @jax.jit
+    def C_innerprod(X: jnp.ndarray) -> jnp.float32:
         sum = 0.0
-        for j in nb.prange(indptr.size - 1):
-            for offset in nb.prange(indptr[j], indptr[j+1]):
-                sum += data[offset] * X[indices[offset], j]
+        inner_loop = lambda j, init_sum : lax.fori_loop(
+            indptr[j],
+            indptr[j+1],
+            lambda offset, partial_sum: partial_sum + (data[offset] * X[indices[offset], j]),
+            init_sum)
+        sum = lax.fori_loop(0, indptr.size-1, inner_loop, sum)
         return sum
     return C_innerprod
 
 
-def create_C_add(C: csc_matrix) -> Callable[[np.ndarray], np.ndarray]:
-    indptr = C.indptr
-    indices = C.indices
-    data = C.data
-    @nb.njit(parallel=True, fastmath=True)
-    def C_add(X: np.ndarray) -> np.ndarray:
-        Y = np.empty_like(X)
-        Y = X
-        for j in nb.prange(indptr.size - 1):
-            for offset in nb.prange(indptr[j], indptr[j+1]):
-                i = indices[offset]
-                Y[i, j] = data[offset] + X[i, j]
+def create_C_add(C: csc_matrix) -> Callable[[jnp.ndarray], jnp.ndarray]:
+    indptr = jnp.array(C.indptr)
+    indices = jnp.array(C.indices)
+    data = jnp.array(C.data)
+    @jax.jit
+    def C_add(X: jnp.ndarray) -> jnp.ndarray:
+        Y = jnp.copy(X)
+        inner_loop = lambda j, init_Y: lax.fori_loop(
+            indptr[j],
+            indptr[j+1],
+            lambda offset, partial_Y: partial_Y.at[indices[offset], j].add(data[offset]),
+            init_Y)
+        Y = lax.fori_loop(0, indptr.size-1, inner_loop, Y)
         return Y
     return C_add
 
 
-def create_C_matvec(C: csc_matrix) -> Callable[[np.ndarray], np.ndarray]:
-    indptr = C.indptr
-    indices = C.indices
-    data = C.data
-    @nb.njit(parallel=True, fastmath=True)
-    def C_matvec(u: np.ndarray) -> np.ndarray:
-        v = np.zeros_like(u)
-        for j in nb.prange(indptr.size - 1):
-            for offset in nb.prange(indptr[j], indptr[j+1]):
-                v[indices[offset]] += u[j] * data[offset]
+def create_C_matvec(C: csc_matrix) -> Callable[[jnp.ndarray], jnp.ndarray]:
+    indptr = jnp.array(C.indptr)
+    indices = jnp.array(C.indices)
+    data = jnp.array(C.data)
+    n = C.shape[0]
+    @jax.jit
+    def C_matvec(u: jnp.ndarray) -> jnp.ndarray:
+        v = jnp.zeros((n,))
+        inner_loop = lambda j, init_v: lax.fori_loop(
+            indptr[j],
+            indptr[j+1],
+            lambda offset, partial_v: partial_v.at[indices[offset]].add(u[j] * data[offset]),
+            init_v)
+        v = lax.fori_loop(0, indptr.size-1, inner_loop, v)
         return v
     return C_matvec
 
 
-def create_A_operator(n: int) -> Callable[[np.ndarray], np.ndarray]:
-    @nb.njit(parallel=True, fastmath=True)
-    def A_operator(X: np.ndarray) -> np.ndarray:
-        z = np.empty((n,))
-        for i in nb.prange(n):
-            z[i] = X[i, i]
-        return z
+def create_A_operator(n: int) -> Callable[[jnp.ndarray], jnp.ndarray]:
+    @jax.jit
+    def A_operator(X: jnp.ndarray) -> jnp.ndarray:
+        return jnp.diag(X)
     return A_operator
 
 
@@ -126,9 +134,10 @@ if __name__ == "__main__":
     C = problem["Problem"][0][0][1]
     n = C.shape[0]
 
-    C = scipy.sparse.spdiags((C @ np.ones((n,1))).T, 0) - C
+    C = scipy.sparse.spdiags((C @ np.ones((n,1))).T, 0, n, n) - C
     C = 0.5*(C + C.T)
     C = -0.25*C
+    C = C.tocsc()
 
     SCALE_C = 1.0 / scipy.sparse.linalg.norm(C, ord="fro") 
     SCALE_X = 1.0 / n
@@ -147,12 +156,18 @@ if __name__ == "__main__":
     C_add = create_C_add(scaled_C)
     C_matvec = create_C_matvec(scaled_C)
     A_operator = create_A_operator(n)
+
+    X = jax.random.normal(jax.random.PRNGKey(0), shape=C.shape)
+    u = jax.random.normal(jax.random.PRNGKey(0), shape=(C.shape[0],))
+
+    embed()
+    exit()
     A_operator_slim = create_A_operator_slim(n)
     A_adjoint = create_A_adjoint(n)
     A_adjoint_slim = create_A_adjoint_slim(n)
     proj_K = create_proj_K(n, SCALE_X)
 
-    X, y = solver.al(
+    X, y = solver.cgal(
        n=n,
        m=n,
        trace_ub=1.0,

@@ -33,8 +33,7 @@ constraints += [
     cp.trace(A[i] @ X) == b[i] for i in range(len(A))
 ]
 constraints += [ cp.trace(X) == 1 ]
-prob = cp.Problem(cp.Minimize(cp.trace(C @ X)),
-                  constraints)
+prob = cp.Problem(cp.Minimize(cp.trace(C @ X)), constraints)
 prob.solve(solver=cp.SCS)
 
 # Print result.
