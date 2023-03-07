@@ -2,7 +2,6 @@ import cvxpy as cp
 import jax
 import jax.numpy as jnp
 from jax import lax
-import numba as nb
 import numpy as np
 from pathlib import Path
 import pickle
@@ -68,46 +67,39 @@ def create_C_matvec(C: csc_matrix) -> Callable[[jnp.ndarray], jnp.ndarray]:
     return C_matvec
 
 
-def create_A_operator(n: int) -> Callable[[jnp.ndarray], jnp.ndarray]:
+def create_A_operator() -> Callable[[jnp.ndarray], jnp.ndarray]:
     @jax.jit
     def A_operator(X: jnp.ndarray) -> jnp.ndarray:
         return jnp.diag(X)
     return A_operator
 
 
-def create_A_operator_slim(n: int) -> Callable[[np.ndarray], np.ndarray]:
-    @nb.njit(parallel=True, fastmath=True)
-    def A_operator_slim(u: np.ndarray) -> np.ndarray:
-        z = np.empty((n,))
-        for i in nb.prange(n):
-            z[i] = u[i]**2
-        return z
+def create_A_operator_slim() -> Callable[[jnp.ndarray, jnp.ndarray], jnp.ndarray]:
+    @jax.jit
+    def A_operator_slim(u: jnp.ndarray) -> jnp.ndarray:
+        return u ** 2
     return A_operator_slim
 
 
-def create_A_adjoint(n: int) -> Callable[[np.ndarray], np.ndarray]:
-    @nb.njit(parallel=True, fastmath=True)
-    def A_adjoint(z: np.ndarray) -> np.ndarray:
-        Y = np.zeros((n,n))
-        for i in nb.prange(n):
-            Y[i, i] = z[i]
+def create_A_adjoint(n: int) -> Callable[[jnp.ndarray], jnp.ndarray]:
+    @jax.jit
+    def A_adjoint(z: jnp.ndarray) -> jnp.ndarray:
+        Y = jnp.zeros((n,n))
+        Y = Y.at[jnp.diag_indices(n, ndim=2)].set(z)
         return Y
     return A_adjoint
 
 
-def create_A_adjoint_slim(n: int) -> Callable[[np.ndarray, np.ndarray], np.ndarray]:
-    @nb.njit(parallel=True, fastmath=True)
-    def A_adjoint(z: np.ndarray, u: np.ndarray) -> np.ndarray:
-        v = np.empty((n,))
-        for i in nb.prange(n):
-            v[i] = z[i] * u[i]
-        return v
+def create_A_adjoint_slim() -> Callable[[jnp.ndarray, jnp.ndarray], jnp.ndarray]:
+    @jax.jit
+    def A_adjoint(z: jnp.ndarray, u: jnp.ndarray) -> jnp.ndarray:
+        return z * u
     return A_adjoint
 
 
-def create_proj_K(n: int, SCALE_X: float) -> Callable[[np.ndarray], np.ndarray]:
-    @nb.njit(parallel=True, fastmath=True)
-    def proj_K(z: np.ndarray) -> np.ndarray:
+def create_proj_K(n: int, SCALE_X: float) -> Callable[[jnp.ndarray], jnp.ndarray]:
+    @jax.jit
+    def proj_K(z: jnp.ndarray) -> jnp.ndarray:
         return np.ones((n,)) * SCALE_X
     return proj_K
 
@@ -155,17 +147,14 @@ if __name__ == "__main__":
     C_innerprod = create_C_innerprod(scaled_C)
     C_add = create_C_add(scaled_C)
     C_matvec = create_C_matvec(scaled_C)
-    A_operator = create_A_operator(n)
-
-    X = jax.random.normal(jax.random.PRNGKey(0), shape=C.shape)
-    u = jax.random.normal(jax.random.PRNGKey(0), shape=(C.shape[0],))
+    A_operator = create_A_operator()
+    A_operator_slim = create_A_operator_slim()
+    A_adjoint = create_A_adjoint(n)
+    A_adjoint_slim = create_A_adjoint_slim()
+    proj_K = create_proj_K(n, SCALE_X)
 
     embed()
     exit()
-    A_operator_slim = create_A_operator_slim(n)
-    A_adjoint = create_A_adjoint(n)
-    A_adjoint_slim = create_A_adjoint_slim(n)
-    proj_K = create_proj_K(n, SCALE_X)
 
     X, y = solver.cgal(
        n=n,
@@ -184,6 +173,3 @@ if __name__ == "__main__":
        eps=1e-3,
        max_iters=500
     )
-
-    embed()
-    exit()
