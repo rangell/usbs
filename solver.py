@@ -1,18 +1,22 @@
-import numba as nb
+from collections import namedtuple
+import jax
+import jax.numpy as jnp
+from jax import lax
 import numpy as np
-import scipy
-from scipy.linalg import eigh_tridiagonal
-from typing import Callable, Tuple
+import scipy  # type: ignore
+from scipy.linalg import eigh_tridiagonal  # type: ignore 
+from typing import Any, Callable, Tuple
 
 from IPython import embed
 
 
 def approx_min_eigen(
-    M: Callable[[np.ndarray], np.ndarray],
+    M: Callable[[jnp.ndarray], jnp.ndarray],
     n: int,
+    k: int,
     num_iters: int,
     eps: float
-) -> Tuple[float, np.ndarray]:
+) -> Tuple[jnp.ndarray, jnp.ndarray]:
 
     V = np.empty((num_iters, n))
     omegas = np.empty((num_iters,))
@@ -50,29 +54,76 @@ def approx_min_eigen(
 
     return min_eigen_val.squeeze(), min_eigen_vec.T
 
-#@nb.njit(cache=True)
+# don't have to jit this function? just jaxpr since it's only called once? YES
 def cgal(
-    n: np.int,
-    m: np.int,
-    trace_ub: np.int,
-    C_innerprod: Callable[[np.ndarray], np.double],
-    C_add: Callable[[np.ndarray], np.ndarray],
-    C_matvec: Callable[[np.ndarray], np.ndarray],
-    A_operator: Callable[[np.ndarray], np.ndarray],
-    A_operator_slim: Callable[[np.ndarray], np.ndarray],
-    A_adjoint: Callable[[np.ndarray], np.ndarray],
-    A_adjoint_slim: Callable[[np.ndarray, np.ndarray], np.ndarray],
-    proj_K: Callable[[np.ndarray], np.ndarray],
-    SCALE_C: np.double,
-    SCALE_X: np.double,
-    eps: np.double,
-    max_iters: np.int
-) -> Tuple[np.ndarray, np.ndarray]:
-    X = np.ones((n, n)) * trace_ub / n
-    y = np.zeros(m)
+    n: int,
+    m: int,
+    trace_ub: float,
+    C_innerprod: Callable[[jnp.ndarray], float],
+    C_add: Callable[[jnp.ndarray], jnp.ndarray],
+    C_matvec: Callable[[jnp.ndarray], jnp.ndarray],
+    A_operator: Callable[[jnp.ndarray], jnp.ndarray],
+    A_operator_slim: Callable[[jnp.ndarray], jnp.ndarray],
+    A_adjoint: Callable[[jnp.ndarray], jnp.ndarray],
+    A_adjoint_slim: Callable[[jnp.ndarray, jnp.ndarray], jnp.ndarray],
+    proj_K: Callable[[jnp.ndarray], jnp.ndarray],
+    SCALE_C: float,
+    SCALE_X: float,
+    eps: float,
+    max_iters: int
+) -> Tuple[jnp.ndarray, jnp.ndarray]:
+
+    StateStruct = namedtuple(
+        "StateStruct", 
+        ["t", "X", "X_next", "y_next", "grad", "X_update_dir"])
+
+    @jax.jit
+    def stop_func(state: StateStruct) -> bool:
+        obj_gap = jnp.trace(state.grad @ (state.X - state.X_update_dir)) / (SCALE_X * SCALE_C)
+        z_next = A_operator(state.X_next)
+        infeas_gap = jnp.max(jnp.abs(z_next - proj_K(z_next)) / SCALE_X)
+        return (obj_gap > eps and infeas_gap > eps) or state.t == 0 or state.t < max_iters
+
+    @jax.jit
+    def body_func(state: StateStruct) -> StateStruct:
+        X = state.X_next
+        y = state.y_next
+        z = A_operator(X)
+        grad = C_add(A_adjoint(y + z - proj_K(z + y)))
+        eigvals, eigvecs = jnp.linalg.eigh(grad)
+        # TODO: report eigval gap here!
+        min_eigvec = eigvecs.at[:, 0:1].get()  # gives the right shape
+        X_update_dir = min_eigvec @ min_eigvec.T
+        eta = 2.0 / (state.t + 2.0)   # just use the standard CGAL step-size for now
+        X_next = (1-eta)*X + eta*X_update_dir
+        z_next = A_operator(X_next)
+        y_next = y + (z_next - proj_K(z_next + y))
+        return StateStruct(
+            t=state.t+1,
+            X=X,
+            X_next=X_next,
+            y_next=y_next,
+            grad=grad,
+            X_update_dir=X_update_dir)
+
+    init_state = StateStruct(
+        t=0,
+        X=jnp.empty((n, n)),
+        X_next=jnp.ones((n, n)) * trace_ub / n,
+        y_next=jnp.zeros((m,)),
+        grad=jnp.empty((n, n)),
+        X_update_dir=jnp.empty((n, n)))
+
+    state1 = body_func(init_state)
+    state2 = body_func(state1)
+
+    embed()
+    exit()
+
     z = A_operator(X)
     for t in range(max_iters):
         eta = 2.0 / (t + 2.0)
+        z = A_operator(X)
         grad = C_add(A_adjoint(y) + A_adjoint(z - proj_K(z + y)))
         min_eigval, min_eigvec = scipy.sparse.linalg.eigsh(grad, k=1, which="SA")
 
@@ -98,111 +149,3 @@ def cgal(
         X = X_next
         y = y_next
     return X, y
-
-
-@nb.njit(cache=True)
-def al(
-    n: np.int,
-    m: np.int,
-    trace_ub: np.int,
-    C_innerprod: Callable[[np.ndarray], np.double],
-    C_add: Callable[[np.ndarray], np.ndarray],
-    C_matvec: Callable[[np.ndarray], np.ndarray],
-    A_operator: Callable[[np.ndarray], np.ndarray],
-    A_operator_slim: Callable[[np.ndarray], np.ndarray],
-    A_adjoint: Callable[[np.ndarray], np.ndarray],
-    A_adjoint_slim: Callable[[np.ndarray, np.ndarray], np.ndarray],
-    proj_K: Callable[[np.ndarray], np.ndarray],
-    SCALE_C: np.double,
-    SCALE_X: np.double,
-    eps: np.double,
-    max_iters: np.int
-) -> Tuple[np.ndarray, np.ndarray]:
-    X = np.ones((n, n)) * trace_ub / n
-    y = np.zeros(m)
-    for t in range(max_iters):
-        X = pgd(X=X,
-                y=y,
-                trace_ub=trace_ub,
-                C_innerprod=C_innerprod,
-                C_add=C_add,
-                C_matvec=C_matvec,
-                A_operator=A_operator,
-                A_operator_slim=A_operator_slim,
-                A_adjoint=A_adjoint,
-                A_adjoint_slim=A_adjoint_slim,
-                proj_K=proj_K,
-                SCALE_C=SCALE_C,
-                SCALE_X=SCALE_X,
-                eps=eps,
-                max_iters=max_iters) 
-        z = A_operator(X)
-        y_next = y + (z - proj_K(z + y))
-        gap = np.max(np.abs(y - y_next) / SCALE_X)
-        print("AL t: ", t, " err: ", gap, " infeas: ", np.linalg.norm((z - proj_K(z + y)) / SCALE_X))
-        if gap < eps:
-            break
-        y = y_next
-    return X, y
-
-
-@nb.njit(cache=True)
-def pgd(
-    X: np.ndarray,
-    y: np.ndarray,
-    trace_ub: np.int,
-    C_innerprod: Callable[[np.ndarray], np.double],
-    C_add: Callable[[np.ndarray], np.ndarray],
-    C_matvec: Callable[[np.ndarray], np.ndarray],
-    A_operator: Callable[[np.ndarray], np.ndarray],
-    A_operator_slim: Callable[[np.ndarray], np.ndarray],
-    A_adjoint: Callable[[np.ndarray], np.ndarray],
-    A_adjoint_slim: Callable[[np.ndarray, np.ndarray], np.ndarray],
-    proj_K: Callable[[np.ndarray], np.ndarray],
-    SCALE_C: np.double,
-    SCALE_X: np.double,
-    eps: np.double,
-    max_iters: np.int
-) -> np.ndarray:
-    # TODO: check step-size issue here?
-    step_size = 1.0
-    max_iters = 1e4
-    z = A_operator(X)
-    infeas = z - proj_K(z + y)
-    objective = (C_innerprod(X) / (SCALE_X * SCALE_C)
-                 + np.dot(y, infeas / SCALE_X)
-                 + np.linalg.norm(infeas / SCALE_X)**2)
-    for i in range(max_iters):
-        grad = C_add(A_adjoint(y) + A_adjoint(z - proj_K(z + y)))
-        X_update_dir = X - (step_size * grad)
-
-        eigvals, eigvecs = np.linalg.eigh(X_update_dir)
-
-        descend_vals = np.flip(eigvals)
-        weighted_vals = (descend_vals
-                         + (1.0 / np.arange(1, len(descend_vals)+1))
-                            * (1 - np.cumsum(descend_vals)))
-        idx = np.sum(weighted_vals > 0) - 1
-        offset = weighted_vals[idx] - descend_vals[idx]
-        proj_descend_vals = descend_vals + offset
-        proj_descend_vals = proj_descend_vals * (proj_descend_vals > 0)
-        proj_eigvals = np.flip(proj_descend_vals) * trace_ub
-        proj_eigvals = np.reshape(proj_eigvals, (1, -1))
-
-        X_new = (eigvecs * proj_eigvals) @ eigvecs.T
-        z_new = A_operator(X_new)
-        infeas_new = z_new - proj_K(z_new + y)
-        objective_new = (C_innerprod(X_new) / (SCALE_X * SCALE_C)
-                         + np.dot(y, infeas_new / SCALE_X)
-                         + np.linalg.norm(infeas_new / SCALE_X)**2)
-        gap = np.abs(objective - objective_new)
-        gap = np.max(np.abs(X - X_new) / SCALE_X)
-        print("\t PGD i: ", i, " err: ", gap, " obj: ", objective_new)
-        X = X_new
-        z = z_new
-        infeas = infeas_new
-        objective = objective_new
-        if gap < eps:
-            break
-
-    return X
