@@ -5,22 +5,22 @@ from jax import lax
 import numpy as np
 from pathlib import Path
 import pickle
-import scipy
-from scipy.io import loadmat
-from scipy.sparse import csc_matrix
-from typing import Callable
+import scipy  # type: ignore
+from scipy.io import loadmat  # type: ignore
+from scipy.sparse import csc_matrix  # type: ignore
+from typing import Any, Callable
 
 import solver
 
 from IPython import embed
 
 
-def create_C_innerprod(C: csc_matrix) -> Callable[[jnp.ndarray], jnp.float32]:
+def create_C_innerprod(C: csc_matrix) -> Callable[[jnp.ndarray], float]:
     indptr = jnp.array(C.indptr)
     indices = jnp.array(C.indices)
     data = jnp.array(C.data)
     @jax.jit
-    def C_innerprod(X: jnp.ndarray) -> jnp.float32:
+    def C_innerprod(X: jnp.ndarray) -> float:
         sum = 0.0
         inner_loop = lambda j, init_sum : lax.fori_loop(
             indptr[j],
@@ -104,7 +104,7 @@ def create_proj_K(n: int, SCALE_X: float) -> Callable[[jnp.ndarray], jnp.ndarray
     return proj_K
 
 
-def solve_scs(C: csc_matrix) -> np.ndarray:
+def solve_scs(C: csc_matrix) -> np.ndarray[Any, Any]:
     n = C.shape[0]
     X = cp.Variable((n,n), symmetric=True)
     constraints = [X >> 0]
@@ -136,12 +136,12 @@ if __name__ == "__main__":
 
     scs_soln_cache = str(Path(MAT_PATH).with_suffix("")) + "_scs_soln.pkl"
     if Path(scs_soln_cache).is_file():
-        with open(scs_soln_cache, "rb") as f:
-            X_scs = pickle.load(f)
+        with open(scs_soln_cache, "rb") as f_in:
+            X_scs = pickle.load(f_in)
     else:
         X_scs = solve_scs(C)
-        with open(scs_soln_cache, "wb") as f:
-            pickle.dump(X_scs, f)
+        with open(scs_soln_cache, "wb") as f_out:
+            pickle.dump(X_scs, f_out)
 
     scaled_C = C * SCALE_C
     C_innerprod = create_C_innerprod(scaled_C)
@@ -152,9 +152,6 @@ if __name__ == "__main__":
     A_adjoint = create_A_adjoint(n)
     A_adjoint_slim = create_A_adjoint_slim()
     proj_K = create_proj_K(n, SCALE_X)
-
-    embed()
-    exit()
 
     X, y = solver.cgal(
        n=n,
