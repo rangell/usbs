@@ -153,6 +153,10 @@ if __name__ == "__main__":
     A_adjoint_slim = create_A_adjoint_slim()
     proj_K = create_proj_K(n, SCALE_X)
 
+    M = jax.random.normal(jax.random.PRNGKey(0), shape=(100, 100))
+    embed()
+    exit()
+
     X, y = solver.cgal(
        n=n,
        m=n,
@@ -165,8 +169,9 @@ if __name__ == "__main__":
        A_adjoint=A_adjoint,
        A_adjoint_slim=A_adjoint_slim,
        proj_K=proj_K,
+       beta=1.0,
        SCALE_C=SCALE_C,
        SCALE_X=SCALE_X,
-       eps=1e-3,
-       max_iters=500
+       eps=1.0,
+       max_iters=1e6
     )
