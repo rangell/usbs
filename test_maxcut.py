@@ -153,7 +153,12 @@ if __name__ == "__main__":
     A_adjoint_slim = create_A_adjoint_slim()
     proj_K = create_proj_K(n, SCALE_X)
 
-    M = jax.random.normal(jax.random.PRNGKey(0), shape=(100, 100))
+    rng = jax.random.PRNGKey(0)
+    M = jax.random.normal(rng, shape=(100, 100))
+
+    eigvals, eigvecs = solver.approx_k_min_eigen(
+        M = lambda v: M @ v, n=100, k=2, num_iters=100, eps=1e-6, rng=rng)
+
     embed()
     exit()
 

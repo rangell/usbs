@@ -16,8 +16,48 @@ def approx_k_min_eigen(
     n: int,
     k: int,
     num_iters: int,
-    eps: float
+    eps: float,
+    rng: jnp.ndarray
 ) -> Tuple[jnp.ndarray, jnp.ndarray]:
+
+    TriDiagStateStruct = namedtuple(
+        "TriDiagStateStruct", 
+        ["t", "v_prev", "v", "diag", "off_diag"])
+
+    def tri_diag_stop_cond(state: TriDiagStateStruct) -> bool:
+        # TODO: check state.off_diag[state.t] > eps when state.t > 0
+        predicates = jnp.array([state.off_diag[state.t] < eps, state.t > 0], dtype=jnp.uint8)
+        predicates = jnp.array([jnp.sum(predicates) > 0, state.t <= num_iters], dtype=jnp.uint8)
+        return jnp.sum(predicates) == 2
+
+    def tri_diag_body_func(state: TriDiagStateStruct) -> TriDiagStateStruct:
+        diag = state.diag
+        off_diag = state.off_diag
+        transformed_v = M(state.v)
+        diag = diag.at[state.t].set(jnp.dot(state.v, transformed_v))
+        v_next = (transformed_v
+                  - (diag[state.t] * state.v)
+                  - (off_diag[state.t] * state.v_prev))  # heed the off_diag index
+        off_diag = off_diag.at[state.t+1].set(jnp.linalg.norm(v_next))
+        v_next /= off_diag[state.t+1]
+        return TriDiagStateStruct(
+            t=state.t+1, v_prev=state.v, v=v_next, diag=diag, off_diag=off_diag
+        )
+
+    v_0 = jax.random.normal(rng, shape=(n,))
+    v_0 = v_0 / jnp.linalg.norm(v_0)
+    init_state = TriDiagStateStruct(
+        t=0, v_prev=jnp.empty((n,)), v=v_0, diag=jnp.zeros((n,)), off_diag=jnp.zeros((n+1,))
+    )
+
+    state1 = tri_diag_body_func(init_state)
+
+    embed()
+    exit()
+
+    # TODO: use `off_diag[1:-1]` for tri diagonal
+
+    # TODO: maybe assert that the eigvals are all negative (or at least some are)?
 
     V = np.empty((num_iters, n))
     omegas = np.empty((num_iters,))
@@ -38,8 +78,6 @@ def approx_k_min_eigen(
         if rhos[i] < eps:
             break
         V[i + 1] = V[i + 1] / rhos[i]
-
-        # TODO: perform full re-orthogonalization here?
 
     min_eigen_val, u = eigh_tridiagonal(
         omegas[: i + 1], rhos[:i], select="i", select_range=(0, 0)
@@ -86,9 +124,7 @@ def cgal(
         # hacky jax-compatible implementation of the following predicate (to continue optimizing):
         #   (obj_gap > eps or infeas_gap > eps) and state.t < max_iters
         predicates = jnp.array([state.obj_gap > eps, state.infeas_gap > eps], dtype=jnp.uint8)
-        jax.debug.print("t: {t} - predicates 1: {predicates}", t=state.t, predicates=predicates)
         predicates = jnp.array([jnp.sum(predicates) > 0, state.t < max_iters], dtype=jnp.uint8)
-        jax.debug.print("t: {t} - predicates 2: {predicates}", t=state.t, predicates=predicates)
         return jnp.sum(predicates) == 2
 
     @jax.jit
@@ -99,7 +135,7 @@ def cgal(
         eigvals, eigvecs = jnp.linalg.eigh(grad)
         # TODO: report eigval gap here!
         min_eigval = eigvals[0]
-        min_eigvec = eigvecs.at[:, 0:1].get()  # gives the right shape
+        min_eigvec = eigvecs[:, 0:1]  # gives the right shape
         X_update_dir = min_eigvec @ min_eigvec.T
         eta = 2.0 / (state.t + 2.0)   # just use the standard CGAL step-size for now
         surrogate_dual_gap = jnp.trace(grad @ (state.X - X_update_dir))
