@@ -2,6 +2,7 @@ import cvxpy as cp
 import jax
 import jax.numpy as jnp
 from jax import lax
+from jax._src.typing import Array
 import numpy as np
 from pathlib import Path
 import pickle
@@ -15,12 +16,12 @@ import solver
 from IPython import embed
 
 
-def create_C_innerprod(C: csc_matrix) -> Callable[[jnp.ndarray], float]:
+def create_C_innerprod(C: csc_matrix) -> Callable[[Array], float]:
     indptr = jnp.array(C.indptr)
     indices = jnp.array(C.indices)
     data = jnp.array(C.data)
     @jax.jit
-    def C_innerprod(X: jnp.ndarray) -> float:
+    def C_innerprod(X: Array) -> float:
         sum = 0.0
         inner_loop = lambda j, init_sum : lax.fori_loop(
             indptr[j],
@@ -32,12 +33,12 @@ def create_C_innerprod(C: csc_matrix) -> Callable[[jnp.ndarray], float]:
     return C_innerprod
 
 
-def create_C_add(C: csc_matrix) -> Callable[[jnp.ndarray], jnp.ndarray]:
+def create_C_add(C: csc_matrix) -> Callable[[Array], Array]:
     indptr = jnp.array(C.indptr)
     indices = jnp.array(C.indices)
     data = jnp.array(C.data)
     @jax.jit
-    def C_add(X: jnp.ndarray) -> jnp.ndarray:
+    def C_add(X: Array) -> Array:
         Y = jnp.copy(X)
         inner_loop = lambda j, init_Y: lax.fori_loop(
             indptr[j],
@@ -49,13 +50,13 @@ def create_C_add(C: csc_matrix) -> Callable[[jnp.ndarray], jnp.ndarray]:
     return C_add
 
 
-def create_C_matvec(C: csc_matrix) -> Callable[[jnp.ndarray], jnp.ndarray]:
+def create_C_matvec(C: csc_matrix) -> Callable[[Array], Array]:
     indptr = jnp.array(C.indptr)
     indices = jnp.array(C.indices)
     data = jnp.array(C.data)
     n = C.shape[0]
     @jax.jit
-    def C_matvec(u: jnp.ndarray) -> jnp.ndarray:
+    def C_matvec(u: Array) -> Array:
         v = jnp.zeros((n,))
         inner_loop = lambda j, init_v: lax.fori_loop(
             indptr[j],
@@ -67,39 +68,39 @@ def create_C_matvec(C: csc_matrix) -> Callable[[jnp.ndarray], jnp.ndarray]:
     return C_matvec
 
 
-def create_A_operator() -> Callable[[jnp.ndarray], jnp.ndarray]:
+def create_A_operator() -> Callable[[Array], Array]:
     @jax.jit
-    def A_operator(X: jnp.ndarray) -> jnp.ndarray:
+    def A_operator(X: Array) -> Array:
         return jnp.diag(X)
     return A_operator
 
 
-def create_A_operator_slim() -> Callable[[jnp.ndarray, jnp.ndarray], jnp.ndarray]:
+def create_A_operator_slim() -> Callable[[Array, Array], Array]:
     @jax.jit
-    def A_operator_slim(u: jnp.ndarray) -> jnp.ndarray:
+    def A_operator_slim(u: Array) -> Array:
         return u ** 2
     return A_operator_slim
 
 
-def create_A_adjoint(n: int) -> Callable[[jnp.ndarray], jnp.ndarray]:
+def create_A_adjoint(n: int) -> Callable[[Array], Array]:
     @jax.jit
-    def A_adjoint(z: jnp.ndarray) -> jnp.ndarray:
+    def A_adjoint(z: Array) -> Array:
         Y = jnp.zeros((n,n))
         Y = Y.at[jnp.diag_indices(n, ndim=2)].set(z)
         return Y
     return A_adjoint
 
 
-def create_A_adjoint_slim() -> Callable[[jnp.ndarray, jnp.ndarray], jnp.ndarray]:
+def create_A_adjoint_slim() -> Callable[[Array, Array], Array]:
     @jax.jit
-    def A_adjoint(z: jnp.ndarray, u: jnp.ndarray) -> jnp.ndarray:
+    def A_adjoint(z: Array, u: Array) -> Array:
         return z * u
     return A_adjoint
 
 
-def create_proj_K(n: int, SCALE_X: float) -> Callable[[jnp.ndarray], jnp.ndarray]:
+def create_proj_K(n: int, SCALE_X: float) -> Callable[[Array], Array]:
     @jax.jit
-    def proj_K(z: jnp.ndarray) -> jnp.ndarray:
+    def proj_K(z: Array) -> Array:
         return np.ones((n,)) * SCALE_X
     return proj_K
 
@@ -157,7 +158,7 @@ if __name__ == "__main__":
     M = jax.random.normal(rng, shape=(100, 100))
 
     eigvals, eigvecs = solver.approx_k_min_eigen(
-        M = lambda v: M @ v, n=100, k=2, num_iters=100, eps=1e-6, rng=rng)
+        M = lambda v: M @ v, n=100, k=2, num_iters=15, eps=1e-6, rng=rng)
 
     embed()
     exit()
