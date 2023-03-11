@@ -84,21 +84,8 @@ def approx_k_min_eigen(
         # to eigenvalues closer than "gaptol", which will need to be
         # orthogonalized against each other.
         close = jnp.less(gap, gaptol)
-        left_neighbor_close = jnp.concatenate([jnp.array([False]), close], axis=0)
-        right_neighbor_close = jnp.concatenate([close, jnp.array([False])], axis=0)
-        ortho_interval_start = jnp.logical_and(
-            jnp.logical_not(left_neighbor_close), right_neighbor_close)
-        ortho_interval_start = jnp.where(ortho_interval_start)[0]
-        ortho_interval_end = jnp.logical_and(
-            left_neighbor_close, jnp.logical_not(right_neighbor_close))
-        ortho_interval_end = jnp.where(ortho_interval_end)[0] + 1
-        num_clusters = ortho_interval_end.size
-
-        # JAX is annoying...
-        ortho_interval_start = jnp.concatenate(
-            [jnp.zeros((1,), dtype=ortho_interval_start.dtype), ortho_interval_start])
-        ortho_interval_end = jnp.concatenate(
-            [jnp.zeros((1,), dtype=ortho_interval_end.dtype), ortho_interval_end])
+        cluster_mask = jnp.eye(k, dtype=bool) | jnp.diag(close, k=1) | jnp.diag(close, k=-1)
+        cluster_mask = lax.fori_loop(0, k-2, lambda _, mask: mask @ mask, cluster_mask)
 
         # We perform inverse iteration for all eigenvectors in parallel,
         # starting from a random set of vectors, until all have converged.
@@ -124,25 +111,18 @@ def approx_k_min_eigen(
             # after each step of inverse iteration. It is customary to use
             # modified Gram-Schmidt for this, but this is not very efficient
             # on some platforms, so here we defer to the QR decomposition in JAX.
-            def orthogonalize_cluster(state: Tuple[int, Array]):
-                cluster_idx, eigenvectors = state
-                start = ortho_interval_start[cluster_idx]
-                end = ortho_interval_end[cluster_idx]
-                update_indices = jnp.expand_dims(
-                    jnp.arange(start, end), -1)
-                vectors_in_cluster = eigenvectors[start:end, :]
+
+            def orthogonalize_cluster(i: int, eigenvectors: Array):
                 # We use the builtin QR factorization to orthonormalize the
                 # vectors in the cluster.
-                q, _ = jnp.linalg.qr(jnp.transpose(vectors_in_cluster))
-                vectors_to_update = jnp.transpose(q)
-                eigenvectors = eigenvectors.at[update_indices].set(vectors_to_update)
-                return cluster_idx+1, eigenvectors
+                cluster_mask_i = cluster_mask[i].reshape(-1, 1)
+                q, _ = jnp.linalg.qr(jnp.transpose(cluster_mask_i * eigenvectors))
+                update_vectors = jnp.transpose(q)
+                eigenvectors = ((cluster_mask_i * update_vectors)
+                                + (~cluster_mask_i * eigenvectors))
+                return eigenvectors
 
-            _, eigenvectors = lax.while_loop(
-                lambda state: jnp.less(state[0], num_clusters),
-                orthogonalize_cluster,
-                (0, eigenvectors))
-
+            eigenvectors = lax.fori_loop(0, k, orthogonalize_cluster, eigenvectors)
             return eigenvectors
 
         def continue_iteration(state: Tuple[int, Array, Array, Array]):
@@ -172,19 +152,10 @@ def approx_k_min_eigen(
             nrm_v = jnp.linalg.norm(v, axis=1)
             v = v / nrm_v.reshape(-1, 1)
             v = orthogonalize_close_eigenvectors(v)
-            embed()
-            exit()
             return i+1, v, nrm_v, nrm_v_old
-
-        state1 = inverse_iteration_step((0, v0, norm_v0, zero_norm))
-
-        jax.debug.print("\n Here! \n")
-        embed()
-        exit()
 
         _, v, _, _ = lax.while_loop(
             continue_iteration, inverse_iteration_step, (0, v0, norm_v0, zero_norm))
-
 
         return jnp.transpose(v)
 
@@ -193,6 +164,10 @@ def approx_k_min_eigen(
         final_state.diag, final_state.off_diag[1:-1], min_k_eigvals)
 
     # TODO: maybe assert that the eigvals are all negative (or at least some are)?
+
+    jax.debug.print("\n Here! \n")
+    embed()
+    exit()
 
     V = np.empty((num_iters, n))
     omegas = np.empty((num_iters,))
