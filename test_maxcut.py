@@ -157,11 +157,14 @@ if __name__ == "__main__":
     rng = jax.random.PRNGKey(0)
     M = jax.random.normal(rng, shape=(100, 100))
     Q, _ = jnp.linalg.qr(M) # columns of Q are orthonormal
-    eigvals = jnp.ceil(jnp.arange(1, 32, 0.3))[:100].reshape(1, -1)
+    #eigvals = jnp.ceil(jnp.arange(1, 32, 0.3))[:100].reshape(1, -1)
+    eigvals = jnp.ceil(jnp.arange(1, 101, 1))[:100].reshape(1, -1)
     M = (Q * eigvals) @ Q.T
 
     eigvals, eigvecs = solver.approx_k_min_eigen(
         M = lambda v: M @ v, n=100, k=6, num_iters=60, eps=1e-6, rng=rng)
+
+    eigvals0, eigvecs0 = scipy.sparse.linalg.eigsh(np.array(M), k=6, which="SA")
 
     embed()
     exit()

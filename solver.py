@@ -11,7 +11,8 @@ from typing import Any, Callable, Tuple
 from IPython import embed
 
 
-# TODO: implement storage efficient version?
+# TODO: implement storage efficient version? No, numerically unstable
+# TODO: add static_argnames: n, k, num_iters, eps (, rng?)
 def approx_k_min_eigen(
     M: Callable[[Array], Array],
     n: int,
@@ -21,15 +22,11 @@ def approx_k_min_eigen(
     rng: Array
 ) -> Tuple[Array, Array]:
 
-    TriDiagStateStruct = namedtuple(
-        "TriDiagStateStruct", 
-        ["t", "V", "diag", "off_diag"])
+    TriDiagStateStruct = namedtuple("TriDiagStateStruct", ["t", "V", "diag", "off_diag"])
 
     def tri_diag_cond_func(state: TriDiagStateStruct) -> bool:
-        # TODO: re-write this to use `jnp.logical_*`
-        predicates = jnp.array([state.off_diag[state.t] > eps, state.t == 1], dtype=jnp.uint8)
-        predicates = jnp.array([jnp.sum(predicates) > 0, state.t <= num_iters], dtype=jnp.uint8)
-        return jnp.sum(predicates) == 2
+        return jnp.logical_and(
+            jnp.logical_or(state.off_diag[state.t] > eps, state.t == 1), state.t <= num_iters)
 
     def tri_diag_body_func(state: TriDiagStateStruct) -> TriDiagStateStruct:
         V = state.V
@@ -64,6 +61,10 @@ def approx_k_min_eigen(
 
     final_state = lax.while_loop(tri_diag_cond_func, tri_diag_body_func, init_state)
 
+    if final_state.t <= num_iters:
+        # TODO: implement this, replace extra diags with -jnp.inf?
+        raise NotImplementedError("Krylov subspace found prematurely not handled.")
+
     # remove dimension hacking initiated at (*)
     V = final_state.V[1:-1,:]
     diag = final_state.diag[1:]
@@ -76,9 +77,6 @@ def approx_k_min_eigen(
         select_range=(0, k-1),
         eigvals_only=True)
 
-    embed()
-    exit()
-
     # Since jax only implements `eigh_tridiagonal` for eigenvalues, we need to compute
     # eigenvectors for ourselves. Below is adapted from tensorflow implementation:
     # https://github.com/tensorflow/tensorflow/blob/c1a369e066d94418ee4f6d8aeaf7fbe086441fc0/tensorflow/python/ops/linalg/linalg_impl.py#L1460-L1585
@@ -86,22 +84,6 @@ def approx_k_min_eigen(
     def tridiag_eigvecs(diag, off_diag, eigvals):
         k = eigvals.size
         n = diag.size
-
-        # Eigenvectors corresponding to cluster of close eigenvalues are
-        # not unique and need to be explicitly orthogonalized. Here we
-        # identify such clusters. Note: This function assumes that
-        # eigenvalues are sorted in non-decreasing order.
-        gap = eigvals[1:] - eigvals[:-1]
-        t_norm = jnp.max(
-            jnp.array([jnp.abs(eigvals[0]), jnp.abs(eigvals[-1])]))
-        gaptol = jnp.sqrt(jnp.finfo(eigvals.dtype).eps) * t_norm
-
-        # Find the beginning and end of runs of eigenvectors corresponding
-        # to eigenvalues closer than "gaptol", which will need to be
-        # orthogonalized against each other.
-        close = jnp.less(gap, gaptol)
-        cluster_mask = jnp.eye(k, dtype=bool) | jnp.diag(close, k=1) | jnp.diag(close, k=-1)
-        cluster_mask = lax.fori_loop(0, k-2, lambda _, mask: mask @ mask, cluster_mask)
 
         # We perform inverse iteration for all eigenvectors in parallel,
         # starting from a random set of vectors, until all have converged.
@@ -119,27 +101,6 @@ def approx_k_min_eigen(
         d = (diag.reshape(1, -1) - eigvals_cast.reshape(-1, 1))
         dl = jnp.concatenate([jnp.zeros((k, 1)), jnp.conj(off_diag)], axis=1)
         du = jnp.concatenate([off_diag, jnp.zeros((k, 1))], axis=1)
-
-        def orthogonalize_close_eigenvectors(eigenvectors):
-            # Eigenvectors corresponding to a cluster of close eigenvalues are not
-            # uniquely defined, but the subspace they span is. To avoid numerical
-            # instability, we explicitly mutually orthogonalize such eigenvectors
-            # after each step of inverse iteration. It is customary to use
-            # modified Gram-Schmidt for this, but this is not very efficient
-            # on some platforms, so here we defer to the QR decomposition in JAX.
-
-            def orthogonalize_cluster(i: int, eigenvectors: Array):
-                # We use the builtin QR factorization to orthonormalize the
-                # vectors in the cluster.
-                cluster_mask_i = cluster_mask[i].reshape(-1, 1)
-                q, _ = jnp.linalg.qr(jnp.transpose(cluster_mask_i * eigenvectors))
-                update_vectors = jnp.transpose(q)
-                eigenvectors = ((cluster_mask_i * update_vectors)
-                                + (~cluster_mask_i * eigenvectors))
-                return eigenvectors
-
-            eigenvectors = lax.fori_loop(0, k, orthogonalize_cluster, eigenvectors)
-            return eigenvectors
 
         def continue_iteration(state: Tuple[int, Array, Array, Array]):
             i, _, nrm_v, nrm_v_old = state
@@ -174,53 +135,13 @@ def approx_k_min_eigen(
         
         _, v, _, _ = lax.while_loop(
             continue_iteration, inverse_iteration_step, (0, v0, norm_v0, zero_norm))
+        return v
 
-        return jnp.transpose(v)
+    tridiag_eigvecs = tridiag_eigvecs(diag, off_diag, min_k_eigvals)
+    min_k_eigvecs = jnp.transpose(tridiag_eigvecs @ V)
 
-    min_k_eigvecs = tridiag_eigvecs(diag, off_diag, min_k_eigvals)
+    return min_k_eigvals, min_k_eigvecs
 
-    # TODO: maybe assert that the eigvals are all negative (or at least some are)?
-
-    jax.debug.print("\n Here! \n")
-    embed()
-    exit()
-
-
-    V = np.empty((num_iters, n))
-    omegas = np.empty((num_iters,))
-    rhos = np.empty((num_iters - 1,))
-
-    v_0 = np.random.normal(size=(n,))
-    V[0] = v_0 / np.linalg.norm(v_0)
-
-    for i in range(num_iters):
-        transformed_v = M(V[i])
-        omegas[i] = np.dot(V[i], transformed_v)
-        if i == num_iters - 1:
-            break  # we have all we need
-        V[i + 1] = transformed_v - (omegas[i] * V[i])
-        if i > 0:
-            V[i + 1] -= rhos[i - 1] * V[i - 1]
-        rhos[i] = np.linalg.norm(V[i + 1])
-        if rhos[i] < eps:
-            break
-        V[i + 1] = V[i + 1] / rhos[i]
-
-    min_eigen_val, u = eigh_tridiagonal(
-        omegas[: i + 1], rhos[:i], select="i", select_range=(0, 0)
-    )
-    min_eigen_vec = (u.T @ V[: i + 1])
-    # renormalize for stability
-    min_eigen_vec = min_eigen_vec / np.linalg.norm(min_eigen_vec)
-
-    #max_eigen_val, u = eigh_tridiagonal(
-    #    omegas[: i + 1], rhos[:i], select="i", select_range=(i, i)
-    #)
-    #max_eigen_vec = (u.T @ V[: i + 1]).squeeze()
-    ## renormalize for stability
-    #max_eigen_vec = max_eigen_vec / np.linalg.norm(max_eigen_vec)
-
-    return min_eigen_val.squeeze(), min_eigen_vec.T
 
 # don't have to jit this function? just jaxpr since it's only called once? YES
 def cgal(
@@ -242,9 +163,7 @@ def cgal(
     max_iters: int
 ) -> Tuple[Array, Array]:
 
-    StateStruct = namedtuple(
-        "StateStruct", 
-        ["t", "X", "y", "obj_gap", "infeas_gap"])
+    StateStruct = namedtuple("StateStruct", ["t", "X", "y", "obj_gap", "infeas_gap"])
 
     @jax.jit
     def cond_func(state: StateStruct) -> bool:
