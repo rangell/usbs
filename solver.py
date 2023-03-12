@@ -53,10 +53,9 @@ def approx_k_min_eigen(
     v_1 = jax.random.normal(rng, shape=(n,))
     v_1 = v_1 / jnp.linalg.norm(v_1)
 
-    # (*) add an extra dimension for the first iteration of Lanczos
-    V = jnp.zeros((num_iters+1, n)) 
+    # (*) dimension hacking to make it easier for jax
+    V = jnp.zeros((num_iters+2, n)) 
     V = V.at[1].set(v_1)
-
     init_state = TriDiagStateStruct(
         t=1,
         V=V,
@@ -65,17 +64,20 @@ def approx_k_min_eigen(
 
     final_state = lax.while_loop(tri_diag_cond_func, tri_diag_body_func, init_state)
 
-    # trim the extra dimension we added at (*)
-    V = final_state.V[1:,:]
+    # remove dimension hacking initiated at (*)
+    V = final_state.V[1:-1,:]
     diag = final_state.diag[1:]
-    off_diag = final_state.off_diag[1:]
+    off_diag = final_state.off_diag[2:-1]
 
     min_k_eigvals = jax.scipy.linalg.eigh_tridiagonal(
         diag,
-        off_diag[1:-1],
+        off_diag,
         select="i",
         select_range=(0, k-1),
         eigvals_only=True)
+
+    embed()
+    exit()
 
     # Since jax only implements `eigh_tridiagonal` for eigenvalues, we need to compute
     # eigenvectors for ourselves. Below is adapted from tensorflow implementation:
@@ -175,10 +177,13 @@ def approx_k_min_eigen(
 
         return jnp.transpose(v)
 
-    # TODO: use `off_diag[1:-1]` for tri diagonal
-    min_k_eigvecs = tridiag_eigvecs(diag, off_diag[1:-1], min_k_eigvals)
+    min_k_eigvecs = tridiag_eigvecs(diag, off_diag, min_k_eigvals)
 
     # TODO: maybe assert that the eigvals are all negative (or at least some are)?
+
+    jax.debug.print("\n Here! \n")
+    embed()
+    exit()
 
 
     V = np.empty((num_iters, n))
