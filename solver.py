@@ -23,42 +23,56 @@ def approx_k_min_eigen(
 
     TriDiagStateStruct = namedtuple(
         "TriDiagStateStruct", 
-        ["t", "v_prev", "v", "diag", "off_diag"])
+        ["t", "V", "diag", "off_diag"])
 
     def tri_diag_cond_func(state: TriDiagStateStruct) -> bool:
         # TODO: re-write this to use `jnp.logical_*`
-        predicates = jnp.array([state.off_diag[state.t] > eps, state.t == 0], dtype=jnp.uint8)
+        predicates = jnp.array([state.off_diag[state.t] > eps, state.t == 1], dtype=jnp.uint8)
         predicates = jnp.array([jnp.sum(predicates) > 0, state.t <= num_iters], dtype=jnp.uint8)
         return jnp.sum(predicates) == 2
 
     def tri_diag_body_func(state: TriDiagStateStruct) -> TriDiagStateStruct:
+        V = state.V
         diag = state.diag
         off_diag = state.off_diag
-        transformed_v = M(state.v)
-        diag = diag.at[state.t].set(jnp.dot(state.v, transformed_v))
-        v_next = (transformed_v
-                  - (diag[state.t] * state.v)
-                  - (off_diag[state.t] * state.v_prev))  # heed the off_diag index
+        transformed_v = M(V[state.t]) - (off_diag[state.t] * V[state.t-1]) # heed the off_diag index
+        diag = diag.at[state.t].set(jnp.dot(V[state.t], transformed_v))
+        v_next = transformed_v - (diag[state.t] * V[state.t])  
+
+        # full reorthogonalization here
+        v_next = lax.fori_loop(
+            1, state.t+1, lambda i, vec: vec - (jnp.dot(vec, V[i]) * V[i]), v_next)
+
         off_diag = off_diag.at[state.t+1].set(jnp.linalg.norm(v_next))
         v_next /= off_diag[state.t+1]
+        V = V.at[state.t+1].set(v_next)
         return TriDiagStateStruct(
-            t=state.t+1, v_prev=state.v, v=v_next, diag=diag, off_diag=off_diag
+            t=state.t+1, V=V, diag=diag, off_diag=off_diag
         )
 
-    v_0 = jax.random.normal(rng, shape=(n,))
-    v_0 = v_0 / jnp.linalg.norm(v_0)
+    v_1 = jax.random.normal(rng, shape=(n,))
+    v_1 = v_1 / jnp.linalg.norm(v_1)
+
+    # (*) add an extra dimension for the first iteration of Lanczos
+    V = jnp.zeros((num_iters+1, n)) 
+    V = V.at[1].set(v_1)
+
     init_state = TriDiagStateStruct(
-        t=0,
-        v_prev=jnp.empty((n,)),
-        v=v_0,
-        diag=jnp.zeros((num_iters,)),
-        off_diag=jnp.zeros((num_iters+1,)))
+        t=1,
+        V=V,
+        diag=jnp.zeros((num_iters+1,)),
+        off_diag=jnp.zeros((num_iters+2,)))
 
     final_state = lax.while_loop(tri_diag_cond_func, tri_diag_body_func, init_state)
 
+    # trim the extra dimension we added at (*)
+    V = final_state.V[1:,:]
+    diag = final_state.diag[1:]
+    off_diag = final_state.off_diag[1:]
+
     min_k_eigvals = jax.scipy.linalg.eigh_tridiagonal(
-        final_state.diag,
-        final_state.off_diag[1:-1],
+        diag,
+        off_diag[1:-1],
         select="i",
         select_range=(0, k-1),
         eigvals_only=True)
@@ -151,23 +165,21 @@ def approx_k_min_eigen(
             nrm_v_old = nrm_v
             nrm_v = jnp.linalg.norm(v, axis=1)
             v = v / nrm_v.reshape(-1, 1)
-            v = orthogonalize_close_eigenvectors(v)
+            # orthogonalize for numerical stability
+            q, _ = jnp.linalg.qr(jnp.transpose(v))
+            v = jnp.transpose(q)
             return i+1, v, nrm_v, nrm_v_old
-
+        
         _, v, _, _ = lax.while_loop(
             continue_iteration, inverse_iteration_step, (0, v0, norm_v0, zero_norm))
 
         return jnp.transpose(v)
 
     # TODO: use `off_diag[1:-1]` for tri diagonal
-    min_k_eigvecs = tridiag_eigvecs(
-        final_state.diag, final_state.off_diag[1:-1], min_k_eigvals)
+    min_k_eigvecs = tridiag_eigvecs(diag, off_diag[1:-1], min_k_eigvals)
 
     # TODO: maybe assert that the eigvals are all negative (or at least some are)?
 
-    jax.debug.print("\n Here! \n")
-    embed()
-    exit()
 
     V = np.empty((num_iters, n))
     omegas = np.empty((num_iters,))
