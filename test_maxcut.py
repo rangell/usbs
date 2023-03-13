@@ -162,9 +162,7 @@ if __name__ == "__main__":
     M = (Q * eigvals) @ Q.T
 
     eigvals, eigvecs = solver.approx_k_min_eigen(
-        M = lambda v: M @ v, n=100, k=6, num_iters=60, eps=1e-6, rng=rng)
-
-    eigvals0, eigvecs0 = scipy.sparse.linalg.eigsh(np.array(M), k=6, which="SA")
+        M = lambda v: M @ v, n=100, k=6, num_iters=99, eps=1e-6, rng=rng)
 
     embed()
     exit()

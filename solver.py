@@ -1,4 +1,5 @@
 from collections import namedtuple
+from functools import partial
 import jax
 import jax.numpy as jnp
 from jax import lax
@@ -11,10 +12,11 @@ from typing import Any, Callable, Tuple
 from IPython import embed
 
 
-# TODO: implement storage efficient version? No, numerically unstable
-# TODO: add static_argnames: n, k, num_iters, eps (, rng?)
+# TODO: restructure to handle linear operator
+# NOTE: The storage efficient version of this is NOT accurate
+@partial(jax.jit, static_argnames=["M", "n", "k", "num_iters", "eps"])
 def approx_k_min_eigen(
-    M: Callable[[Array], Array],
+    M: Callable[[Array], Array],  # this is going to change everytime because it's the gradient
     n: int,
     k: int,
     num_iters: int,
@@ -61,15 +63,16 @@ def approx_k_min_eigen(
 
     final_state = lax.while_loop(tri_diag_cond_func, tri_diag_body_func, init_state)
 
-    if final_state.t <= num_iters:
-        # TODO: implement this, replace extra diags with -jnp.inf?
-        raise NotImplementedError("Krylov subspace found prematurely not handled.")
+    ## TODO: implement this, replace extra diags with -jnp.inf?
+    #if final_state.t <= num_iters:
+    #    raise NotImplementedError("Krylov subspace found prematurely not handled.")
 
     # remove dimension hacking initiated at (*)
     V = final_state.V[1:-1,:]
     diag = final_state.diag[1:]
     off_diag = final_state.off_diag[2:-1]
 
+    # Compute eigenvectors from tridiagonal matrix
     min_k_eigvals = jax.scipy.linalg.eigh_tridiagonal(
         diag,
         off_diag,
@@ -137,6 +140,7 @@ def approx_k_min_eigen(
             continue_iteration, inverse_iteration_step, (0, v0, norm_v0, zero_norm))
         return v
 
+    # Compute eigenvector for tridiagonal matrix
     tridiag_eigvecs = tridiag_eigvecs(diag, off_diag, min_k_eigvals)
     min_k_eigvecs = jnp.transpose(tridiag_eigvecs @ V)
 
