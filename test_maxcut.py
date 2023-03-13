@@ -154,18 +154,15 @@ if __name__ == "__main__":
     A_adjoint_slim = create_A_adjoint_slim()
     proj_K = create_proj_K(n, SCALE_X)
 
-    rng = jax.random.PRNGKey(0)
-    M = jax.random.normal(rng, shape=(100, 100))
-    Q, _ = jnp.linalg.qr(M) # columns of Q are orthonormal
-    eigvals = jnp.ceil(jnp.arange(1, 32, 0.3))[:100].reshape(1, -1)
-    #eigvals = jnp.ceil(jnp.arange(1, 101, 1))[:100].reshape(1, -1)
-    M = (Q * eigvals) @ Q.T
+    #rng = jax.random.PRNGKey(0)
+    #M = jax.random.normal(rng, shape=(100, 100))
+    #Q, _ = jnp.linalg.qr(M) # columns of Q are orthonormal
+    #eigvals = jnp.ceil(jnp.arange(1, 32, 0.3))[:100].reshape(1, -1)
+    ##eigvals = jnp.ceil(jnp.arange(1, 101, 1))[:100].reshape(1, -1)
+    #M = (Q * eigvals) @ Q.T
 
-    eigvals, eigvecs = solver.approx_k_min_eigen(
-        M = lambda v: M @ v, n=100, k=6, num_iters=99, eps=1e-6, rng=rng)
-
-    embed()
-    exit()
+    #eigvals, eigvecs = solver.approx_k_min_eigen(
+    #    M = lambda v: M @ v, n=100, k=6, num_iters=50, eps=1e-6, rng=rng)
 
     X, y = solver.cgal(
        n=n,
@@ -183,5 +180,4 @@ if __name__ == "__main__":
        SCALE_C=SCALE_C,
        SCALE_X=SCALE_X,
        eps=1.0,
-       max_iters=1e6
-    )
+       max_iters=1e6)

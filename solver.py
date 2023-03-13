@@ -14,9 +14,15 @@ from IPython import embed
 
 # TODO: restructure to handle linear operator
 # NOTE: The storage efficient version of this is NOT accurate
-@partial(jax.jit, static_argnames=["M", "n", "k", "num_iters", "eps"])
-def approx_k_min_eigen(
-    M: Callable[[Array], Array],  # this is going to change everytime because it's the gradient
+@partial(jax.jit,
+         static_argnames=["C_matvec", "A_adjoint_slim", "proj_K", "n", "k", "num_iters", "eps"])
+def approx_grad_k_min_eigen(
+    C_matvec: Callable[[Array], Array],
+    A_adjoint_slim: Callable[[Array, Array], Array],
+    proj_K: Callable[[Array], Array],
+    y: Array,
+    z: Array,
+    beta: float,
     n: int,
     k: int,
     num_iters: int,
@@ -24,17 +30,22 @@ def approx_k_min_eigen(
     rng: Array
 ) -> Tuple[Array, Array]:
 
+    # cache this since it will not change 
+    adjoint_left_vec = y + beta*(z - proj_K(z + (y / beta)))
+
     TriDiagStateStruct = namedtuple("TriDiagStateStruct", ["t", "V", "diag", "off_diag"])
 
     def tri_diag_cond_func(state: TriDiagStateStruct) -> bool:
-        return jnp.logical_and(
-            jnp.logical_or(state.off_diag[state.t] > eps, state.t == 1), state.t <= num_iters)
+        #return jnp.logical_and(
+        #    jnp.logical_or(state.off_diag[state.t] > eps, state.t == 1), state.t <= num_iters)
+        return state.t <= num_iters  # Don't worry about eps for now, we will come back if we need it.
 
     def tri_diag_body_func(state: TriDiagStateStruct) -> TriDiagStateStruct:
         V = state.V
         diag = state.diag
         off_diag = state.off_diag
-        transformed_v = M(V[state.t]) - (off_diag[state.t] * V[state.t-1]) # heed the off_diag index
+        transformed_v = C_matvec(V[state.t]) + A_adjoint_slim(adjoint_left_vec, V[state.t])
+        transformed_v = transformed_v - (off_diag[state.t] * V[state.t-1]) # heed the off_diag index
         diag = diag.at[state.t].set(jnp.dot(V[state.t], transformed_v))
         v_next = transformed_v - (diag[state.t] * V[state.t])  
 
@@ -63,9 +74,9 @@ def approx_k_min_eigen(
 
     final_state = lax.while_loop(tri_diag_cond_func, tri_diag_body_func, init_state)
 
-    ## TODO: implement this, replace extra diags with -jnp.inf?
-    #if final_state.t <= num_iters:
-    #    raise NotImplementedError("Krylov subspace found prematurely not handled.")
+    # TODO: implement Krylov subspace found prematurely:
+    #   replace extra diags with `jnp.inf` and off_diags with `0`?
+    # NOTE: this will not be needed until we change `tri_diag_cond_func` to reincorporate `eps`.
 
     # remove dimension hacking initiated at (*)
     V = final_state.V[1:-1,:]
@@ -171,19 +182,33 @@ def cgal(
 
     @jax.jit
     def cond_func(state: StateStruct) -> bool:
-        # hacky jax-compatible implementation of the following predicate (to continue optimizing):
-        #   (obj_gap > eps or infeas_gap > eps) and state.t < max_iters
-        # TODO: re-write this to use `jnp.logical_*`
-        predicates = jnp.array([state.obj_gap > eps, state.infeas_gap > eps], dtype=jnp.uint8)
-        predicates = jnp.array([jnp.sum(predicates) > 0, state.t < max_iters], dtype=jnp.uint8)
-        return jnp.sum(predicates) == 2
+        return jnp.logical_and(
+            jnp.logical_or(state.obj_gap > eps, state.infeas_gap > eps),
+            state.t < max_iters)
 
-    @jax.jit
+    #@jax.jit
     def body_func(state: StateStruct) -> StateStruct:
         z = A_operator(state.X)
         b = proj_K(z + (state.y / beta))
         grad = C_add(A_adjoint(state.y + beta*(z - b)))
-        eigvals, eigvecs = jnp.linalg.eigh(grad)
+        eigvals0, eigvecs0 = jnp.linalg.eigh(grad)
+
+        eigvals, eigvecs = approx_grad_k_min_eigen(
+            C_matvec=C_matvec,
+            A_adjoint_slim=A_adjoint_slim,
+            proj_K=proj_K,
+            y=state.y,
+            z=z,
+            beta=beta,
+            n=n,
+            k=2,
+            num_iters=100,
+            eps=eps,
+            rng=jax.random.PRNGKey(0))
+
+        embed()
+        exit()
+
         # TODO: report eigval gap here!
         min_eigval = eigvals[0]
         min_eigvec = eigvecs[:, 0:1]  # gives the right shape
@@ -208,8 +233,6 @@ def cgal(
             obj_gap=obj_gap,
             infeas_gap=infeas_gap)
 
-
-
     init_state = StateStruct(
         t=0,
         X=jnp.zeros((n, n)) * SCALE_X,
@@ -217,9 +240,12 @@ def cgal(
         obj_gap=1.1*eps,
         infeas_gap=1.1*eps)
 
-    final_state = lax.while_loop(cond_func, body_func, init_state)
+    state1 = body_func(init_state)
 
     embed()
     exit()
+
+    final_state = lax.while_loop(cond_func, body_func, init_state)
+
 
     return final_state.X, final_state.y
