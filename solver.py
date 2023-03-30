@@ -5,6 +5,7 @@ import jax.numpy as jnp
 from jax import lax
 from jax._src.typing import Array
 import numpy as np
+import math
 import scipy  # type: ignore
 from scipy.linalg import eigh_tridiagonal  # type: ignore 
 from typing import Any, Callable, Tuple
@@ -22,7 +23,7 @@ def approx_grad_k_min_eigen(
     adjoint_left_vec: Array,
     n: int,
     k: int,
-    num_iters: int,
+    num_iters: Array,
     eps: float,
     rng: Array
 ) -> Tuple[Array, Array]:
@@ -165,12 +166,14 @@ def cgal(
     A_adjoint: Callable[[Array], Array],
     A_adjoint_slim: Callable[[Array, Array], Array],
     proj_K: Callable[[Array], Array],
-    beta: float,
+    beta0: float,
     SCALE_C: float,
     SCALE_X: float,
     eps: float,
     max_iters: int
 ) -> Tuple[Array, Array]:
+
+    lanczos_num_iters = int(math.ceil((trace_ub/(eps * SCALE_X * SCALE_C) + 1) ** (1 / 4)) * math.log(n))
 
     StateStruct = namedtuple(
         "StateStruct",
@@ -182,45 +185,53 @@ def cgal(
             jnp.logical_or(state.obj_gap > eps, state.infeas_gap > eps),
             state.t < max_iters)
 
-    @jax.jit
+    #@jax.jit
     def body_func(state: StateStruct) -> StateStruct:
+        #beta = beta0 * jnp.sqrt(state.t + 1)
+        beta = 10.0
         b = proj_K(state.z + (state.y / beta))
         adjoint_left_vec = state.y + beta*(state.z - b)
+
+        #grad = C_add(A_adjoint(state.y + beta*(state.z - b)))
+        #eigvals0, eigvecs0 = jnp.linalg.eigh(grad)
+
         eigvals, eigvecs = approx_grad_k_min_eigen(
             C_matvec=C_matvec,
             A_adjoint_slim=A_adjoint_slim,
             adjoint_left_vec=adjoint_left_vec,
             n=n,
             k=2,
-            num_iters=100, # TODO: change this depending one `n` and `state.t`?
+            num_iters=lanczos_num_iters,
             eps=1e-6,
             rng=jax.random.PRNGKey(0))
 
         min_eigval = eigvals[0]
         min_eigvec = eigvecs[:, 0:1]  # gives the right shape for next line
-        X_update_dir = min_eigvec @ min_eigvec.T
+        X_update_dir = trace_ub * min_eigvec @ min_eigvec.T
         min_eigvec = min_eigvec.reshape(-1,)
 
-        surrogate_dual_gap = state.obj_val - jnp.dot(min_eigvec, C_matvec(min_eigvec))
+        surrogate_dual_gap = state.obj_val - trace_ub*jnp.dot(min_eigvec, C_matvec(min_eigvec))
         surrogate_dual_gap += jnp.dot(adjoint_left_vec, state.z)
-        surrogate_dual_gap -= jnp.dot(min_eigvec, A_adjoint_slim(adjoint_left_vec, min_eigvec))
+        surrogate_dual_gap -= trace_ub * jnp.dot(min_eigvec, A_adjoint_slim(adjoint_left_vec, min_eigvec))
         obj_gap = surrogate_dual_gap - jnp.dot(state.y, state.z - b)
         obj_gap -= 0.5*beta*jnp.linalg.norm(state.z - b)**2
         obj_gap = obj_gap / (SCALE_C * SCALE_X)
         infeas_gap = jnp.max(jnp.abs(state.z - proj_K(state.z))) / SCALE_X
 
-        # TODO: report eigval gap here!
-        jax.debug.print("t: {t} - obj_val: {obj_val} - obj_gap: {obj_gap} - infeas_gap: {infeas_gap}",
+        jax.debug.print("t: {t} - obj_val: {obj_val} - "
+                        "obj_gap: {obj_gap} - infeas_gap: {infeas_gap} - "
+                        "eigen_gap: {eigen_gap}",
                         t=state.t,
                         obj_val=state.obj_val / (SCALE_C * SCALE_X),
                         obj_gap=obj_gap,
-                        infeas_gap=infeas_gap)
+                        infeas_gap=infeas_gap,
+                        eigen_gap=eigvals[1] - eigvals[0])
 
         eta = 2.0 / (state.t + 2.0)   # just use the standard CGAL step-size for now
         X_next = (1-eta)*state.X + eta*X_update_dir
-        z_next = (1-eta)*state.z + eta*A_operator_slim(min_eigvec)
+        z_next = (1-eta)*state.z + eta*trace_ub*A_operator_slim(min_eigvec)
         y_next = state.y + (z_next - proj_K(z_next + (state.y / beta)))
-        obj_val_next = (1-eta)*state.obj_val + eta*jnp.dot(min_eigvec, C_matvec(min_eigvec))
+        obj_val_next = (1-eta)*state.obj_val + eta*trace_ub*jnp.dot(min_eigvec, C_matvec(min_eigvec))
 
         return StateStruct(
             t=state.t+1,
@@ -242,10 +253,6 @@ def cgal(
 
     state1 = body_func(init_state)
 
-    embed()
-    exit()
-
     final_state = lax.while_loop(cond_func, body_func, init_state)
-
 
     return final_state.X, final_state.y

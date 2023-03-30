@@ -134,6 +134,10 @@ if __name__ == "__main__":
 
     SCALE_C = 1.0 / scipy.sparse.linalg.norm(C, ord="fro") 
     SCALE_X = 1.0 / n
+    trace_ub = 1.0
+    #SCALE_C = 1.0
+    #SCALE_X = 1.0
+    #trace_ub = n
 
     scs_soln_cache = str(Path(MAT_PATH).with_suffix("")) + "_scs_soln.pkl"
     if Path(scs_soln_cache).is_file():
@@ -167,7 +171,7 @@ if __name__ == "__main__":
     X, y = solver.cgal(
        n=n,
        m=n,
-       trace_ub=1.0,
+       trace_ub=trace_ub,
        C_innerprod=C_innerprod,
        C_add=C_add,
        C_matvec=C_matvec,
@@ -176,7 +180,7 @@ if __name__ == "__main__":
        A_adjoint=A_adjoint,
        A_adjoint_slim=A_adjoint_slim,
        proj_K=proj_K,
-       beta=1.0,
+       beta0=1.0,
        SCALE_C=SCALE_C,
        SCALE_X=SCALE_X,
        eps=1.0,
