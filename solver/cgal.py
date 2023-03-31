@@ -185,7 +185,7 @@ def cgal(
             jnp.logical_or(state.obj_gap > eps, state.infeas_gap > eps),
             state.t < max_iters)
 
-    #@jax.jit
+    @jax.jit
     def body_func(state: StateStruct) -> StateStruct:
         #beta = beta0 * jnp.sqrt(state.t + 1)
         beta = 10.0
@@ -250,8 +250,6 @@ def cgal(
         obj_val=0.0,
         obj_gap=1.1*eps,
         infeas_gap=1.1*eps)
-
-    state1 = body_func(init_state)
 
     final_state = lax.while_loop(cond_func, body_func, init_state)
 

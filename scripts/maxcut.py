@@ -11,7 +11,7 @@ from scipy.io import loadmat  # type: ignore
 from scipy.sparse import csc_matrix  # type: ignore
 from typing import Any, Callable
 
-import solver
+from solver.cgal import cgal
 
 from IPython import embed
 
@@ -168,7 +168,7 @@ if __name__ == "__main__":
     #eigvals, eigvecs = solver.approx_k_min_eigen(
     #    M = lambda v: M @ v, n=100, k=6, num_iters=50, eps=1e-6, rng=rng)
 
-    X, y = solver.cgal(
+    X, y = cgal(
        n=n,
        m=n,
        trace_ub=trace_ub,
@@ -184,4 +184,4 @@ if __name__ == "__main__":
        SCALE_C=SCALE_C,
        SCALE_X=SCALE_X,
        eps=1.0,
-       max_iters=1e6)
+       max_iters=10)
