@@ -155,7 +155,7 @@ def cgal(
 ) -> Tuple[Array, Array]:
 
     #lanczos_num_iters = int(math.ceil((trace_ub/(eps * SCALE_X * SCALE_C) + 1) ** (1 / 4)) * math.log(n))
-    lanczos_num_iters = 40
+    lanczos_num_iters = 100
 
     StateStruct = namedtuple(
         "StateStruct",
