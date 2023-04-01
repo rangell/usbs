@@ -158,4 +158,4 @@ if __name__ == "__main__":
        SCALE_C=SCALE_C,
        SCALE_X=SCALE_X,
        eps=1.0,
-       max_iters=10)
+       max_iters=3000)

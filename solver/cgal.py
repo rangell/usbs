@@ -1,4 +1,5 @@
 from collections import namedtuple
+from equinox.internal._loop.bounded import bounded_while_loop # type: ignore
 from functools import partial
 import jax
 import jax.numpy as jnp
@@ -6,17 +7,13 @@ from jax import lax
 from jax._src.typing import Array
 import numpy as np
 import math
-import scipy  # type: ignore
-from scipy.linalg import eigh_tridiagonal  # type: ignore 
 from typing import Any, Callable, Tuple
 
 from IPython import embed
 
 
-# TODO: restructure to handle linear operator
 # NOTE: The storage efficient version of this is NOT accurate
-@partial(jax.jit,
-         static_argnames=["C_matvec", "A_adjoint_slim", "n", "k", "num_iters", "eps"])
+@partial(jax.jit, static_argnames=["C_matvec", "A_adjoint_slim", "n", "k", "num_iters"])
 def approx_grad_k_min_eigen(
     C_matvec: Callable[[Array], Array],
     A_adjoint_slim: Callable[[Array, Array], Array],
@@ -24,35 +21,28 @@ def approx_grad_k_min_eigen(
     n: int,
     k: int,
     num_iters: Array,
-    eps: float,
     rng: Array
 ) -> Tuple[Array, Array]:
 
     TriDiagStateStruct = namedtuple("TriDiagStateStruct", ["t", "V", "diag", "off_diag"])
 
-    def tri_diag_cond_func(state: TriDiagStateStruct) -> bool:
-        #return jnp.logical_and(
-        #    jnp.logical_or(state.off_diag[state.t] > eps, state.t == 1), state.t <= num_iters)
-        return state.t <= num_iters  # Don't worry about eps for now, we will come back if we need it.
-
-    def tri_diag_body_func(state: TriDiagStateStruct) -> TriDiagStateStruct:
+    def tri_diag_body_func(t: int, state: TriDiagStateStruct) -> TriDiagStateStruct:
         V = state.V
         diag = state.diag
         off_diag = state.off_diag
-        transformed_v = C_matvec(V[state.t]) + A_adjoint_slim(adjoint_left_vec, V[state.t])
-        transformed_v = transformed_v - (off_diag[state.t] * V[state.t-1]) # heed the off_diag index
-        diag = diag.at[state.t].set(jnp.dot(V[state.t], transformed_v))
-        v_next = transformed_v - (diag[state.t] * V[state.t])  
+        transformed_v = C_matvec(V[t]) + A_adjoint_slim(adjoint_left_vec, V[t])
+        transformed_v = transformed_v - (off_diag[t] * V[t-1]) # heed the off_diag index
+        diag = diag.at[t].set(jnp.dot(V[t], transformed_v))
+        v_next = transformed_v - (diag[t] * V[t])  
 
         # full reorthogonalization here
-        v_next = lax.fori_loop(
-            1, state.t+1, lambda i, vec: vec - (jnp.dot(vec, V[i]) * V[i]), v_next)
+        v_next -= jnp.sum((V @ v_next).reshape(-1, 1) * V, axis=0)
 
-        off_diag = off_diag.at[state.t+1].set(jnp.linalg.norm(v_next))
-        v_next /= off_diag[state.t+1]
-        V = V.at[state.t+1].set(v_next)
+        off_diag = off_diag.at[t+1].set(jnp.linalg.norm(v_next))
+        v_next /= off_diag[t+1]
+        V = V.at[t+1].set(v_next)
         return TriDiagStateStruct(
-            t=state.t+1, V=V, diag=diag, off_diag=off_diag
+            t=t+1, V=V, diag=diag, off_diag=off_diag
         )
 
     v_1 = jax.random.normal(rng, shape=(n,))
@@ -67,11 +57,7 @@ def approx_grad_k_min_eigen(
         diag=jnp.zeros((num_iters+1,)),
         off_diag=jnp.zeros((num_iters+2,)))
 
-    final_state = lax.while_loop(tri_diag_cond_func, tri_diag_body_func, init_state)
-
-    # TODO: implement Krylov subspace found prematurely:
-    #   replace extra diags with `jnp.inf` and off_diags with `0`?
-    # NOTE: this will not be needed until we change `tri_diag_cond_func` to reincorporate `eps`.
+    final_state = lax.fori_loop(1, num_iters+1, tri_diag_body_func, init_state)
 
     # remove dimension hacking initiated at (*)
     V = final_state.V[1:-1,:]
@@ -113,17 +99,11 @@ def approx_grad_k_min_eigen(
 
         def continue_iteration(state: Tuple[int, Array, Array, Array]):
             i, _, nrm_v, nrm_v_old = state
-            max_it = 5  # Taken from LAPACK xSTEIN.
             min_norm_growth = 0.1
             norm_growth_factor = 1 + min_norm_growth
             # We stop the inverse iteration when we reach the maximum number of
             # iterations or the norm growths is less than 10%.
-            return jnp.logical_and(
-                jnp.less(i, max_it),
-                jnp.any(
-                    jnp.greater_equal(
-                        jnp.real(nrm_v),
-                        jnp.real(norm_growth_factor * nrm_v_old))))
+            return jnp.any(jnp.greater_equal(jnp.real(nrm_v), jnp.real(norm_growth_factor * nrm_v_old)))
 
         def inverse_iteration_step(state: Tuple[int, Array, Array, Array]):
             i, v, nrm_v, nrm_v_old = state
@@ -141,9 +121,10 @@ def approx_grad_k_min_eigen(
             q, _ = jnp.linalg.qr(jnp.transpose(v))
             v = jnp.transpose(q)
             return i+1, v, nrm_v, nrm_v_old
-        
-        _, v, _, _ = lax.while_loop(
-            continue_iteration, inverse_iteration_step, (0, v0, norm_v0, zero_norm))
+
+        # `max_steps` taken from LAPACK xSTEIN.
+        _, v, _, _ = bounded_while_loop(
+            continue_iteration, inverse_iteration_step, (0, v0, norm_v0, zero_norm), max_steps=5)
         return v
 
     # Compute eigenvector for tridiagonal matrix
@@ -173,7 +154,8 @@ def cgal(
     max_iters: int
 ) -> Tuple[Array, Array]:
 
-    lanczos_num_iters = int(math.ceil((trace_ub/(eps * SCALE_X * SCALE_C) + 1) ** (1 / 4)) * math.log(n))
+    #lanczos_num_iters = int(math.ceil((trace_ub/(eps * SCALE_X * SCALE_C) + 1) ** (1 / 4)) * math.log(n))
+    lanczos_num_iters = 40
 
     StateStruct = namedtuple(
         "StateStruct",
@@ -181,14 +163,11 @@ def cgal(
 
     @jax.jit
     def cond_func(state: StateStruct) -> bool:
-        return jnp.logical_and(
-            jnp.logical_or(state.obj_gap > eps, state.infeas_gap > eps),
-            state.t < max_iters)
+        return jnp.logical_or(state.obj_gap > eps, state.infeas_gap > eps)
 
     @jax.jit
     def body_func(state: StateStruct) -> StateStruct:
-        #beta = beta0 * jnp.sqrt(state.t + 1)
-        beta = 10.0
+        beta = beta0 * jnp.sqrt(state.t + 1)
         b = proj_K(state.z + (state.y / beta))
         adjoint_left_vec = state.y + beta*(state.z - b)
 
@@ -200,9 +179,8 @@ def cgal(
             A_adjoint_slim=A_adjoint_slim,
             adjoint_left_vec=adjoint_left_vec,
             n=n,
-            k=2,
+            k=1,
             num_iters=lanczos_num_iters,
-            eps=1e-6,
             rng=jax.random.PRNGKey(0))
 
         min_eigval = eigvals[0]
@@ -219,13 +197,11 @@ def cgal(
         infeas_gap = jnp.max(jnp.abs(state.z - proj_K(state.z))) / SCALE_X
 
         jax.debug.print("t: {t} - obj_val: {obj_val} - "
-                        "obj_gap: {obj_gap} - infeas_gap: {infeas_gap} - "
-                        "eigen_gap: {eigen_gap}",
+                        "obj_gap: {obj_gap} - infeas_gap: {infeas_gap} ",
                         t=state.t,
                         obj_val=state.obj_val / (SCALE_C * SCALE_X),
                         obj_gap=obj_gap,
-                        infeas_gap=infeas_gap,
-                        eigen_gap=eigvals[1] - eigvals[0])
+                        infeas_gap=infeas_gap)
 
         eta = 2.0 / (state.t + 2.0)   # just use the standard CGAL step-size for now
         X_next = (1-eta)*state.X + eta*X_update_dir
@@ -251,6 +227,6 @@ def cgal(
         obj_gap=1.1*eps,
         infeas_gap=1.1*eps)
 
-    final_state = lax.while_loop(cond_func, body_func, init_state)
+    final_state = bounded_while_loop(cond_func, body_func, init_state, max_steps=max_iters)
 
     return final_state.X, final_state.y
