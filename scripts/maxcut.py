@@ -121,7 +121,11 @@ if __name__ == "__main__":
 
     scaled_C = C * SCALE_C
     scaled_C = scaled_C.tocoo().T
-    scaled_C = COO((scaled_C.data, scaled_C.row, scaled_C.col), shape=scaled_C.shape) 
+    scaled_C = COO(
+        (scaled_C.data, scaled_C.row, scaled_C.col),
+        shape=scaled_C.shape,
+        cols_sorted=True,
+        rows_sorted=True) 
 
     C_innerprod = create_C_innerprod(scaled_C)
     C_add = create_C_add(scaled_C)
