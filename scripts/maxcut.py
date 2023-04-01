@@ -3,6 +3,7 @@ import jax
 import jax.numpy as jnp
 from jax import lax
 from jax._src.typing import Array
+from jax.experimental.sparse import COO, coo_matmat, coo_matvec
 import numpy as np
 from pathlib import Path
 import pickle
@@ -16,55 +17,25 @@ from solver.cgal import cgal
 from IPython import embed
 
 
-def create_C_innerprod(C: csc_matrix) -> Callable[[Array], float]:
-    indptr = jnp.array(C.indptr)
-    indices = jnp.array(C.indices)
-    data = jnp.array(C.data)
+def create_C_innerprod(C: COO) -> Callable[[Array], float]:
     @jax.jit
     def C_innerprod(X: Array) -> float:
-        sum = 0.0
-        inner_loop = lambda j, init_sum : lax.fori_loop(
-            indptr[j],
-            indptr[j+1],
-            lambda offset, partial_sum: partial_sum + (data[offset] * X[indices[offset], j]),
-            init_sum)
-        sum = lax.fori_loop(0, indptr.size-1, inner_loop, sum)
-        return sum
+        return jnp.trace(coo_matmat(C, X))
     return C_innerprod
 
 
-def create_C_add(C: csc_matrix) -> Callable[[Array], Array]:
-    indptr = jnp.array(C.indptr)
-    indices = jnp.array(C.indices)
-    data = jnp.array(C.data)
+def create_C_add(C: COO) -> Callable[[Array], Array]:
+    dense_C = C.todense()
     @jax.jit
     def C_add(X: Array) -> Array:
-        Y = jnp.copy(X)
-        inner_loop = lambda j, init_Y: lax.fori_loop(
-            indptr[j],
-            indptr[j+1],
-            lambda offset, partial_Y: partial_Y.at[indices[offset], j].add(data[offset]),
-            init_Y)
-        Y = lax.fori_loop(0, indptr.size-1, inner_loop, Y)
-        return Y
+        return dense_C + X
     return C_add
 
 
-def create_C_matvec(C: csc_matrix) -> Callable[[Array], Array]:
-    indptr = jnp.array(C.indptr)
-    indices = jnp.array(C.indices)
-    data = jnp.array(C.data)
-    n = C.shape[0]
+def create_C_matvec(C: COO) -> Callable[[Array], Array]:
     @jax.jit
     def C_matvec(u: Array) -> Array:
-        v = jnp.zeros((n,))
-        inner_loop = lambda j, init_v: lax.fori_loop(
-            indptr[j],
-            indptr[j+1],
-            lambda offset, partial_v: partial_v.at[indices[offset]].add(u[j] * data[offset]),
-            init_v)
-        v = lax.fori_loop(0, indptr.size-1, inner_loop, v)
-        return v
+        return coo_matvec(C, u)
     return C_matvec
 
 
@@ -149,6 +120,9 @@ if __name__ == "__main__":
             pickle.dump(X_scs, f_out)
 
     scaled_C = C * SCALE_C
+    scaled_C = scaled_C.tocoo().T
+    scaled_C = COO((scaled_C.data, scaled_C.row, scaled_C.col), shape=scaled_C.shape) 
+
     C_innerprod = create_C_innerprod(scaled_C)
     C_add = create_C_add(scaled_C)
     C_matvec = create_C_matvec(scaled_C)
