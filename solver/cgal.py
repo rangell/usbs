@@ -12,7 +12,6 @@ from typing import Any, Callable, Tuple
 from IPython import embed
 
 
-# NOTE: The storage efficient version of this is NOT accurate
 @partial(jax.jit, static_argnames=["C_matvec", "A_adjoint_slim", "n", "k", "num_iters"])
 def approx_grad_k_min_eigen(
     C_matvec: Callable[[Array], Array],
@@ -134,7 +133,6 @@ def approx_grad_k_min_eigen(
     return min_k_eigvals, min_k_eigvecs
 
 
-# don't have to jit this function? just jaxpr since it's only called once? YES
 def cgal(
     n: int,
     m: int,
@@ -151,11 +149,9 @@ def cgal(
     SCALE_C: float,
     SCALE_X: float,
     eps: float,
-    max_iters: int
+    max_iters: int,
+    lanczos_num_iters: int
 ) -> Tuple[Array, Array]:
-
-    #lanczos_num_iters = int(math.ceil((trace_ub/(eps * SCALE_X * SCALE_C) + 1) ** (1 / 4)) * math.log(n))
-    lanczos_num_iters = 100
 
     StateStruct = namedtuple(
         "StateStruct",
@@ -171,9 +167,6 @@ def cgal(
         b = proj_K(state.z + (state.y / beta))
         adjoint_left_vec = state.y + beta*(state.z - b)
 
-        #grad = C_add(A_adjoint(state.y + beta*(state.z - b)))
-        #eigvals0, eigvecs0 = jnp.linalg.eigh(grad)
-
         eigvals, eigvecs = approx_grad_k_min_eigen(
             C_matvec=C_matvec,
             A_adjoint_slim=A_adjoint_slim,
@@ -181,7 +174,7 @@ def cgal(
             n=n,
             k=1,
             num_iters=lanczos_num_iters,
-            rng=jax.random.PRNGKey(0))
+            rng=jax.random.PRNGKey(state.t))
 
         min_eigval = eigvals[0]
         min_eigvec = eigvecs[:, 0:1]  # gives the right shape for next line
@@ -203,7 +196,7 @@ def cgal(
                         obj_gap=obj_gap,
                         infeas_gap=infeas_gap)
 
-        eta = 2.0 / (state.t + 2.0)   # just use the standard CGAL step-size for now
+        eta = 2.0 / (state.t + 2.0)
         X_next = (1-eta)*state.X + eta*X_update_dir
         z_next = (1-eta)*state.z + eta*trace_ub*A_operator_slim(min_eigvec)
         y_next = state.y + (z_next - proj_K(z_next + (state.y / beta)))
@@ -226,6 +219,8 @@ def cgal(
         obj_val=0.0,
         obj_gap=1.1*eps,
         infeas_gap=1.1*eps)
+
+    #state1 = body_func(init_state)
 
     final_state = bounded_while_loop(cond_func, body_func, init_state, max_steps=max_iters)
 

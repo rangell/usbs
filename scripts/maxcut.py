@@ -106,9 +106,6 @@ if __name__ == "__main__":
     SCALE_C = 1.0 / scipy.sparse.linalg.norm(C, ord="fro") 
     SCALE_X = 1.0 / n
     trace_ub = 1.0
-    #SCALE_C = 1.0
-    #SCALE_X = 1.0
-    #trace_ub = n
 
     scs_soln_cache = str(Path(MAT_PATH).with_suffix("")) + "_scs_soln.pkl"
     if Path(scs_soln_cache).is_file():
@@ -136,22 +133,10 @@ if __name__ == "__main__":
     A_adjoint_slim = create_A_adjoint_slim()
     proj_K = create_proj_K(n, SCALE_X)
 
-    #rng = jax.random.PRNGKey(0)
-    #M = jax.random.normal(rng, shape=(100, 100))
-    #Q, _ = jnp.linalg.qr(M) # columns of Q are orthonormal
-    #eigvals = jnp.ceil(jnp.arange(1, 32, 0.3))[:100].reshape(1, -1)
-    ##eigvals = jnp.ceil(jnp.arange(1, 101, 1))[:100].reshape(1, -1)
-    #M = (Q * eigvals) @ Q.T
-
-    #eigvals, eigvecs = solver.approx_k_min_eigen(
-    #    M = lambda v: M @ v, n=100, k=6, num_iters=50, eps=1e-6, rng=rng)
-
     X, y = cgal(
        n=n,
        m=n,
        trace_ub=trace_ub,
-       C_innerprod=C_innerprod,
-       C_add=C_add,
        C_matvec=C_matvec,
        A_operator=A_operator,
        A_operator_slim=A_operator_slim,
@@ -162,4 +147,5 @@ if __name__ == "__main__":
        SCALE_C=SCALE_C,
        SCALE_X=SCALE_X,
        eps=1.0,
-       max_iters=3000)
+       max_iters=10000,
+       lanczos_num_iters=100)
