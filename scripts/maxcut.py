@@ -137,6 +137,8 @@ if __name__ == "__main__":
        n=n,
        m=n,
        trace_ub=trace_ub,
+       C_innerprod=C_innerprod,
+       C_add=C_add,
        C_matvec=C_matvec,
        A_operator=A_operator,
        A_operator_slim=A_operator_slim,
@@ -146,6 +148,6 @@ if __name__ == "__main__":
        beta0=1.0,
        SCALE_C=SCALE_C,
        SCALE_X=SCALE_X,
-       eps=1.0,
+       eps=1e-3,
        max_iters=10000,
-       lanczos_num_iters=100)
+       lanczos_num_iters=50)
