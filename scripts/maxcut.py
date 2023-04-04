@@ -3,7 +3,7 @@ import jax
 import jax.numpy as jnp
 from jax import lax
 from jax._src.typing import Array
-from jax.experimental.sparse import COO, coo_matmat, coo_matvec
+from jax.experimental.sparse import BCOO
 import numpy as np
 from pathlib import Path
 import pickle
@@ -13,18 +13,19 @@ from scipy.sparse import csc_matrix  # type: ignore
 from typing import Any, Callable
 
 from solver.cgal import cgal
+from solver.sfwal import sfwal
 
 from IPython import embed
 
 
-def create_C_innerprod(C: COO) -> Callable[[Array], float]:
+def create_C_innerprod(C: BCOO) -> Callable[[Array], float]:
     @jax.jit
     def C_innerprod(X: Array) -> float:
-        return jnp.trace(coo_matmat(C, X))
+        return jnp.trace(C @ X)
     return C_innerprod
 
 
-def create_C_add(C: COO) -> Callable[[Array], Array]:
+def create_C_add(C: BCOO) -> Callable[[Array], Array]:
     dense_C = C.todense()
     @jax.jit
     def C_add(X: Array) -> Array:
@@ -32,10 +33,10 @@ def create_C_add(C: COO) -> Callable[[Array], Array]:
     return C_add
 
 
-def create_C_matvec(C: COO) -> Callable[[Array], Array]:
+def create_C_matvec(C: BCOO) -> Callable[[Array], Array]:
     @jax.jit
     def C_matvec(u: Array) -> Array:
-        return coo_matvec(C, u)
+        return C @ u
     return C_matvec
 
 
@@ -118,11 +119,8 @@ if __name__ == "__main__":
 
     scaled_C = C * SCALE_C
     scaled_C = scaled_C.tocoo().T
-    scaled_C = COO(
-        (scaled_C.data, scaled_C.row, scaled_C.col),
-        shape=scaled_C.shape,
-        cols_sorted=True,
-        rows_sorted=True) 
+    scaled_C = BCOO(
+        (scaled_C.data, jnp.stack((scaled_C.row, scaled_C.col)).T), shape=scaled_C.shape)
 
     C_innerprod = create_C_innerprod(scaled_C)
     C_add = create_C_add(scaled_C)
@@ -133,19 +131,31 @@ if __name__ == "__main__":
     A_adjoint_slim = create_A_adjoint_slim()
     proj_K = create_proj_K(n, SCALE_X)
 
-    X, y = cgal(
+    #X, y = cgal(
+    #   n=n,
+    #   m=n,
+    #   trace_ub=trace_ub,
+    #   C_matvec=C_matvec,
+    #   A_operator_slim=A_operator_slim,
+    #   A_adjoint_slim=A_adjoint_slim,
+    #   proj_K=proj_K,
+    #   beta0=1.0,
+    #   SCALE_C=SCALE_C,
+    #   SCALE_X=SCALE_X,
+    #   eps=1e-3,
+    #   max_iters=10000,
+    #   lanczos_num_iters=50)
+
+    X, y = sfwal(
        n=n,
        m=n,
        trace_ub=trace_ub,
-       C_innerprod=C_innerprod,
-       C_add=C_add,
        C_matvec=C_matvec,
-       A_operator=A_operator,
        A_operator_slim=A_operator_slim,
-       A_adjoint=A_adjoint,
        A_adjoint_slim=A_adjoint_slim,
        proj_K=proj_K,
-       beta0=1.0,
+       beta=1.0,
+       k=5,
        SCALE_C=SCALE_C,
        SCALE_X=SCALE_X,
        eps=1e-3,
