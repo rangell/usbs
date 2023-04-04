@@ -16,12 +16,8 @@ def cgal(
     n: int,
     m: int,
     trace_ub: float,
-    C_innerprod: Callable[[Array], float],
-    C_add: Callable[[Array], Array],
     C_matvec: Callable[[Array], Array],
-    A_operator: Callable[[Array], Array],
     A_operator_slim: Callable[[Array], Array],
-    A_adjoint: Callable[[Array], Array],
     A_adjoint_slim: Callable[[Array, Array], Array],
     proj_K: Callable[[Array], Array],
     beta0: float,
@@ -56,6 +52,7 @@ def cgal(
             rng=jax.random.PRNGKey(state.t))
 
         min_eigvec = eigvecs[:, 0:1]  # gives the right shape for next line
+        # TODO: fix trace_ub here to allow for <= trace
         X_update_dir = trace_ub * min_eigvec @ min_eigvec.T
         min_eigvec = min_eigvec.reshape(-1,)
 
@@ -82,7 +79,7 @@ def cgal(
         z_next = (1-eta)*state.z + eta*trace_ub*A_operator_slim(min_eigvec)
 
         # TODO: fix dual step size here
-        y_next = state.y + (z_next - proj_K(z_next + (state.y / beta)))
+        y_next = state.y + 0.5*(z_next - proj_K(z_next + (state.y / beta)))
 
         obj_val_next = (1-eta)*state.obj_val + eta*trace_ub*jnp.dot(min_eigvec, C_matvec(min_eigvec))
 
