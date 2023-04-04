@@ -81,10 +81,11 @@ def sfwal(
         # spectral line search
         # State: (eta, S_eigvals, S_eigvecs, max_value_change)
 
-        step_size = 0.1
-        apgd_max_iters = 10
+        step_size = 0.001
+        apgd_max_iters = 10000
 
-        def apgd(curr: Tuple[float, Array, Array, float]) -> Tuple[float, Array, Array, float]:
+        @jax.jit
+        def apgd(curr: Tuple[Array, Array, Array, Array]) -> Tuple[Array, Array, Array, Array]:
             eta, S_eigvals, S_eigvecs, _ = curr
             VSV_T_factor = (V @ S_eigvecs) * jnp.sqrt(S_eigvals).reshape(1, -1)
             A_operator_VSV_T = jnp.sum(A_operator_batched(VSV_T_factor), axis=1)
@@ -104,11 +105,9 @@ def sfwal(
 
             S_unproj_eigvals, S_eigvecs = jnp.linalg.eigh(S_unproj)
 
-            eta_index = jnp.sum(S_unproj_eigvals < eta_unproj)
-            trace_vals = jnp.insert(S_unproj_eigvals, eta_index, eta_unproj)
-
-            embed()
-            exit()
+            trace_vals = jnp.append(S_unproj_eigvals, eta_unproj)
+            inv_sort_indices = jnp.argsort(jnp.argsort(trace_vals))
+            trace_vals = jnp.sort(trace_vals) / trace_ub
 
             # project `trace_vals` onto the (k+1)-dim simplex
             # TODO: change this to be the convex hull of the (k+1)-dim simplex
@@ -120,22 +119,28 @@ def sfwal(
             offset = weighted_vals[idx] - descend_vals[idx]
             proj_descend_vals = descend_vals + offset
             proj_descend_vals = proj_descend_vals * (proj_descend_vals > 0)
-            proj_trace_vals = jnp.flip(proj_descend_vals)
+            proj_trace_vals = jnp.flip(proj_descend_vals)[inv_sort_indices]
 
-            eta_new = trace_ub * proj_trace_vals[eta_index]
-            proj_S_eigvals = trace_ub * jnp.delete(proj_trace_vals, eta_index)
+            eta_new = trace_ub * proj_trace_vals[-1]
+            proj_S_eigvals = trace_ub * proj_trace_vals[:-1]
             S_new = (S_eigvecs * proj_S_eigvals.reshape(1, -1)) @ S_eigvecs.T
             max_value_change = jnp.max(
                 jnp.append(jnp.abs(S_new - S).reshape(-1,), jnp.abs(eta - eta_new)))
 
+            next_state = (eta_new, proj_S_eigvals, S_eigvecs, max_value_change)
+
+            jax.debug.print("state: {state}", state=next_state)
+
+            # Compute actual Lagrangian value here
+
             return (eta_new, proj_S_eigvals, S_eigvecs, max_value_change)
 
-        next = apgd((0, jnp.ones(k) / k * trace_ub, jnp.eye(k), 1.1*eps))
+        #next = apgd((jnp.array(0.0), jnp.ones(k) / k * trace_ub, jnp.eye(k), jnp.array(1.1*eps)))
 
         final_state = bounded_while_loop(
-            lambda curr: curr[-1] > eps,
+            lambda curr: curr[-1] > 1e-5,
             apgd, 
-            (0, jnp.ones(k) / k * trace_ub, jnp.eye(k), 1.1*eps),
+            (jnp.array(0.0), jnp.ones(k) / k * trace_ub, jnp.eye(k), jnp.array(1.1*eps)),
             max_steps=apgd_max_iters)
 
         embed()
