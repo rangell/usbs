@@ -8,6 +8,8 @@ from jax._src.typing import Array
 from typing import Any, Callable, Tuple
 
 from IPython import embed
+
+
 @partial(jax.jit, static_argnames=["C_matvec", "A_adjoint_slim", "n", "k", "num_iters"])
 def approx_grad_k_min_eigen(
     C_matvec: Callable[[Array], Array],

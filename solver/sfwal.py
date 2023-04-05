@@ -68,7 +68,7 @@ def sfwal(
         surrogate_dual_gap -= trace_ub * jnp.dot(min_eigvec, A_adjoint_slim(adjoint_left_vec, min_eigvec))
         obj_gap = surrogate_dual_gap - jnp.dot(state.y, state.z - b)
         obj_gap -= 0.5*beta*jnp.linalg.norm(state.z - b)**2
-        obj_gap = obj_gap / (SCALE_C * SCALE_X)
+        obj_gap /= (SCALE_C * SCALE_X)
         obj_gap /= 1.0 + (jnp.abs(state.obj_val) / (SCALE_C * SCALE_X))
         infeas_gap = jnp.linalg.norm(state.z - proj_K(state.z)) / SCALE_X
         infeas_gap /= 1.0 + (jnp.linalg.norm(proj_K(state.z)) / SCALE_X)
@@ -83,14 +83,25 @@ def sfwal(
 
 
         # spectral line search
-        # State: (eta, S_eigvals, S_eigvecs, max_value_change)
+        APGDState = namedtuple(
+            "APGDState",
+            ["i", "eta_curr", "eta_past", "S_curr", "S_past", "max_value_change"])
 
         step_size = 1.0
         apgd_max_iters = 10000
 
         #@jax.jit
-        def apgd(curr: Tuple[Array, Array, Array, Array]) -> Tuple[Array, Array, Array, Array]:
-            eta, S_eigvals, S_eigvecs, _ = curr
+        def apgd(apgd_state: APGDState) -> APGDState:
+            # TODO: accelerate by adding momentum here
+            # TODO: compute eta, S_eigvecs, S_eigvals using acceleration formula
+            momentum = apgd_state.i / (apgd_state.i + 3)  # set this to 0.0 for standard PGD
+            #momentum = 0.0
+            S = apgd_state.S_curr +  momentum * (apgd_state.S_curr - apgd_state.S_past)
+            eta = apgd_state.eta_curr + momentum * (apgd_state.eta_curr - apgd_state.eta_past)
+            S_eigvals, S_eigvecs = jnp.linalg.eigh(S)
+            # for numerical stability, make sure all eigvals are >= 0
+            S_eigvals = jnp.where(S_eigvals < 0, 0, S_eigvals)
+
             VSV_T_factor = (V @ S_eigvecs) * jnp.sqrt(S_eigvals).reshape(1, -1)
             A_operator_VSV_T = jnp.sum(A_operator_batched(VSV_T_factor), axis=1)
 
@@ -102,24 +113,6 @@ def sfwal(
                         + eta * jnp.linalg.norm(state.z)**2
                         + jnp.dot(state.z, A_operator_VSV_T - b))
 
-            #S = (S_eigvecs * S_eigvals.reshape(1, -1)) @ S_eigvecs
-            #_grad_S = (V.T @ C_matmat(V)
-            #          + V.T @ A_adjoint(state.y) @ V
-            #          + V.T @ A_adjoint(A_operator((eta*state.X) + (V @ S @ V.T)) - b) @ V)
-            #_grad_eta = (C_innerprod(state.X)
-            #            + jnp.dot(state.y, A_operator(state.X))
-            #            + eta * jnp.linalg.norm(A_operator(state.X))**2
-            #            + jnp.dot(A_operator(state.X), A_operator(V @ S @ V.T) - b))
-
-            #jax.debug.print("grad_S all close : {close}", close=jnp.allclose(grad_S, _grad_S))
-            #jax.debug.print("grad_eta all close : {close}", close=jnp.allclose(grad_eta, _grad_eta))
-
-            #embed()
-            #exit()
-
-            S = (S_eigvecs * S_eigvals.reshape(1, -1)) @ S_eigvecs.T
-
-            # TODO: accelerate by adding momentum here
             S_unproj = S - (step_size * grad_S)
             eta_unproj = eta - (step_size * grad_eta)
 
@@ -141,35 +134,56 @@ def sfwal(
             proj_descend_vals = proj_descend_vals * (proj_descend_vals > 0)
             proj_trace_vals = jnp.flip(proj_descend_vals)[inv_sort_indices]
 
-            eta_new = trace_ub * proj_trace_vals[-1]
+            eta_next = trace_ub * proj_trace_vals[-1]
             proj_S_eigvals = trace_ub * proj_trace_vals[:-1]
-            S_new = (S_eigvecs * proj_S_eigvals.reshape(1, -1)) @ S_eigvecs.T
+            S_next = (S_eigvecs * proj_S_eigvals.reshape(1, -1)) @ S_eigvecs.T
             max_value_change = jnp.max(
-                jnp.append(jnp.abs(S_new - S).reshape(-1,), jnp.abs(eta - eta_new)))
-
-            #next_state = (eta_new, proj_S_eigvals, S_eigvecs, max_value_change)
-            #jax.debug.print("state: {state}", state=next_state)
+                jnp.append(jnp.abs(apgd_state.S_curr - S_next).reshape(-1,),
+                           jnp.abs(apgd_state.eta_curr - eta_next)))
 
             # Compute actual Lagrangian value here
-            curr_X_hat = eta_new * state.X + V @ S_new @ V.T
+            curr_X_hat = eta_next * state.X + V @ S_next @ V.T
             curr_infeas = A_operator(curr_X_hat) - b
             curr_obj_val = C_innerprod(curr_X_hat) + jnp.dot(state.y, curr_infeas)
             curr_obj_val += (beta / 2) * jnp.linalg.norm(curr_infeas)**2
             curr_obj_val /= (SCALE_C * SCALE_X)
 
-            jax.debug.print("curr_obj_val: {curr_obj_val}", curr_obj_val=curr_obj_val)
+            jax.debug.print("i: {i} - curr_obj_val: {curr_obj_val} - momentum: {momentum}",
+                            i=apgd_state.i+1,
+                            curr_obj_val=curr_obj_val,
+                            momentum=momentum)
 
-            return (eta_new, proj_S_eigvals, S_eigvecs, max_value_change)
+            return APGDState(
+                i=apgd_state.i+1,
+                eta_curr=eta_next,
+                eta_past=apgd_state.eta_curr,
+                S_curr=S_next,
+                S_past=apgd_state.S_curr,
+                max_value_change=max_value_change)
 
-        #next = apgd((jnp.array(0.0), jnp.ones(k) / k * trace_ub, jnp.eye(k), jnp.array(1.1*eps)))
+        init_apgd_state = APGDState(
+            i=0.0,
+            eta_curr=jnp.array(0.0),
+            eta_past=jnp.array(0.0),
+            S_curr=jnp.eye(k)/k*trace_ub,
+            S_past=jnp.zeros((k,k)),
+            max_value_change=jnp.array(1.1*eps))
+
+        #import pickle
+        #with open("tmp_pickle.pkl", "rb") as f:
+        #    init_apgd_state = pickle.load(f)
+        #init_apgd_state = APGDState(*init_apgd_state)
+
+        #next = apgd(init_apgd_state)
+
         #embed()
         #exit()
 
-        ## `final_state` should yield objective value: -3.5361716747283936
+        ## `final_state` should yield objective value: -12474.3173828125
         final_state = bounded_while_loop(
-            lambda curr: curr[-1] > 1e-5,
+            lambda apgd_state: apgd_state.max_value_change > 1e-5,
             apgd, 
-            (jnp.array(0.0), jnp.ones((k,)) / k * trace_ub, jnp.eye(k), jnp.array(1.1*eps)),
+            init_apgd_state,
             max_steps=apgd_max_iters)
 
         embed()
