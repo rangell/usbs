@@ -16,8 +16,12 @@ def sfwal(
     n: int,
     m: int,
     trace_ub: float,
+    C_innerprod: Callable[[Array], float],
+    C_add: Callable[[Array], Array],
     C_matvec: Callable[[Array], Array],
+    A_operator: Callable[[Array], Array],
     A_operator_slim: Callable[[Array], Array],
+    A_adjoint: Callable[[Array], Array],
     A_adjoint_slim: Callable[[Array, Array], Array],
     proj_K: Callable[[Array], Array],
     beta: float,
@@ -81,10 +85,10 @@ def sfwal(
         # spectral line search
         # State: (eta, S_eigvals, S_eigvecs, max_value_change)
 
-        step_size = 0.001
+        step_size = 1.0
         apgd_max_iters = 10000
 
-        @jax.jit
+        #@jax.jit
         def apgd(curr: Tuple[Array, Array, Array, Array]) -> Tuple[Array, Array, Array, Array]:
             eta, S_eigvals, S_eigvecs, _ = curr
             VSV_T_factor = (V @ S_eigvecs) * jnp.sqrt(S_eigvals).reshape(1, -1)
@@ -97,6 +101,22 @@ def sfwal(
                         + jnp.dot(state.y, state.z)
                         + eta * jnp.linalg.norm(state.z)**2
                         + jnp.dot(state.z, A_operator_VSV_T - b))
+
+            #S = (S_eigvecs * S_eigvals.reshape(1, -1)) @ S_eigvecs
+            #_grad_S = (V.T @ C_matmat(V)
+            #          + V.T @ A_adjoint(state.y) @ V
+            #          + V.T @ A_adjoint(A_operator((eta*state.X) + (V @ S @ V.T)) - b) @ V)
+            #_grad_eta = (C_innerprod(state.X)
+            #            + jnp.dot(state.y, A_operator(state.X))
+            #            + eta * jnp.linalg.norm(A_operator(state.X))**2
+            #            + jnp.dot(A_operator(state.X), A_operator(V @ S @ V.T) - b))
+
+            #jax.debug.print("grad_S all close : {close}", close=jnp.allclose(grad_S, _grad_S))
+            #jax.debug.print("grad_eta all close : {close}", close=jnp.allclose(grad_eta, _grad_eta))
+
+            #embed()
+            #exit()
+
             S = (S_eigvecs * S_eigvals.reshape(1, -1)) @ S_eigvecs.T
 
             # TODO: accelerate by adding momentum here
@@ -127,25 +147,33 @@ def sfwal(
             max_value_change = jnp.max(
                 jnp.append(jnp.abs(S_new - S).reshape(-1,), jnp.abs(eta - eta_new)))
 
-            next_state = (eta_new, proj_S_eigvals, S_eigvecs, max_value_change)
-
-            jax.debug.print("state: {state}", state=next_state)
+            #next_state = (eta_new, proj_S_eigvals, S_eigvecs, max_value_change)
+            #jax.debug.print("state: {state}", state=next_state)
 
             # Compute actual Lagrangian value here
+            curr_X_hat = eta_new * state.X + V @ S_new @ V.T
+            curr_infeas = A_operator(curr_X_hat) - b
+            curr_obj_val = C_innerprod(curr_X_hat) + jnp.dot(state.y, curr_infeas)
+            curr_obj_val += (beta / 2) * jnp.linalg.norm(curr_infeas)**2
+            curr_obj_val /= (SCALE_C * SCALE_X)
+
+            jax.debug.print("curr_obj_val: {curr_obj_val}", curr_obj_val=curr_obj_val)
 
             return (eta_new, proj_S_eigvals, S_eigvecs, max_value_change)
 
         #next = apgd((jnp.array(0.0), jnp.ones(k) / k * trace_ub, jnp.eye(k), jnp.array(1.1*eps)))
+        #embed()
+        #exit()
 
+        ## `final_state` should yield objective value: -3.5361716747283936
         final_state = bounded_while_loop(
             lambda curr: curr[-1] > 1e-5,
             apgd, 
-            (jnp.array(0.0), jnp.ones(k) / k * trace_ub, jnp.eye(k), jnp.array(1.1*eps)),
+            (jnp.array(0.0), jnp.ones((k,)) / k * trace_ub, jnp.eye(k), jnp.array(1.1*eps)),
             max_steps=apgd_max_iters)
 
         embed()
         exit()
-
 
         eta = 2.0 / (state.t + 2.0)
         X_next = (1-eta)*state.X + eta*X_update_dir
@@ -161,13 +189,29 @@ def sfwal(
             obj_val=obj_val_next,
             obj_gap=obj_gap,
             infeas_gap=infeas_gap)
+    
 
+    #init_state = StateStruct(
+    #    t=0,
+    #    X=jnp.zeros((n, n)),
+    #    y=jnp.zeros((m,)),
+    #    z=jnp.zeros((m,)),
+    #    obj_val=0.0,
+    #    obj_gap=1.1*eps,
+    #    infeas_gap=1.1*eps)
+
+    #X_0 = jax.random.normal(jax.random.PRNGKey(0), shape=(n,n))
+    #X_0 /= jnp.trace(X_0)
+    #y_0 = jax.random.normal(jax.random.PRNGKey(1), shape=(m,))
+    X_0 = jnp.ones((n, n)) * SCALE_X * trace_ub
+    z_0 = A_operator(X_0)
+    y_0 = jnp.zeros((m,))
     init_state = StateStruct(
         t=0,
-        X=jnp.zeros((n, n)) * SCALE_X,
-        y=jnp.zeros((m,)),
-        z=jnp.zeros((m,)),
-        obj_val=0.0,
+        X=X_0,
+        y=y_0,
+        z=z_0,
+        obj_val=C_innerprod(X_0),
         obj_gap=1.1*eps,
         infeas_gap=1.1*eps)
 
