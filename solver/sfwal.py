@@ -87,10 +87,12 @@ def sfwal(
             "APGDState",
             ["i", "eta_curr", "eta_past", "S_curr", "S_past", "max_value_change"])
 
-        step_size = 1.0
+        apgd_step_size = 1.0
         apgd_max_iters = 10000
+        apgd_eps = 1e-5
+        trace_exact = False
 
-        #@jax.jit
+        @jax.jit
         def apgd(apgd_state: APGDState) -> APGDState:
             momentum = apgd_state.i / (apgd_state.i + 3)  # set this to 0.0 for standard PGD
             S = apgd_state.S_curr +  momentum * (apgd_state.S_curr - apgd_state.S_past)
@@ -112,46 +114,43 @@ def sfwal(
                         + jnp.dot(state.z, A_operator_VSV_T - b))
 
             # compute unprojected steps
-            S_unproj = S - (step_size * grad_S)
-            eta_unproj = eta - (step_size * grad_eta)
+            S_unproj = S - (apgd_step_size * grad_S)
+            eta_unproj = eta - (apgd_step_size * grad_eta)
 
             S_unproj_eigvals, S_eigvecs = jnp.linalg.eigh(S_unproj)
-            trace_vals = jnp.append(S_unproj_eigvals, eta_unproj)
-            inv_sort_indices = jnp.argsort(jnp.argsort(trace_vals))
-            trace_vals = jnp.sort(trace_vals) / trace_ub
+            trace_vals = jnp.append(S_unproj_eigvals / trace_ub, eta_unproj)
 
-            # project `trace_vals` onto the (k+1)-dim simplex
-            # TODO: change this to be the convex hull of the (k+1)-dim simplex
-            descend_vals = jnp.flip(trace_vals)
-            weighted_vals = (descend_vals
-                            + (1.0 / jnp.arange(1, len(descend_vals)+1))
-                                * (1 - jnp.cumsum(descend_vals)))
-            idx = jnp.sum(weighted_vals > 0) - 1
-            offset = weighted_vals[idx] - descend_vals[idx]
-            proj_descend_vals = descend_vals + offset
-            proj_descend_vals = proj_descend_vals * (proj_descend_vals > 0)
-            proj_trace_vals = jnp.flip(proj_descend_vals)[inv_sort_indices]
+            def proj_simplex(unsorted_vals: Array) -> Array:
+                inv_sort_indices = jnp.argsort(jnp.argsort(unsorted_vals))
+                sorted_vals = jnp.sort(unsorted_vals)
+                descend_vals = jnp.flip(sorted_vals)
+                weighted_vals = (descend_vals
+                                + (1.0 / jnp.arange(1, len(descend_vals)+1))
+                                    * (1 - jnp.cumsum(descend_vals)))
+                idx = jnp.sum(weighted_vals > 0) - 1
+                offset = weighted_vals[idx] - descend_vals[idx]
+                proj_descend_vals = descend_vals + offset
+                proj_descend_vals = proj_descend_vals * (proj_descend_vals > 0)
+                proj_unsorted_vals = jnp.flip(proj_descend_vals)[inv_sort_indices]
+                return proj_unsorted_vals
+
+            # check to see if we do not need to project onto the simplex
+            no_projection_needed = jnp.logical_and(
+                jnp.logical_not(trace_exact), jnp.logical_and(jnp.sum(trace_vals) < 1,
+                                                              jnp.all(trace_vals > -1e-6)))
+            proj_trace_vals = lax.cond(
+                no_projection_needed,
+                lambda arr: arr,
+                lambda arr: proj_simplex(arr),
+                trace_vals)
 
             # get projected next step values
-            eta_next = trace_ub * proj_trace_vals[-1]
+            eta_next = proj_trace_vals[-1]
             proj_S_eigvals = trace_ub * proj_trace_vals[:-1]
             S_next = (S_eigvecs * proj_S_eigvals.reshape(1, -1)) @ S_eigvecs.T
             max_value_change = jnp.max(
                 jnp.append(jnp.abs(apgd_state.S_curr - S_next).reshape(-1,),
                            jnp.abs(apgd_state.eta_curr - eta_next)))
-
-            # Compute actual Lagrangian value here
-            curr_X_hat = eta_next * state.X + V @ S_next @ V.T
-            curr_infeas = A_operator(curr_X_hat) - b
-            curr_obj_val = C_innerprod(curr_X_hat) + jnp.dot(state.y, curr_infeas)
-            curr_obj_val += (beta / 2) * jnp.linalg.norm(curr_infeas)**2
-            curr_obj_val /= (SCALE_C * SCALE_X)
-
-            jax.debug.print("i: {i} - curr_obj_val: {curr_obj_val} - momentum: {momentum}",
-                            i=apgd_state.i+1,
-                            curr_obj_val=curr_obj_val,
-                            momentum=momentum)
-
             return APGDState(
                 i=apgd_state.i+1,
                 eta_curr=eta_next,
@@ -169,7 +168,7 @@ def sfwal(
             max_value_change=jnp.array(1.1*eps))
 
         final_apgd_state = bounded_while_loop(
-            lambda apgd_state: apgd_state.max_value_change > 1e-5,
+            lambda apgd_state: apgd_state.max_value_change > apgd_eps,
             apgd, 
             init_apgd_state,
             max_steps=apgd_max_iters)
