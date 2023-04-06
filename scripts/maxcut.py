@@ -150,6 +150,7 @@ if __name__ == "__main__":
        n=n,
        m=n,
        trace_ub=trace_ub,
+       trace_exact=True,
        C_innerprod=C_innerprod,
        C_add=C_add,
        C_matvec=C_matvec,
@@ -164,4 +165,7 @@ if __name__ == "__main__":
        SCALE_X=SCALE_X,
        eps=1e-3,
        max_iters=10000,
-       lanczos_num_iters=50)
+       lanczos_num_iters=50,
+       apgd_step_size=1.0,
+       apgd_max_iters=10000,
+       apgd_eps=1e-5)

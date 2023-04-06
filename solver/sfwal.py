@@ -16,6 +16,7 @@ def sfwal(
     n: int,
     m: int,
     trace_ub: float,
+    trace_exact: bool,
     C_innerprod: Callable[[Array], float],
     C_add: Callable[[Array], Array],
     C_matvec: Callable[[Array], Array],
@@ -30,7 +31,10 @@ def sfwal(
     SCALE_X: float,
     eps: float,
     max_iters: int,
-    lanczos_num_iters: int
+    lanczos_num_iters: int,
+    apgd_step_size: float,
+    apgd_max_iters: int,
+    apgd_eps: float
 ) -> Tuple[Array, Array]:
 
     C_matmat = jax.vmap(C_matvec, 1, 1)
@@ -60,7 +64,6 @@ def sfwal(
             rng=jax.random.PRNGKey(state.t))
 
         min_eigvec = V[:, 0:1]  # gives the right shape for next line
-        X_update_dir = trace_ub * min_eigvec @ min_eigvec.T
         min_eigvec = min_eigvec.reshape(-1,)
 
         surrogate_dual_gap = state.obj_val - trace_ub*jnp.dot(min_eigvec, C_matvec(min_eigvec))
@@ -85,11 +88,6 @@ def sfwal(
         APGDState = namedtuple(
             "APGDState",
             ["i", "eta_curr", "eta_past", "S_curr", "S_past", "max_value_change"])
-
-        apgd_step_size = 1.0
-        apgd_max_iters = 10000
-        apgd_eps = 1e-5
-        trace_exact = True
 
         @jax.jit
         def apgd(apgd_state: APGDState) -> APGDState:
@@ -183,9 +181,6 @@ def sfwal(
         obj_val_next = final_apgd_state.eta_curr*state.obj_val
         obj_val_next += jnp.trace(VSV_T_factor.T @ C_matmat(VSV_T_factor))
 
-        embed()
-        exit()
-
         return StateStruct(
             t=state.t+1,
             X=X_next,
@@ -221,6 +216,9 @@ def sfwal(
         infeas_gap=1.1*eps)
 
     state1 = body_func(init_state)
+
+    embed()
+    exit()
 
     final_state = bounded_while_loop(cond_func, body_func, init_state, max_steps=max_iters)
 
