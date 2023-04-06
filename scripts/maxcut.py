@@ -159,7 +159,7 @@ if __name__ == "__main__":
        A_adjoint_slim=A_adjoint_slim,
        proj_K=proj_K,
        beta=1.0,
-       k=15,
+       k=5,
        SCALE_C=SCALE_C,
        SCALE_X=SCALE_X,
        eps=1e-3,
