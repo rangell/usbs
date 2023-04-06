@@ -81,7 +81,6 @@ def sfwal(
                         infeas_gap=infeas_gap,
                         max_infeas=max_infeas)
 
-
         # spectral line search
         APGDState = namedtuple(
             "APGDState",
@@ -90,7 +89,7 @@ def sfwal(
         apgd_step_size = 1.0
         apgd_max_iters = 10000
         apgd_eps = 1e-5
-        trace_exact = False
+        trace_exact = True
 
         @jax.jit
         def apgd(apgd_state: APGDState) -> APGDState:
@@ -173,14 +172,19 @@ def sfwal(
             init_apgd_state,
             max_steps=apgd_max_iters)
 
+        # update variables
+        S_eigvals, S_eigvecs = jnp.linalg.eigh(final_apgd_state.S_curr)
+        S_eigvals = jnp.where(S_eigvals < 0, 0, S_eigvals)
+        VSV_T_factor = (V @ S_eigvecs) * jnp.sqrt(S_eigvals).reshape(1, -1)
+        A_operator_VSV_T = jnp.sum(A_operator_batched(VSV_T_factor), axis=1)
+        X_next = final_apgd_state.eta_curr*state.X + V @ final_apgd_state.S_curr @ V.T
+        z_next = final_apgd_state.eta_curr*state.z + A_operator_VSV_T
+        y_next = state.y + beta*(z_next - proj_K(z_next + (state.y / beta)))
+        obj_val_next = final_apgd_state.eta_curr*state.obj_val
+        obj_val_next += jnp.trace(VSV_T_factor.T @ C_matmat(VSV_T_factor))
+
         embed()
         exit()
-
-        eta = 2.0 / (state.t + 2.0)
-        X_next = (1-eta)*state.X + eta*X_update_dir
-        z_next = (1-eta)*state.z + eta*trace_ub*A_operator_slim(min_eigvec)
-        y_next = state.y + beta*(z_next - proj_K(z_next + (state.y / beta)))
-        obj_val_next = (1-eta)*state.obj_val + eta*trace_ub*jnp.dot(min_eigvec, C_matvec(min_eigvec))
 
         return StateStruct(
             t=state.t+1,
