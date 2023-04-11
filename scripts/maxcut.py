@@ -162,13 +162,16 @@ if __name__ == "__main__":
        A_adjoint=A_adjoint,
        A_adjoint_slim=A_adjoint_slim,
        proj_K=proj_K,
-       beta=10.0,
-       k=20,
+       beta=5.0,
+       k=10,
        SCALE_C=SCALE_C,
        SCALE_X=SCALE_X,
        eps=1e-3,
-       max_iters=10000,
+       max_iters=500,
        lanczos_num_iters=100,
        apgd_step_size=0.1,
        apgd_max_iters=2000,
-       apgd_eps=1e-8)
+       apgd_eps=1e-6)
+
+    embed()
+    exit()
