@@ -78,7 +78,7 @@ def sfwal(
         obj_gap /= 1.0 + (jnp.abs(state.obj_val) / (SCALE_C * SCALE_X))
         infeas_gap = jnp.linalg.norm((state.z - proj_K(state.z)) / SCALE_X) 
         infeas_gap /= 1.0 + jnp.linalg.norm(proj_K(state.z) / SCALE_X)
-        max_infeas = jnp.max(jnp.abs(state.z - proj_K(state.z))) / SCALE_X
+        max_infeas = jnp.max(jnp.abs(state.z - proj_K(state.z))/ SCALE_X) 
         jax.debug.print("t: {t} - obj_val: {obj_val} - obj_gap: {obj_gap} -"
                         " infeas_gap: {infeas_gap} - max_infeas: {max_infeas}",
                         t=state.t,
