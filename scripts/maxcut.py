@@ -107,6 +107,9 @@ if __name__ == "__main__":
     SCALE_C = 1.0 / scipy.sparse.linalg.norm(C, ord="fro") 
     SCALE_X = 1.0 / n
     trace_ub = 1.0
+    #SCALE_C = 1.0
+    #SCALE_X = 1.0
+    #trace_ub = float(n)
 
     scs_soln_cache = str(Path(MAT_PATH).with_suffix("")) + "_scs_soln.pkl"
     if Path(scs_soln_cache).is_file():
@@ -159,13 +162,13 @@ if __name__ == "__main__":
        A_adjoint=A_adjoint,
        A_adjoint_slim=A_adjoint_slim,
        proj_K=proj_K,
-       beta=1.0,
-       k=5,
+       beta=10.0,
+       k=20,
        SCALE_C=SCALE_C,
        SCALE_X=SCALE_X,
        eps=1e-3,
        max_iters=10000,
-       lanczos_num_iters=50,
-       apgd_step_size=1.0,
-       apgd_max_iters=10000,
-       apgd_eps=1e-5)
+       lanczos_num_iters=100,
+       apgd_step_size=0.1,
+       apgd_max_iters=2000,
+       apgd_eps=1e-8)

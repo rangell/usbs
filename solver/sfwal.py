@@ -46,7 +46,7 @@ def sfwal(
         ["t", "X", "y", "z", "obj_val", "obj_gap", "infeas_gap"])
 
     @jax.jit
-    def cond_func(state: StateStruct) -> bool:
+    def cond_func(state: StateStruct) -> Array:
         return jnp.logical_or(state.obj_gap > eps, state.infeas_gap > eps)
 
     #@jax.jit
@@ -54,17 +54,20 @@ def sfwal(
         b = proj_K(state.z + (state.y / beta))
         adjoint_left_vec = state.y + beta*(state.z - b)
 
-        _, V = approx_grad_k_min_eigen(
+        eigvals, V = approx_grad_k_min_eigen(
             C_matvec=C_matvec,
             A_adjoint_slim=A_adjoint_slim,
             adjoint_left_vec=adjoint_left_vec,
             n=n,
-            k=k,
+            k=k+1,
             num_iters=lanczos_num_iters,
             rng=jax.random.PRNGKey(state.t))
 
+        # TODO: check trim the last eigenvector for the sake of experimentation?
+        V = V[:,:-1]
         min_eigvec = V[:, 0:1]  # gives the right shape for next line
         min_eigvec = min_eigvec.reshape(-1,)
+        max_eigval_gap = jnp.max(eigvals[1:] - eigvals[:-1])
 
         surrogate_dual_gap = state.obj_val - trace_ub*jnp.dot(min_eigvec, C_matvec(min_eigvec))
         surrogate_dual_gap += jnp.dot(adjoint_left_vec, state.z)
@@ -104,11 +107,11 @@ def sfwal(
             A_operator_VSV_T = jnp.sum(A_operator_batched(VSV_T_factor), axis=1)
             grad_S = (V.T @ C_matmat(V)
                       + V.T @ A_adjoint_batched(state.y, V)
-                      + V.T @ A_adjoint_batched((eta*state.z) + A_operator_VSV_T - b, V))
+                      + beta * V.T @ A_adjoint_batched((eta*state.z) + A_operator_VSV_T - b, V))
             grad_eta = (state.obj_val
                         + jnp.dot(state.y, state.z)
-                        + eta * jnp.linalg.norm(state.z)**2
-                        + jnp.dot(state.z, A_operator_VSV_T - b))
+                        + beta * eta * jnp.linalg.norm(state.z)**2
+                        + beta * jnp.dot(state.z, A_operator_VSV_T - b))
 
             # compute unprojected steps
             S_unproj = S - (apgd_step_size * grad_S)
@@ -156,11 +159,18 @@ def sfwal(
                 S_past=apgd_state.S_curr,
                 max_value_change=max_value_change)
 
+        #init_apgd_state = APGDState(
+        #    i=0.0,
+        #    eta_curr=jnp.array(0.0),
+        #    eta_past=jnp.array(0.0),
+        #    S_curr=jnp.eye(k)/k*trace_ub,
+        #    S_past=jnp.zeros((k,k)),
+        #    max_value_change=jnp.array(1.1*eps))
         init_apgd_state = APGDState(
             i=0.0,
-            eta_curr=jnp.array(0.0),
+            eta_curr=jnp.array(1.0),
             eta_past=jnp.array(0.0),
-            S_curr=jnp.eye(k)/k*trace_ub,
+            S_curr=jnp.zeros((k,k)),
             S_past=jnp.zeros((k,k)),
             max_value_change=jnp.array(1.1*eps))
 
@@ -177,7 +187,7 @@ def sfwal(
         A_operator_VSV_T = jnp.sum(A_operator_batched(VSV_T_factor), axis=1)
         X_next = final_apgd_state.eta_curr*state.X + V @ final_apgd_state.S_curr @ V.T
         z_next = final_apgd_state.eta_curr*state.z + A_operator_VSV_T
-        y_next = state.y + beta*(z_next - proj_K(z_next + (state.y / beta)))
+        y_next = state.y + 0.4*beta*(z_next - proj_K(z_next + (state.y / beta)))
         obj_val_next = final_apgd_state.eta_curr*state.obj_val
         obj_val_next += jnp.trace(VSV_T_factor.T @ C_matmat(VSV_T_factor))
 
@@ -204,6 +214,7 @@ def sfwal(
     #X_0 /= jnp.trace(X_0)
     #y_0 = jax.random.normal(jax.random.PRNGKey(1), shape=(m,))
     X_0 = jnp.ones((n, n)) * SCALE_X * trace_ub
+    #X_0 = jnp.zeros((n, n)) * SCALE_X * trace_ub
     z_0 = A_operator(X_0)
     y_0 = jnp.zeros((m,))
     init_state = StateStruct(
@@ -215,11 +226,10 @@ def sfwal(
         obj_gap=1.1*eps,
         infeas_gap=1.1*eps)
 
-    state1 = body_func(init_state)
-
-    embed()
-    exit()
+    #state1 = body_func(init_state)
 
     final_state = bounded_while_loop(cond_func, body_func, init_state, max_steps=max_iters)
+    embed()
+    exit()
 
     return final_state.X, final_state.y
