@@ -49,7 +49,7 @@ def sfwal(
     def cond_func(state: StateStruct) -> Array:
         return jnp.logical_or(state.obj_gap > eps, state.infeas_gap > eps)
 
-    #@jax.jit
+    @jax.jit
     def body_func(state: StateStruct) -> StateStruct:
         b = proj_K(state.z + (state.y / beta))
         adjoint_left_vec = state.y + beta*(state.z - b)
@@ -76,8 +76,8 @@ def sfwal(
         obj_gap -= 0.5*beta*jnp.linalg.norm(state.z - b)**2
         obj_gap /= (SCALE_C * SCALE_X)
         obj_gap /= 1.0 + (jnp.abs(state.obj_val) / (SCALE_C * SCALE_X))
-        infeas_gap = jnp.linalg.norm(state.z - proj_K(state.z)) / SCALE_X
-        infeas_gap /= 1.0 + (jnp.linalg.norm(proj_K(state.z)) / SCALE_X)
+        infeas_gap = jnp.linalg.norm((state.z - proj_K(state.z)) / SCALE_X) 
+        infeas_gap /= 1.0 + jnp.linalg.norm(proj_K(state.z) / SCALE_X)
         max_infeas = jnp.max(jnp.abs(state.z - proj_K(state.z))) / SCALE_X
         jax.debug.print("t: {t} - obj_val: {obj_val} - obj_gap: {obj_gap} -"
                         " infeas_gap: {infeas_gap} - max_infeas: {max_infeas}",
@@ -187,7 +187,7 @@ def sfwal(
         A_operator_VSV_T = jnp.sum(A_operator_batched(VSV_T_factor), axis=1)
         X_next = final_apgd_state.eta_curr*state.X + V @ final_apgd_state.S_curr @ V.T
         z_next = final_apgd_state.eta_curr*state.z + A_operator_VSV_T
-        y_next = state.y + 0.4*beta*(z_next - proj_K(z_next + (state.y / beta)))
+        y_next = state.y + 0.5*beta*(z_next - proj_K(z_next + (state.y / beta)))
         obj_val_next = final_apgd_state.eta_curr*state.obj_val
         obj_val_next += jnp.trace(VSV_T_factor.T @ C_matmat(VSV_T_factor))
 
