@@ -229,7 +229,5 @@ def sfwal(
     #state1 = body_func(init_state)
 
     final_state = bounded_while_loop(cond_func, body_func, init_state, max_steps=max_iters)
-    embed()
-    exit()
 
     return final_state.X, final_state.y
