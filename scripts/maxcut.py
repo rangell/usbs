@@ -73,7 +73,7 @@ def create_A_adjoint_slim() -> Callable[[Array, Array], Array]:
 def create_proj_K(n: int, SCALE_X: float) -> Callable[[Array], Array]:
     @jax.jit
     def proj_K(z: Array) -> Array:
-        return np.ones((n,)) * SCALE_X
+        return jnp.ones((n,)) * SCALE_X
     return proj_K
 
 
@@ -133,7 +133,7 @@ if __name__ == "__main__":
     A_adjoint = create_A_adjoint(n)
     A_adjoint_slim = create_A_adjoint_slim()
     proj_K = create_proj_K(n, SCALE_X)
-    b = np.ones((n,)) * SCALE_X
+    b = jnp.ones((n,)) * SCALE_X
 
     #X, y = cgal(
     #   n=n,
@@ -154,9 +154,9 @@ if __name__ == "__main__":
     # initialize variables here
     k_curr = 3
     k_past = 2
-    X = np.zeros((n, n))  # used to track primal solution
-    y = np.zeros((n,))
-    z = np.zeros((n,))
+    X = jnp.zeros((n, n))  # used to track primal solution
+    y = jnp.zeros((n,))
+    z = jnp.zeros((n,))
 
     # generate a random orthonormal matrix
     rng = jax.random.PRNGKey(0)
@@ -172,6 +172,7 @@ if __name__ == "__main__":
         n=n,
         m=n,
         trace_ub=trace_ub,
+        C=C,
         C_innerprod=C_innerprod,
         C_add=C_add,
         C_matvec=C_matvec,
@@ -189,9 +190,9 @@ if __name__ == "__main__":
         eps=1e-3,
         max_iters=500,
         lanczos_num_iters=100,
-        apgd_step_size=0.1,
-        apgd_max_iters=2000,
-        apgd_eps=1e-6)
+        apgd_step_size=100.0,
+        apgd_max_iters=100,
+        apgd_eps=1e-8)
 
     embed()
     exit()

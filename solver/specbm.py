@@ -1,4 +1,5 @@
 from collections import namedtuple
+import cvxpy as cp
 from equinox.internal._loop.bounded import bounded_while_loop # type: ignore
 from functools import partial
 import jax
@@ -6,6 +7,8 @@ import jax.numpy as jnp
 from jax import lax
 from jax._src.typing import Array
 from typing import Any, Callable, Tuple
+
+from scipy.sparse import csc_matrix  # type: ignore
 
 from solver.eigen import approx_grad_k_min_eigen
 
@@ -103,20 +106,20 @@ def solve_subproblem(
             S_past=apgd_state.S_curr,
             max_value_change=max_value_change)
 
-    #init_apgd_state = APGDState(
-    #    i=0.0,
-    #    eta_curr=jnp.array(0.0),
-    #    eta_past=jnp.array(0.0),
-    #    S_curr=jnp.eye(k)/k*trace_ub,
-    #    S_past=jnp.zeros((k,k)),
-    #    max_value_change=jnp.array(1.1*eps))
     init_apgd_state = APGDState(
         i=0.0,
-        eta_curr=jnp.array(1.0),
+        eta_curr=jnp.array(0.0),
         eta_past=jnp.array(0.0),
-        S_curr=jnp.zeros((k,k)),
+        S_curr=jnp.eye(k)/k*trace_ub,
         S_past=jnp.zeros((k,k)),
         max_value_change=jnp.array(1.1*apgd_eps))
+    #init_apgd_state = APGDState(
+    #    i=0.0,
+    #    eta_curr=jnp.array(1.0),
+    #    eta_past=jnp.array(0.0),
+    #    S_curr=jnp.zeros((k,k)),
+    #    S_past=jnp.zeros((k,k)),
+    #    max_value_change=jnp.array(1.1*apgd_eps))
 
     final_apgd_state = bounded_while_loop(
         lambda apgd_state: apgd_state.max_value_change > apgd_eps,
@@ -124,6 +127,8 @@ def solve_subproblem(
         init_apgd_state,
         max_steps=apgd_max_iters)
 
+    embed()
+    exit()
 
 def specbm(
     X: Array,
@@ -134,6 +139,7 @@ def specbm(
     n: int,
     m: int,
     trace_ub: float,
+    C: csc_matrix,
     C_innerprod: Callable[[Array], float],
     C_add: Callable[[Array], Array],
     C_matvec: Callable[[Array], Array],
@@ -156,5 +162,48 @@ def specbm(
     apgd_eps: float
 ) -> Tuple[Array, Array]:
 
-    # TODO: fix me
+    # TODO: check `solve_subproblem` against SCS and MOSEK
+
+    k = k_curr + k_past
+
+    S = cp.Variable((k,k), symmetric=True)
+    eta = cp.Variable((1,))
+    constraints = [S >> 0]
+    constraints += [eta >= 0]
+    constraints += [cp.trace(S) + eta*cp.trace(X) <= trace_ub]
+    prob = cp.Problem(
+        cp.Minimize(y @ b
+                    + cp.trace((eta * X + V @ S @ V.T) @ (C - cp.diag(y)))
+                    + (0.5 / rho) * cp.sum_squares(b - cp.diag(eta * X + V @ S @ V.T))),
+        constraints)
+    prob.solve(solver=cp.SCS, verbose=True)
+
+    jax.debug.print("SCS eta: {eta}", eta=eta.value)
+    jax.debug.print("SCS S: {S}", S=S.value)
+
+    eta, S, z = solve_subproblem(
+        C_matvec=C_matvec,
+        A_operator_slim=A_operator_slim,
+        A_adjoint_slim=A_adjoint_slim,
+        b=b,
+        trace_ub=trace_ub,
+        rho=rho,
+        obj_val=obj_val,
+        z=z,
+        y=y,
+        V=V,
+        k=k,
+        apgd_step_size=apgd_step_size,
+        apgd_max_iters=apgd_max_iters,
+        apgd_eps=apgd_eps,
+    )
+
+    embed()
+    exit()
+
+    # TODO: implement f and f_bar 
+    # TODO: create new Lanczos function for this solver
+    # TODO: implement stopping criteria
+
+    # TODO: fix to return all things needed for warm-start
     return jnp.zeros(n, n), jnp.zeros((m,))
