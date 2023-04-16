@@ -151,35 +151,47 @@ if __name__ == "__main__":
     #   lanczos_num_iters=50)
     
 
-    # TODO: initialize variables here!
+    # initialize variables here
+    k_curr = 3
+    k_past = 2
+    X = np.zeros((n, n))  # used to track primal solution
+    y = np.zeros((n,))
+    z = np.zeros((n,))
 
-    embed()
-    exit()
+    # generate a random orthonormal matrix
+    rng = jax.random.PRNGKey(0)
+    M = jax.random.normal(rng, shape=(n, k_curr + k_past))
+    V = jnp.linalg.qr(M)[0]
 
     X, y = specbm(
-       n=n,
-       m=n,
-       trace_ub=trace_ub,
-       C_innerprod=C_innerprod,
-       C_add=C_add,
-       C_matvec=C_matvec,
-       A_operator=A_operator,
-       A_operator_slim=A_operator_slim,
-       A_adjoint=A_adjoint,
-       A_adjoint_slim=A_adjoint_slim,
-       b=b,
-       rho=0.5,
-       beta=0.25,
-       r_curr=3,
-       r_past=2,
-       SCALE_C=SCALE_C,
-       SCALE_X=SCALE_X,
-       eps=1e-3,
-       max_iters=500,
-       lanczos_num_iters=100,
-       apgd_step_size=0.1,
-       apgd_max_iters=2000,
-       apgd_eps=1e-6)
+        X=X,
+        y=y,
+        z=z,
+        obj_val=0.0,
+        V=V,
+        n=n,
+        m=n,
+        trace_ub=trace_ub,
+        C_innerprod=C_innerprod,
+        C_add=C_add,
+        C_matvec=C_matvec,
+        A_operator=A_operator,
+        A_operator_slim=A_operator_slim,
+        A_adjoint=A_adjoint,
+        A_adjoint_slim=A_adjoint_slim,
+        b=b,
+        rho=0.5,
+        beta=0.25,
+        k_curr=k_curr,
+        k_past=k_past,
+        SCALE_C=SCALE_C,
+        SCALE_X=SCALE_X,
+        eps=1e-3,
+        max_iters=500,
+        lanczos_num_iters=100,
+        apgd_step_size=0.1,
+        apgd_max_iters=2000,
+        apgd_eps=1e-6)
 
     embed()
     exit()
