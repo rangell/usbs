@@ -13,7 +13,7 @@ from scipy.sparse import csc_matrix  # type: ignore
 from typing import Any, Callable
 
 from solver.cgal import cgal
-from solver.sfwal import sfwal
+from solver.specbm import specbm
 
 from IPython import embed
 
@@ -104,12 +104,12 @@ if __name__ == "__main__":
     C = -0.25*C
     C = C.tocsc()
 
-    SCALE_C = 1.0 / scipy.sparse.linalg.norm(C, ord="fro") 
-    SCALE_X = 1.0 / n
-    trace_ub = 1.0
-    #SCALE_C = 1.0
-    #SCALE_X = 1.0
-    #trace_ub = float(n)
+    #SCALE_C = 1.0 / scipy.sparse.linalg.norm(C, ord="fro") 
+    #SCALE_X = 1.0 / n
+    #trace_ub = 1.0
+    SCALE_C = 1.0
+    SCALE_X = 1.0
+    trace_ub = 2*float(n)
 
     scs_soln_cache = str(Path(MAT_PATH).with_suffix("")) + "_scs_soln.pkl"
     if Path(scs_soln_cache).is_file():
@@ -133,6 +133,7 @@ if __name__ == "__main__":
     A_adjoint = create_A_adjoint(n)
     A_adjoint_slim = create_A_adjoint_slim()
     proj_K = create_proj_K(n, SCALE_X)
+    b = np.ones((n,)) * SCALE_X
 
     #X, y = cgal(
     #   n=n,
@@ -148,12 +149,17 @@ if __name__ == "__main__":
     #   eps=1e-3,
     #   max_iters=10000,
     #   lanczos_num_iters=50)
+    
 
-    X, y = sfwal(
+    # TODO: initialize variables here!
+
+    embed()
+    exit()
+
+    X, y = specbm(
        n=n,
        m=n,
        trace_ub=trace_ub,
-       trace_exact=True,
        C_innerprod=C_innerprod,
        C_add=C_add,
        C_matvec=C_matvec,
@@ -161,9 +167,11 @@ if __name__ == "__main__":
        A_operator_slim=A_operator_slim,
        A_adjoint=A_adjoint,
        A_adjoint_slim=A_adjoint_slim,
-       proj_K=proj_K,
-       beta=5.0,
-       k=10,
+       b=b,
+       rho=0.5,
+       beta=0.25,
+       r_curr=3,
+       r_past=2,
        SCALE_C=SCALE_C,
        SCALE_X=SCALE_X,
        eps=1e-3,
