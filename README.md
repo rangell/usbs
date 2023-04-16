@@ -1,1 +1,1 @@
-# SpecFW-AL
+# Spectral Bundle Method with Sketching
