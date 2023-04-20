@@ -16,13 +16,13 @@ from IPython import embed
 
 
 def solve_subproblem(
-    C_matvec: Callable[[Array], Array],
-    A_operator_slim: Callable[[Array], Array],
-    A_adjoint_slim: Callable[[Array, Array], Array],
+    C_matmat: Callable[[Array], Array],
+    A_operator_batched: Callable[[Array], Array],
+    A_adjoint_batched: Callable[[Array, Array], Array],
     b: Array,
     trace_ub: float,
     rho: float,
-    obj_val: Array,
+    primal_obj_val: Array,
     z: Array,
     y: Array,
     V: Array,
@@ -30,10 +30,7 @@ def solve_subproblem(
     apgd_step_size: float,
     apgd_max_iters: int,
     apgd_eps: float
-) -> Tuple[Array, Array, Array]:
-    C_matmat = jax.vmap(C_matvec, 1, 1)
-    A_adjoint_batched = jax.vmap(A_adjoint_slim, (None, 1), 1)
-    A_operator_batched = jax.vmap(A_operator_slim, 1, 1)
+) -> Tuple[Array, Array]:
 
     # spectral line search
     APGDState = namedtuple(
@@ -56,7 +53,7 @@ def solve_subproblem(
         grad_S = (V.T @ C_matmat(V)
                     + V.T @ A_adjoint_batched(y, V)
                     + (1.0/rho) * V.T @ A_adjoint_batched((eta*z) + A_operator_VSV_T - b, V))
-        grad_eta = (obj_val
+        grad_eta = (primal_obj_val
                     + jnp.dot(y, z)
                     + (1.0/rho) * eta * jnp.linalg.norm(z)**2
                     + (1.0/rho) * jnp.dot(z, A_operator_VSV_T - b))
@@ -113,13 +110,6 @@ def solve_subproblem(
         S_curr=jnp.eye(k)/k*trace_ub,
         S_past=jnp.zeros((k,k)),
         max_value_change=jnp.array(1.1*apgd_eps))
-    #init_apgd_state = APGDState(
-    #    i=0.0,
-    #    eta_curr=jnp.array(1.0),
-    #    eta_past=jnp.array(0.0),
-    #    S_curr=jnp.zeros((k,k)),
-    #    S_past=jnp.zeros((k,k)),
-    #    max_value_change=jnp.array(1.1*apgd_eps))
 
     final_apgd_state = bounded_while_loop(
         lambda apgd_state: apgd_state.max_value_change > apgd_eps,
@@ -127,14 +117,14 @@ def solve_subproblem(
         init_apgd_state,
         max_steps=apgd_max_iters)
 
-    embed()
-    exit()
+    return final_apgd_state.eta_curr, final_apgd_state.S_curr
+
 
 def specbm(
     X: Array,
     y: Array,
     z: Array,
-    obj_val: float,
+    primal_obj_val: float,
     V: Array,
     n: int,
     m: int,
@@ -162,33 +152,42 @@ def specbm(
     apgd_eps: float
 ) -> Tuple[Array, Array]:
 
+    X_bar = jnp.copy(X)
+    z_bar = jnp.copy(z)
+
+    bar_obj_val = primal_obj_val
+
+    C_matmat = jax.vmap(C_matvec, 1, 1)
+    A_adjoint_batched = jax.vmap(A_adjoint_slim, (None, 1), 1)
+    A_operator_batched = jax.vmap(A_operator_slim, 1, 1)
+
     # TODO: check `solve_subproblem` against SCS and MOSEK
 
     k = k_curr + k_past
 
-    S = cp.Variable((k,k), symmetric=True)
-    eta = cp.Variable((1,))
-    constraints = [S >> 0]
-    constraints += [eta >= 0]
-    constraints += [cp.trace(S) + eta*cp.trace(X) <= trace_ub]
-    prob = cp.Problem(
-        cp.Minimize(y @ b
-                    + cp.trace((eta * X + V @ S @ V.T) @ (C - cp.diag(y)))
-                    + (0.5 / rho) * cp.sum_squares(b - cp.diag(eta * X + V @ S @ V.T))),
-        constraints)
-    prob.solve(solver=cp.SCS, verbose=True)
+    #S = cp.Variable((k,k), symmetric=True)
+    #eta = cp.Variable((1,))
+    #constraints = [S >> 0]
+    #constraints += [eta >= 0]
+    #constraints += [cp.trace(S) + eta*cp.trace(X) <= trace_ub]
+    #prob = cp.Problem(
+    #    cp.Minimize(y @ b
+    #                + cp.trace((eta * X + V @ S @ V.T) @ (C - cp.diag(y)))
+    #                + (0.5 / rho) * cp.sum_squares(b - cp.diag(eta * X + V @ S @ V.T))),
+    #    constraints)
+    #prob.solve(solver=cp.SCS, verbose=True)
 
-    jax.debug.print("SCS eta: {eta}", eta=eta.value)
-    jax.debug.print("SCS S: {S}", S=S.value)
+    #jax.debug.print("SCS eta: {eta}", eta=eta.value)
+    #jax.debug.print("SCS S: {S}", S=S.value)
 
-    eta, S, z = solve_subproblem(
-        C_matvec=C_matvec,
-        A_operator_slim=A_operator_slim,
-        A_adjoint_slim=A_adjoint_slim,
+    eta, S = solve_subproblem(
+        C_matmat=C_matmat,
+        A_operator_batched=A_operator_batched,
+        A_adjoint_batched=A_adjoint_batched,
         b=b,
         trace_ub=trace_ub,
         rho=rho,
-        obj_val=obj_val,
+        primal_obj_val=primal_obj_val,
         z=z,
         y=y,
         V=V,
@@ -197,9 +196,64 @@ def specbm(
         apgd_max_iters=apgd_max_iters,
         apgd_eps=apgd_eps,
     )
+    S_eigvals, S_eigvecs = jnp.linalg.eigh(S)
+    S_eigvals = jnp.clip(S_eigvals, a_min=0)
+
+    # TODO: fix this for X and X_bar
+    VSV_T_factor = (V @ S_eigvecs) * jnp.sqrt(S_eigvals).reshape(1, -1)
+    A_operator_VSV_T = jnp.sum(A_operator_batched(VSV_T_factor), axis=1)
+
+    X_next = eta * X + V @ S @ V.T
+    z_next = eta * z_bar + A_operator_VSV_T
+    y_cand = y + (1.0 / rho) * (b - z_next)
+
+    prev_eigvals, prev_eigvecs = approx_grad_k_min_eigen(
+        C_matvec=C_matvec,
+        A_adjoint_slim=A_adjoint_slim,
+        adjoint_left_vec=-y,
+        n=n,
+        k=k,
+        num_iters=lanczos_num_iters,
+        rng=jax.random.PRNGKey(0))
+    prev_eigvals = -prev_eigvals
+
+    cand_eigvals, cand_eigvecs = approx_grad_k_min_eigen(
+        C_matvec=C_matvec,
+        A_adjoint_slim=A_adjoint_slim,
+        adjoint_left_vec=-y_cand,
+        n=n,
+        k=k_curr,
+        num_iters=lanczos_num_iters,
+        rng=jax.random.PRNGKey(0))
+    cand_eigvals = -cand_eigvals
+
+    M1 = A_adjoint(y) - C.todense()
+    M2 = A_adjoint(y_cand) - C.todense()
+
+    eigvals1, eigvecs1 = jnp.linalg.eigh(M1)
+    eigvals2, eigvecs2 = jnp.linalg.eigh(M2)
+
+    prev_dual_obj = jnp.dot(-b, y) + trace_ub*jnp.clip(prev_eigvals[0], a_min=0)
+    cand_dual_obj = jnp.dot(-b, y_cand) + trace_ub*jnp.clip(cand_eigvals[0], a_min=0)
+    cand_est_obj = jnp.dot(-b, y_cand) + eta*jnp.dot(z_bar, y_cand) - eta*bar_obj_val
+    cand_est_obj += jnp.dot(A_operator_VSV_T, y_cand) - jnp.trace(VSV_T_factor.T @ C_matmat(VSV_T_factor))
+
+    y_next = lax.cond(
+        beta * (prev_dual_obj - cand_est_obj) <= prev_dual_obj - cand_dual_obj,
+        lambda _: y_cand,
+        lambda _: y,
+        None)
+
+    X_bar_next = eta * X_bar + V @ (
+        (S_eigvecs[:, :k_curr] * S_eigvals[:k_curr].reshape(1, -1)) @ S_eigvecs[:, :k_curr].T) @ V.T
+    # z_bar_next = 
+    V_next = jnp.concatenate([V @ S_eigvecs[:,k_curr:], cand_eigvecs], axis=1)
 
     embed()
     exit()
+
+
+    # TODO: update `bar_obj_val`, `z_bar`
 
     # TODO: implement f and f_bar 
     # TODO: create new Lanczos function for this solver
