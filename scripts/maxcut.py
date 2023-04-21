@@ -167,7 +167,7 @@ if __name__ == "__main__":
         X=X,
         y=y,
         z=z,
-        primal_obj_val=0.0,
+        primal_obj=0.0,
         V=V,
         n=n,
         m=n,

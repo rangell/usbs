@@ -15,6 +15,7 @@ from solver.eigen import approx_grad_k_min_eigen
 from IPython import embed
 
 
+@partial(jax.jit, static_argnames=["C_matmat", "A_operator_batched", "A_adjoint_batched", "k", "apgd_max_iters", "apgd_eps"])
 def solve_subproblem(
     C_matmat: Callable[[Array], Array],
     A_operator_batched: Callable[[Array], Array],
@@ -22,7 +23,7 @@ def solve_subproblem(
     b: Array,
     trace_ub: float,
     rho: float,
-    primal_obj_val: Array,
+    primal_obj: Array,
     z: Array,
     y: Array,
     V: Array,
@@ -53,7 +54,7 @@ def solve_subproblem(
         grad_S = (V.T @ C_matmat(V)
                     + V.T @ A_adjoint_batched(y, V)
                     + (1.0/rho) * V.T @ A_adjoint_batched((eta*z) + A_operator_VSV_T - b, V))
-        grad_eta = (primal_obj_val
+        grad_eta = (primal_obj
                     + jnp.dot(y, z)
                     + (1.0/rho) * eta * jnp.linalg.norm(z)**2
                     + (1.0/rho) * jnp.dot(z, A_operator_VSV_T - b))
@@ -124,7 +125,7 @@ def specbm(
     X: Array,
     y: Array,
     z: Array,
-    primal_obj_val: float,
+    primal_obj: float,
     V: Array,
     n: int,
     m: int,
@@ -152,18 +153,141 @@ def specbm(
     apgd_eps: float
 ) -> Tuple[Array, Array]:
 
-    X_bar = jnp.copy(X)
-    z_bar = jnp.copy(z)
-
-    bar_obj_val = primal_obj_val
-
     C_matmat = jax.vmap(C_matvec, 1, 1)
     A_adjoint_batched = jax.vmap(A_adjoint_slim, (None, 1), 1)
     A_operator_batched = jax.vmap(A_operator_slim, 1, 1)
 
-    # TODO: check `solve_subproblem` against SCS and MOSEK
-
     k = k_curr + k_past
+
+    # State:
+    #   X
+    #   X_bar
+    #   z
+    #   z_bar
+    #   y
+    #   V
+    #   pen_dual_obj, i.e. f(y)
+    #   primal_obj, i.e. <C, X>
+    #   bar_primal_obj, i.e. <C, X_bar>    
+    #   lb_spec_est, i.e. f_hat(y, X_bar)
+
+    StateStruct = namedtuple(
+        "StateStruct",
+        ["t", 
+         "X",
+         "X_bar",
+         "z",
+         "z_bar",
+         "y",
+         "V",
+         "primal_obj",
+         "bar_primal_obj",
+         "pen_dual_obj",
+         "lb_spec_est"])
+
+    @jax.jit
+    def cond_func(state: StateStruct) -> Array:
+        return state.t < 0
+
+    #@jax.jit
+    def body_func(state: StateStruct) -> StateStruct:
+        eta, S = solve_subproblem(
+            C_matmat=C_matmat,
+            A_operator_batched=A_operator_batched,
+            A_adjoint_batched=A_adjoint_batched,
+            b=b,
+            trace_ub=trace_ub,
+            rho=rho,
+            primal_obj=state.bar_primal_obj,
+            z=state.z_bar,
+            y=state.y,
+            V=state.V,
+            k=k,
+            apgd_step_size=apgd_step_size,
+            apgd_max_iters=apgd_max_iters,
+            apgd_eps=apgd_eps)
+        S_eigvals, S_eigvecs = jnp.linalg.eigh(S)
+        S_eigvals = jnp.clip(S_eigvals, a_min=0)
+
+        VSV_T_factor = (state.V @ S_eigvecs) * jnp.sqrt(S_eigvals).reshape(1, -1)
+        A_operator_VSV_T = jnp.sum(A_operator_batched(VSV_T_factor), axis=1)
+        X_next = eta * state.X_bar + state.V @ S @ state.V.T
+        z_next = eta * state.z_bar + A_operator_VSV_T
+        y_cand = y + (1.0 / rho) * (b - z_next)
+        primal_obj_next = eta * state.bar_primal_obj + jnp.trace(VSV_T_factor.T @ C_matmat(VSV_T_factor))
+
+        cand_eigvals, cand_eigvecs = approx_grad_k_min_eigen(
+            C_matvec=C_matvec,
+            A_adjoint_slim=A_adjoint_slim,
+            adjoint_left_vec=-y_cand,
+            n=n,
+            k=k_curr,
+            num_iters=lanczos_num_iters,
+            rng=jax.random.PRNGKey(0))
+        cand_eigvals = -cand_eigvals
+
+        cand_pen_dual_obj = jnp.dot(-b, y_cand) + trace_ub*jnp.clip(cand_eigvals[0], a_min=0)
+        lb_spec_est = jnp.dot(-b, y_cand) + eta*jnp.dot(state.z_bar, y_cand) - eta*state.bar_primal_obj
+        lb_spec_est += jnp.dot(A_operator_VSV_T, y_cand) - jnp.trace(VSV_T_factor.T @ C_matmat(VSV_T_factor))
+
+        y_next, pen_dual_obj_next = lax.cond(
+            beta * (state.pen_dual_obj - lb_spec_est) <= state.pen_dual_obj - cand_pen_dual_obj,
+            lambda _: (y_cand, cand_pen_dual_obj),
+            lambda _: (y, state.pen_dual_obj),
+            None)
+
+        curr_VSV_T_factor = (state.V @ S_eigvecs[:, :k_curr]) * jnp.sqrt(S_eigvals[:k_curr]).reshape(1, -1)
+        X_bar_next = eta * state.X_bar + curr_VSV_T_factor @ curr_VSV_T_factor.T
+        z_bar_next =  eta * state.z_bar + jnp.sum(A_operator_batched(curr_VSV_T_factor), axis=1)
+        V_next = jnp.concatenate([state.V @ S_eigvecs[:,k_curr:], cand_eigvecs], axis=1)
+        bar_primal_obj_next = eta * state.bar_primal_obj
+        bar_primal_obj_next += jnp.trace(curr_VSV_T_factor.T @ C_matmat(curr_VSV_T_factor))
+
+        return StateStruct(
+            t=state.t+1,
+            X=X_next,
+            X_bar=X_bar_next,
+            z=z_next,
+            z_bar=z_bar_next,
+            y=y_next,
+            V=V_next,
+            primal_obj=primal_obj_next,
+            bar_primal_obj=bar_primal_obj_next,
+            pen_dual_obj=pen_dual_obj_next,
+            lb_spec_est=lb_spec_est)
+
+
+    # compute current `pen_dual_obj` for `init_state`
+    prev_eigvals, prev_eigvecs = approx_grad_k_min_eigen(
+        C_matvec=C_matvec,
+        A_adjoint_slim=A_adjoint_slim,
+        adjoint_left_vec=-y,
+        n=n,
+        k=1,
+        num_iters=lanczos_num_iters,
+        rng=jax.random.PRNGKey(0))
+    prev_eigvals = -prev_eigvals
+    pen_dual_obj = jnp.dot(-b, y) + trace_ub*jnp.clip(prev_eigvals[0], a_min=0)
+
+    init_state = StateStruct(
+        t=0,
+        X=X,
+        X_bar=X,
+        z=z,
+        z_bar=z,
+        y=y,
+        V=V,
+        primal_obj=primal_obj,
+        bar_primal_obj=primal_obj,
+        pen_dual_obj=pen_dual_obj,
+        lb_spec_est=0.0)
+
+    state1 = body_func(init_state)
+
+    embed()
+    exit()
+
+    # TODO: check `solve_subproblem` against SCS and MOSEK
 
     #S = cp.Variable((k,k), symmetric=True)
     #eta = cp.Variable((1,))
@@ -180,84 +304,8 @@ def specbm(
     #jax.debug.print("SCS eta: {eta}", eta=eta.value)
     #jax.debug.print("SCS S: {S}", S=S.value)
 
-    eta, S = solve_subproblem(
-        C_matmat=C_matmat,
-        A_operator_batched=A_operator_batched,
-        A_adjoint_batched=A_adjoint_batched,
-        b=b,
-        trace_ub=trace_ub,
-        rho=rho,
-        primal_obj_val=primal_obj_val,
-        z=z,
-        y=y,
-        V=V,
-        k=k,
-        apgd_step_size=apgd_step_size,
-        apgd_max_iters=apgd_max_iters,
-        apgd_eps=apgd_eps,
-    )
-    S_eigvals, S_eigvecs = jnp.linalg.eigh(S)
-    S_eigvals = jnp.clip(S_eigvals, a_min=0)
-
-    # TODO: fix this for X and X_bar
-    VSV_T_factor = (V @ S_eigvecs) * jnp.sqrt(S_eigvals).reshape(1, -1)
-    A_operator_VSV_T = jnp.sum(A_operator_batched(VSV_T_factor), axis=1)
-
-    X_next = eta * X + V @ S @ V.T
-    z_next = eta * z_bar + A_operator_VSV_T
-    y_cand = y + (1.0 / rho) * (b - z_next)
-
-    prev_eigvals, prev_eigvecs = approx_grad_k_min_eigen(
-        C_matvec=C_matvec,
-        A_adjoint_slim=A_adjoint_slim,
-        adjoint_left_vec=-y,
-        n=n,
-        k=k,
-        num_iters=lanczos_num_iters,
-        rng=jax.random.PRNGKey(0))
-    prev_eigvals = -prev_eigvals
-
-    cand_eigvals, cand_eigvecs = approx_grad_k_min_eigen(
-        C_matvec=C_matvec,
-        A_adjoint_slim=A_adjoint_slim,
-        adjoint_left_vec=-y_cand,
-        n=n,
-        k=k_curr,
-        num_iters=lanczos_num_iters,
-        rng=jax.random.PRNGKey(0))
-    cand_eigvals = -cand_eigvals
-
-    M1 = A_adjoint(y) - C.todense()
-    M2 = A_adjoint(y_cand) - C.todense()
-
-    eigvals1, eigvecs1 = jnp.linalg.eigh(M1)
-    eigvals2, eigvecs2 = jnp.linalg.eigh(M2)
-
-    prev_dual_obj = jnp.dot(-b, y) + trace_ub*jnp.clip(prev_eigvals[0], a_min=0)
-    cand_dual_obj = jnp.dot(-b, y_cand) + trace_ub*jnp.clip(cand_eigvals[0], a_min=0)
-    cand_est_obj = jnp.dot(-b, y_cand) + eta*jnp.dot(z_bar, y_cand) - eta*bar_obj_val
-    cand_est_obj += jnp.dot(A_operator_VSV_T, y_cand) - jnp.trace(VSV_T_factor.T @ C_matmat(VSV_T_factor))
-
-    y_next = lax.cond(
-        beta * (prev_dual_obj - cand_est_obj) <= prev_dual_obj - cand_dual_obj,
-        lambda _: y_cand,
-        lambda _: y,
-        None)
-
-    X_bar_next = eta * X_bar + V @ (
-        (S_eigvecs[:, :k_curr] * S_eigvals[:k_curr].reshape(1, -1)) @ S_eigvecs[:, :k_curr].T) @ V.T
-    # z_bar_next = 
-    V_next = jnp.concatenate([V @ S_eigvecs[:,k_curr:], cand_eigvecs], axis=1)
-
     embed()
     exit()
-
-
-    # TODO: update `bar_obj_val`, `z_bar`
-
-    # TODO: implement f and f_bar 
-    # TODO: create new Lanczos function for this solver
-    # TODO: implement stopping criteria
 
     # TODO: fix to return all things needed for warm-start
     return jnp.zeros(n, n), jnp.zeros((m,))
