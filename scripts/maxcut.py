@@ -109,7 +109,7 @@ if __name__ == "__main__":
     #trace_ub = 1.0
     SCALE_C = 1.0
     SCALE_X = 1.0
-    trace_ub = 2*float(n)
+    trace_ub = float(n)
 
     scs_soln_cache = str(Path(MAT_PATH).with_suffix("")) + "_scs_soln.pkl"
     if Path(scs_soln_cache).is_file():
@@ -152,8 +152,8 @@ if __name__ == "__main__":
     
 
     # initialize variables here
-    k_curr = 3
-    k_past = 2
+    k_curr = 5
+    k_past = 0
     X = jnp.zeros((n, n))  # used to track primal solution
     y = jnp.zeros((n,))
     z = jnp.zeros((n,))
@@ -190,9 +190,9 @@ if __name__ == "__main__":
         eps=1e-3,
         max_iters=500,
         lanczos_num_iters=100,
-        apgd_step_size=100.0,
-        apgd_max_iters=100,
-        apgd_eps=1e-8)
+        apgd_step_size=1e-7,
+        apgd_max_iters=1000,
+        apgd_eps=1e-5)
 
     embed()
     exit()
