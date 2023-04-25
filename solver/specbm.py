@@ -34,10 +34,19 @@ def solve_subproblem(
     apgd_eps: float
 ) -> Tuple[Array, Array]:
 
-    # spectral line search
     APGDState = namedtuple(
         "APGDState",
         ["i", "eta_curr", "eta_past", "S_curr", "S_past", "max_value_change"])
+
+    # precompute static parts of the gradients
+    trace_ratio_X_bar = trace_ub / tr_X_bar
+    trace_ub_over_rho = trace_ub / rho
+    grad_S_base = trace_ub * V.T @ C_matmat(V) - trace_ub * V.T @ A_adjoint_batched(y, V)
+    grad_S_base -= trace_ub_over_rho * V.T @ A_adjoint_batched(b, V)
+    grad_S_part = trace_ub_over_rho * V.T @ A_adjoint_batched(trace_ratio_X_bar * z_bar, V)
+    grad_eta_base = trace_ratio_X_bar * (bar_primal_obj - jnp.dot(y, z_bar))
+    grad_eta_base -= (trace_ratio_X_bar / rho) * jnp.dot(z_bar, b)
+    grad_eta_part = (trace_ratio_X_bar**2 / rho) * jnp.sum(jnp.square(z_bar))
 
     @jax.jit
     def apgd(apgd_state: APGDState) -> APGDState:
@@ -48,11 +57,12 @@ def solve_subproblem(
         S_eigvals, S_eigvecs = jnp.linalg.eigh(S)
 
         # for numerical stability, make sure all eigvals are >= 0
-        S_eigvals = jnp.where(S_eigvals < 0, 0, S_eigvals)
+        S_eigvals = jnp.clip(S_eigvals, a_min=0)
 
         # compute gradients
         VSV_T_factor = (V @ (S_eigvecs)) * jnp.sqrt(trace_ub * S_eigvals).reshape(1, -1)
         A_operator_VSV_T = jnp.sum(A_operator_batched(VSV_T_factor), axis=1)
+
         subproblem_obj_val = jnp.dot(b, y) + eta*bar_primal_obj - eta*jnp.dot(y, z_bar)
         jax.debug.print("subproblem_obj_val1: {subproblem_obj_val}", subproblem_obj_val=subproblem_obj_val)
         subproblem_obj_val += jnp.trace(VSV_T_factor.T @ C_matmat(VSV_T_factor))
@@ -62,12 +72,10 @@ def solve_subproblem(
         subproblem_obj_val += (0.5 / rho) * jnp.linalg.norm(eta*z_bar + A_operator_VSV_T - b)**2
         jax.debug.print("subproblem_obj_val4: {subproblem_obj_val}", subproblem_obj_val=subproblem_obj_val)
 
-        grad_S = (trace_ub * V.T @ C_matmat(V)
-                  - trace_ub * V.T @ A_adjoint_batched(y, V)
-                  + (trace_ub/rho) * V.T @ A_adjoint_batched((eta*z_bar) + A_operator_VSV_T - b, V))
-        grad_eta = (bar_primal_obj - jnp.dot(y, z_bar)
-                    + (eta/rho) * jnp.linalg.norm(z_bar)**2
-                    + (1.0/rho) * jnp.dot(z_bar, A_operator_VSV_T - b))
+        grad_S = grad_S_base + eta * grad_S_part
+        grad_S += trace_ub_over_rho * V.T @ A_adjoint_batched(A_operator_VSV_T, V)
+        grad_eta = grad_eta_base + eta * grad_eta_part
+        grad_eta += (trace_ratio_X_bar / rho) * jnp.dot(z_bar, A_operator_VSV_T)
 
         # compute unprojected steps
         S_unproj = S - (apgd_step_size * grad_S)
@@ -106,7 +114,6 @@ def solve_subproblem(
         max_value_change = jnp.max(
             jnp.append(jnp.abs(apgd_state.S_curr - S_next).reshape(-1,),
                         jnp.abs(apgd_state.eta_curr - eta_next)))
- 
 
         return APGDState(
             i=apgd_state.i+1,
@@ -133,7 +140,7 @@ def solve_subproblem(
     eta = final_apgd_state.eta_curr
     S = final_apgd_state.S_curr
     S_eigvals, S_eigvecs = jnp.linalg.eigh(S)
-    S_eigvals = jnp.where(S_eigvals < 0, 0, S_eigvals)
+    S_eigvals = jnp.clip(S_eigvals, a_min=0)
     VSV_T_factor = (V @ (S_eigvecs)) * jnp.sqrt(trace_ub * S_eigvals).reshape(1, -1)
     A_operator_VSV_T = jnp.sum(A_operator_batched(VSV_T_factor), axis=1)
     subproblem_obj_val = jnp.dot(b, y) + eta*bar_primal_obj - eta*jnp.dot(y, z_bar)
@@ -148,7 +155,7 @@ def solve_subproblem(
     eta = final_apgd_state.eta_curr
     S = trace_ub * final_apgd_state.S_curr
     S_eigvals, S_eigvecs = jnp.linalg.eigh(S)
-    S_eigvals = jnp.where(S_eigvals < 0, 0, S_eigvals)
+    S_eigvals = jnp.clip(S_eigvals, a_min=0)
     VSV_T_factor = (V @ S_eigvecs) * jnp.sqrt(S_eigvals).reshape(1, -1)
     A_operator_VSV_T = jnp.sum(A_operator_batched(VSV_T_factor), axis=1)
     subproblem_obj_val = jnp.dot(b, y) + eta*bar_primal_obj - eta*jnp.dot(y, z_bar)
@@ -292,7 +299,9 @@ def specbm(
         jax.debug.print("SCS - subproblem_obj_val4: {subproblem_obj_val}", subproblem_obj_val=subproblem_obj_val)
 
         S_eigvals, S_eigvecs = jnp.linalg.eigh(S)
-        S_eigvals = jnp.where(S_eigvals < 0, 0, S_eigvals)
+        S_eigvals = jnp.clip(S_eigvals, a_min=0)
+
+
         VSV_T_factor = (state.V @ S_eigvecs) * jnp.sqrt(S_eigvals).reshape(1, -1)
         A_operator_VSV_T = jnp.sum(A_operator_batched(VSV_T_factor), axis=1)
         subproblem_obj_val = jnp.dot(b, y) + eta *state.bar_primal_obj - eta*jnp.dot(y, state.z_bar)
