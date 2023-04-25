@@ -32,14 +32,21 @@ def solve_subproblem(
     apgd_step_size: float,
     apgd_max_iters: int,
     apgd_eps: float
-) -> Tuple[Array, Array]:
+) -> Tuple[Array, Array, Array, Array]:
 
     APGDState = namedtuple(
         "APGDState",
-        ["i", "eta_curr", "eta_past", "S_curr", "S_past", "max_value_change"])
+        ["i",
+         "eta_curr",
+         "eta_past",
+         "S_curr",
+         "S_curr_eigvals",
+         "S_curr_eigvecs",
+         "S_past",
+         "max_value_change"])
 
     # precompute static parts of the gradients
-    trace_ratio_X_bar = trace_ub / tr_X_bar
+    trace_ratio_X_bar = lax.cond(tr_X_bar > 0.0, lambda _: trace_ub / tr_X_bar, lambda _: 1.0, None)
     trace_ub_over_rho = trace_ub / rho
     grad_S_base = trace_ub * V.T @ C_matmat(V) - trace_ub * V.T @ A_adjoint_batched(y, V)
     grad_S_base -= trace_ub_over_rho * V.T @ A_adjoint_batched(b, V)
@@ -55,22 +62,20 @@ def solve_subproblem(
         S = apgd_state.S_curr +  momentum * (apgd_state.S_curr - apgd_state.S_past)
         eta = apgd_state.eta_curr + momentum * (apgd_state.eta_curr - apgd_state.eta_past)
         S_eigvals, S_eigvecs = jnp.linalg.eigh(S)
-
-        # for numerical stability, make sure all eigvals are >= 0
-        S_eigvals = jnp.clip(S_eigvals, a_min=0)
+        S_eigvals = jnp.clip(S_eigvals, a_min=0)    # numerical instability handling
 
         # compute gradients
         VSV_T_factor = (V @ (S_eigvecs)) * jnp.sqrt(trace_ub * S_eigvals).reshape(1, -1)
         A_operator_VSV_T = jnp.sum(A_operator_batched(VSV_T_factor), axis=1)
 
-        subproblem_obj_val = jnp.dot(b, y) + eta*bar_primal_obj - eta*jnp.dot(y, z_bar)
-        jax.debug.print("subproblem_obj_val1: {subproblem_obj_val}", subproblem_obj_val=subproblem_obj_val)
-        subproblem_obj_val += jnp.trace(VSV_T_factor.T @ C_matmat(VSV_T_factor))
-        jax.debug.print("subproblem_obj_val2: {subproblem_obj_val}", subproblem_obj_val=subproblem_obj_val)
-        subproblem_obj_val -= jnp.dot(y, A_operator_VSV_T)
-        jax.debug.print("subproblem_obj_val3: {subproblem_obj_val}", subproblem_obj_val=subproblem_obj_val)
-        subproblem_obj_val += (0.5 / rho) * jnp.linalg.norm(eta*z_bar + A_operator_VSV_T - b)**2
-        jax.debug.print("subproblem_obj_val4: {subproblem_obj_val}", subproblem_obj_val=subproblem_obj_val)
+        #subproblem_obj_val = jnp.dot(b, y) + eta*bar_primal_obj - eta*jnp.dot(y, z_bar)
+        #jax.debug.print("subproblem_obj_val1: {subproblem_obj_val}", subproblem_obj_val=subproblem_obj_val)
+        #subproblem_obj_val += jnp.trace(VSV_T_factor.T @ C_matmat(VSV_T_factor))
+        #jax.debug.print("subproblem_obj_val2: {subproblem_obj_val}", subproblem_obj_val=subproblem_obj_val)
+        #subproblem_obj_val -= jnp.dot(y, A_operator_VSV_T)
+        #jax.debug.print("subproblem_obj_val3: {subproblem_obj_val}", subproblem_obj_val=subproblem_obj_val)
+        #subproblem_obj_val += (0.5 / rho) * jnp.linalg.norm(eta*z_bar + A_operator_VSV_T - b)**2
+        #jax.debug.print("subproblem_obj_val4: {subproblem_obj_val}", subproblem_obj_val=subproblem_obj_val)
 
         grad_S = grad_S_base + eta * grad_S_part
         grad_S += trace_ub_over_rho * V.T @ A_adjoint_batched(A_operator_VSV_T, V)
@@ -120,6 +125,8 @@ def solve_subproblem(
             eta_curr=eta_next,
             eta_past=apgd_state.eta_curr,
             S_curr=S_next,
+            S_curr_eigvals=proj_S_eigvals,
+            S_curr_eigvecs=S_eigvecs,
             S_past=apgd_state.S_curr,
             max_value_change=max_value_change)
 
@@ -128,6 +135,8 @@ def solve_subproblem(
         eta_curr=jnp.array(0.0),
         eta_past=jnp.array(0.0),
         S_curr=jnp.zeros((k,k)),
+        S_curr_eigvals=jnp.zeros((k,)),
+        S_curr_eigvecs=jnp.eye(k),
         S_past=jnp.zeros((k,k)),
         max_value_change=jnp.array(1.1*apgd_eps))
 
@@ -137,41 +146,44 @@ def solve_subproblem(
         init_apgd_state,
         max_steps=apgd_max_iters)
 
-    eta = final_apgd_state.eta_curr
-    S = final_apgd_state.S_curr
-    S_eigvals, S_eigvecs = jnp.linalg.eigh(S)
-    S_eigvals = jnp.clip(S_eigvals, a_min=0)
-    VSV_T_factor = (V @ (S_eigvecs)) * jnp.sqrt(trace_ub * S_eigvals).reshape(1, -1)
-    A_operator_VSV_T = jnp.sum(A_operator_batched(VSV_T_factor), axis=1)
-    subproblem_obj_val = jnp.dot(b, y) + eta*bar_primal_obj - eta*jnp.dot(y, z_bar)
-    jax.debug.print("APGD () - subproblem_obj_val1: {subproblem_obj_val}", subproblem_obj_val=subproblem_obj_val)
-    subproblem_obj_val += jnp.trace(VSV_T_factor.T @ C_matmat(VSV_T_factor))
-    jax.debug.print("APGD () - subproblem_obj_val2: {subproblem_obj_val}", subproblem_obj_val=subproblem_obj_val)
-    subproblem_obj_val -= jnp.dot(y, A_operator_VSV_T)
-    jax.debug.print("APGD () - subproblem_obj_val3: {subproblem_obj_val}", subproblem_obj_val=subproblem_obj_val)
-    subproblem_obj_val += (0.5 / rho) * jnp.linalg.norm(eta*z_bar + A_operator_VSV_T - b)**2
-    jax.debug.print("APGD () - subproblem_obj_val4: {subproblem_obj_val}", subproblem_obj_val=subproblem_obj_val)
+    #eta = final_apgd_state.eta_curr
+    #S = final_apgd_state.S_curr
+    #S_eigvals, S_eigvecs = jnp.linalg.eigh(S)
+    #S_eigvals = jnp.clip(S_eigvals, a_min=0)
+    #VSV_T_factor = (V @ (S_eigvecs)) * jnp.sqrt(trace_ub * S_eigvals).reshape(1, -1)
+    #A_operator_VSV_T = jnp.sum(A_operator_batched(VSV_T_factor), axis=1)
+    #subproblem_obj_val = jnp.dot(b, y) + eta*bar_primal_obj - eta*jnp.dot(y, z_bar)
+    #jax.debug.print("APGD () - subproblem_obj_val1: {subproblem_obj_val}", subproblem_obj_val=subproblem_obj_val)
+    #subproblem_obj_val += jnp.trace(VSV_T_factor.T @ C_matmat(VSV_T_factor))
+    #jax.debug.print("APGD () - subproblem_obj_val2: {subproblem_obj_val}", subproblem_obj_val=subproblem_obj_val)
+    #subproblem_obj_val -= jnp.dot(y, A_operator_VSV_T)
+    #jax.debug.print("APGD () - subproblem_obj_val3: {subproblem_obj_val}", subproblem_obj_val=subproblem_obj_val)
+    #subproblem_obj_val += (0.5 / rho) * jnp.linalg.norm(eta*z_bar + A_operator_VSV_T - b)**2
+    #jax.debug.print("APGD () - subproblem_obj_val4: {subproblem_obj_val}", subproblem_obj_val=subproblem_obj_val)
 
-    eta = final_apgd_state.eta_curr
-    S = trace_ub * final_apgd_state.S_curr
-    S_eigvals, S_eigvecs = jnp.linalg.eigh(S)
-    S_eigvals = jnp.clip(S_eigvals, a_min=0)
-    VSV_T_factor = (V @ S_eigvecs) * jnp.sqrt(S_eigvals).reshape(1, -1)
-    A_operator_VSV_T = jnp.sum(A_operator_batched(VSV_T_factor), axis=1)
-    subproblem_obj_val = jnp.dot(b, y) + eta*bar_primal_obj - eta*jnp.dot(y, z_bar)
-    jax.debug.print("APGD )( - subproblem_obj_val1: {subproblem_obj_val}", subproblem_obj_val=subproblem_obj_val)
-    subproblem_obj_val += jnp.trace(C_matmat(V @ S @ V.T))
-    jax.debug.print("APGD )( - subproblem_obj_val2: {subproblem_obj_val}", subproblem_obj_val=subproblem_obj_val)
-    subproblem_obj_val -= jnp.dot(y, A_operator_VSV_T)
-    jax.debug.print("APGD )( - subproblem_obj_val3: {subproblem_obj_val}", subproblem_obj_val=subproblem_obj_val)
-    subproblem_obj_val += (0.5 / rho) * jnp.linalg.norm(eta*z_bar + A_operator_VSV_T - b)**2
-    jax.debug.print("APGD )( - subproblem_obj_val4: {subproblem_obj_val}", subproblem_obj_val=subproblem_obj_val)
+    #eta = final_apgd_state.eta_curr
+    #S = trace_ub * final_apgd_state.S_curr
+    #S_eigvals, S_eigvecs = jnp.linalg.eigh(S)
+    #S_eigvals = jnp.clip(S_eigvals, a_min=0)
+    #VSV_T_factor = (V @ S_eigvecs) * jnp.sqrt(S_eigvals).reshape(1, -1)
+    #A_operator_VSV_T = jnp.sum(A_operator_batched(VSV_T_factor), axis=1)
+    #subproblem_obj_val = jnp.dot(b, y) + eta*bar_primal_obj - eta*jnp.dot(y, z_bar)
+    #jax.debug.print("APGD )( - subproblem_obj_val1: {subproblem_obj_val}", subproblem_obj_val=subproblem_obj_val)
+    #subproblem_obj_val += jnp.trace(C_matmat(V @ S @ V.T))
+    #jax.debug.print("APGD )( - subproblem_obj_val2: {subproblem_obj_val}", subproblem_obj_val=subproblem_obj_val)
+    #subproblem_obj_val -= jnp.dot(y, A_operator_VSV_T)
+    #jax.debug.print("APGD )( - subproblem_obj_val3: {subproblem_obj_val}", subproblem_obj_val=subproblem_obj_val)
+    #subproblem_obj_val += (0.5 / rho) * jnp.linalg.norm(eta*z_bar + A_operator_VSV_T - b)**2
+    #jax.debug.print("APGD )( - subproblem_obj_val4: {subproblem_obj_val}", subproblem_obj_val=subproblem_obj_val)
 
-    jax.debug.print("Final S scaled: {S}", S=trace_ub * final_apgd_state.S_curr) 
-    jax.debug.print("update obj slow: {update_obj}", update_obj=jnp.trace(C_matmat(V @ S @ V.T))) 
-    jax.debug.print("update obj fast: {update_obj}", update_obj=jnp.trace(VSV_T_factor.T @ C_matmat(VSV_T_factor))) 
+    #jax.debug.print("Final S scaled: {S}", S=trace_ub * final_apgd_state.S_curr) 
+    #jax.debug.print("update obj slow: {update_obj}", update_obj=jnp.trace(C_matmat(V @ S @ V.T))) 
+    #jax.debug.print("update obj fast: {update_obj}", update_obj=jnp.trace(VSV_T_factor.T @ C_matmat(VSV_T_factor))) 
 
-    return final_apgd_state.eta_curr, trace_ub * final_apgd_state.S_curr
+    return (final_apgd_state.eta_curr,
+            trace_ub * final_apgd_state.S_curr,
+            trace_ub * final_apgd_state.S_curr_eigvals,
+            final_apgd_state.S_curr_eigvecs)
 
 
 def specbm(
@@ -248,7 +260,7 @@ def specbm(
     #@jax.jit
     def body_func(state: StateStruct) -> StateStruct:
 
-        eta, S = solve_subproblem(
+        eta, S, S_eigvals, S_eigvecs = solve_subproblem(
             C_matmat=C_matmat,
             A_operator_batched=A_operator_batched,
             A_adjoint_batched=A_adjoint_batched,
@@ -264,63 +276,64 @@ def specbm(
             apgd_step_size=apgd_step_size,
             apgd_max_iters=apgd_max_iters,
             apgd_eps=apgd_eps)
-        S_eigvals, S_eigvecs = jnp.linalg.eigh(S)
-        S_eigvals = jnp.clip(S_eigvals, a_min=0)
 
+
+        ##################################################################################
+
+        #X = state.X_bar
+        #y = state.y
+        #V = state.V
+
+        #S_ = cp.Variable((k,k), symmetric=True)
+        #eta_ = cp.Variable((1,))
+        #constraints = [S_ >> 0]
+        #constraints += [eta_ >= 0]
+        #constraints += [cp.trace(S_) + eta_*cp.trace(X) <= trace_ub]
+        #prob = cp.Problem(
+        #    cp.Minimize(y @ b
+        #                + cp.trace((eta_ * X + V @ S_ @ V.T) @ (C - cp.diag(y)))
+        #                + (0.5 / rho) * cp.sum_squares(b - cp.diag(eta_ * X + V @ S_ @ V.T))),
+        #    constraints)
+        #prob.solve(solver=cp.SCS, verbose=False)
+
+        #embed()
+        #exit()
+ 
+        #S_eigvals, S_eigvecs = jnp.linalg.eigh(S_.value)
+        #VSV_T_factor = (V @ S_eigvecs) * jnp.sqrt(S_eigvals).reshape(1, -1)
+        #A_operator_VSV_T = jnp.sum(A_operator_batched(VSV_T_factor), axis=1)
+        #subproblem_obj_val = jnp.dot(b, y) + eta_.value *state.bar_primal_obj - eta_.value*jnp.dot(y, state.z_bar)
+        #jax.debug.print("SCS - subproblem_obj_val1: {subproblem_obj_val}", subproblem_obj_val=subproblem_obj_val)
+        #subproblem_obj_val += jnp.trace(C_matmat(V @ S_.value @ V.T))
+        #jax.debug.print("SCS - subproblem_obj_val2: {subproblem_obj_val}", subproblem_obj_val=subproblem_obj_val)
+        #subproblem_obj_val -= jnp.dot(y, A_operator_VSV_T)
+        #jax.debug.print("SCS - subproblem_obj_val3: {subproblem_obj_val}", subproblem_obj_val=subproblem_obj_val)
+        #subproblem_obj_val += (0.5 / rho) * jnp.linalg.norm(eta_.value*state.z_bar + A_operator_VSV_T - b)**2
+        #jax.debug.print("SCS - subproblem_obj_val4: {subproblem_obj_val}", subproblem_obj_val=subproblem_obj_val)
+
+        #S_eigvals, S_eigvecs = jnp.linalg.eigh(S)
+        #S_eigvals = jnp.clip(S_eigvals, a_min=0)
+
+
+        #VSV_T_factor = (state.V @ S_eigvecs) * jnp.sqrt(S_eigvals).reshape(1, -1)
+        #A_operator_VSV_T = jnp.sum(A_operator_batched(VSV_T_factor), axis=1)
+        #subproblem_obj_val = jnp.dot(b, y) + eta *state.bar_primal_obj - eta*jnp.dot(y, state.z_bar)
+        #jax.debug.print("APGD - subproblem_obj_val1: {subproblem_obj_val}", subproblem_obj_val=subproblem_obj_val)
+        #subproblem_obj_val += jnp.trace(C_matmat(state.V @ S @ state.V.T))
+        #jax.debug.print("APGD - subproblem_obj_val2: {subproblem_obj_val}", subproblem_obj_val=subproblem_obj_val)
+        #subproblem_obj_val -= jnp.dot(y, A_operator_VSV_T)
+        #jax.debug.print("APGD - subproblem_obj_val3: {subproblem_obj_val}", subproblem_obj_val=subproblem_obj_val)
+        #subproblem_obj_val += (0.5 / rho) * jnp.linalg.norm(eta*state.z_bar + A_operator_VSV_T - b)**2
+        #jax.debug.print("APGD - subproblem_obj_val4: {subproblem_obj_val}", subproblem_obj_val=subproblem_obj_val)
+
+        #jax.debug.print("Final S scaled: {S}", S=S) 
+        #jax.debug.print("update obj slow: {update_obj}", update_obj=jnp.trace(C_matmat(V @ S @ V.T))) 
+        #jax.debug.print("update obj fast: {update_obj}", update_obj=jnp.trace(VSV_T_factor.T @ C_matmat(VSV_T_factor))) 
+
+        #embed()
+        #exit()
 
         ################################################################################
-
-        X = state.X_bar
-        y = state.y
-        V = state.V
-
-        S_ = cp.Variable((k,k), symmetric=True)
-        eta_ = cp.Variable((1,))
-        constraints = [S_ >> 0]
-        constraints += [eta_ >= 0]
-        constraints += [cp.trace(S_) + eta_*cp.trace(X) <= trace_ub]
-        prob = cp.Problem(
-            cp.Minimize(y @ b
-                        + cp.trace((eta_ * X + V @ S_ @ V.T) @ (C - cp.diag(y)))
-                        + (0.5 / rho) * cp.sum_squares(b - cp.diag(eta_ * X + V @ S_ @ V.T))),
-            constraints)
-        prob.solve(solver=cp.SCS, verbose=False)
- 
-        S_eigvals, S_eigvecs = jnp.linalg.eigh(S_.value)
-        VSV_T_factor = (V @ S_eigvecs) * jnp.sqrt(S_eigvals).reshape(1, -1)
-        A_operator_VSV_T = jnp.sum(A_operator_batched(VSV_T_factor), axis=1)
-        subproblem_obj_val = jnp.dot(b, y) + eta_.value *state.bar_primal_obj - eta_.value*jnp.dot(y, state.z_bar)
-        jax.debug.print("SCS - subproblem_obj_val1: {subproblem_obj_val}", subproblem_obj_val=subproblem_obj_val)
-        subproblem_obj_val += jnp.trace(C_matmat(V @ S_.value @ V.T))
-        jax.debug.print("SCS - subproblem_obj_val2: {subproblem_obj_val}", subproblem_obj_val=subproblem_obj_val)
-        subproblem_obj_val -= jnp.dot(y, A_operator_VSV_T)
-        jax.debug.print("SCS - subproblem_obj_val3: {subproblem_obj_val}", subproblem_obj_val=subproblem_obj_val)
-        subproblem_obj_val += (0.5 / rho) * jnp.linalg.norm(eta_.value*state.z_bar + A_operator_VSV_T - b)**2
-        jax.debug.print("SCS - subproblem_obj_val4: {subproblem_obj_val}", subproblem_obj_val=subproblem_obj_val)
-
-        S_eigvals, S_eigvecs = jnp.linalg.eigh(S)
-        S_eigvals = jnp.clip(S_eigvals, a_min=0)
-
-
-        VSV_T_factor = (state.V @ S_eigvecs) * jnp.sqrt(S_eigvals).reshape(1, -1)
-        A_operator_VSV_T = jnp.sum(A_operator_batched(VSV_T_factor), axis=1)
-        subproblem_obj_val = jnp.dot(b, y) + eta *state.bar_primal_obj - eta*jnp.dot(y, state.z_bar)
-        jax.debug.print("APGD - subproblem_obj_val1: {subproblem_obj_val}", subproblem_obj_val=subproblem_obj_val)
-        subproblem_obj_val += jnp.trace(C_matmat(state.V @ S @ state.V.T))
-        jax.debug.print("APGD - subproblem_obj_val2: {subproblem_obj_val}", subproblem_obj_val=subproblem_obj_val)
-        subproblem_obj_val -= jnp.dot(y, A_operator_VSV_T)
-        jax.debug.print("APGD - subproblem_obj_val3: {subproblem_obj_val}", subproblem_obj_val=subproblem_obj_val)
-        subproblem_obj_val += (0.5 / rho) * jnp.linalg.norm(eta*state.z_bar + A_operator_VSV_T - b)**2
-        jax.debug.print("APGD - subproblem_obj_val4: {subproblem_obj_val}", subproblem_obj_val=subproblem_obj_val)
-
-        jax.debug.print("Final S scaled: {S}", S=S) 
-        jax.debug.print("update obj slow: {update_obj}", update_obj=jnp.trace(C_matmat(V @ S @ V.T))) 
-        jax.debug.print("update obj fast: {update_obj}", update_obj=jnp.trace(VSV_T_factor.T @ C_matmat(VSV_T_factor))) 
-
-        embed()
-        exit()
-
-        ###############################################################################
 
         VSV_T_factor = (state.V @ S_eigvecs) * jnp.sqrt(S_eigvals).reshape(1, -1)
         A_operator_VSV_T = jnp.sum(A_operator_batched(VSV_T_factor), axis=1)
@@ -409,7 +422,12 @@ def specbm(
         lb_spec_est=0.0)
 
     #final_state = bounded_while_loop(cond_func, body_func, init_state, max_steps=10)
-    #state1 = body_func(init_state)
+    state = init_state
+    for _ in range(50):
+        state = body_func(state)
+
+    embed()
+    exit()
 
     import pickle
     #with open("state1.pkl", "wb") as f:
