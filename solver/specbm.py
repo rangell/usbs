@@ -186,121 +186,26 @@ def solve_subproblem(
             final_apgd_state.S_curr_eigvecs)
 
 
-#@partial(jax.jit, static_argnames=["C_matmat", "A_operator_batched", "A_adjoint_batched", "k", "apgd_max_iters", "apgd_eps"])
+@partial(jax.jit, static_argnames=["C_matmat", "A_operator_batched", "A_adjoint_batched"])
 def compute_lb_spec_est(
     C_matmat: Callable[[Array], Array],
     A_operator_batched: Callable[[Array], Array],
     A_adjoint_batched: Callable[[Array, Array], Array],
     b: Array,
     trace_ub: float,
-    rho: float,
     bar_primal_obj: Array,
     z_bar: Array,
     tr_X_bar: Array,
     y: Array,
     V: Array,
-    k: int,
-    apgd_step_size: float,
-    apgd_max_iters: int,
-    apgd_eps: float
 ) -> Array:
-
-    APGDState = namedtuple(
-        "APGDState",
-        ["i",
-         "eta_curr",
-         "eta_past",
-         "S_curr",
-         "S_curr_eigvals",
-         "S_curr_eigvecs",
-         "S_past",
-         "max_value_change"])
-
-    # precompute static parts of the gradients
     trace_ratio_X_bar = lax.cond(tr_X_bar > 0.0, lambda _: trace_ub / tr_X_bar, lambda _: 1.0, None)
-    grad_S_base = trace_ub * V.T @ C_matmat(V) - trace_ub * V.T @ A_adjoint_batched(y, V)
-    grad_eta_base = trace_ratio_X_bar * (bar_primal_obj - jnp.dot(y, z_bar))
+    grad_S = trace_ub * V.T @ C_matmat(V) - trace_ub * V.T @ A_adjoint_batched(y, V)
+    grad_eta = trace_ratio_X_bar * (bar_primal_obj - jnp.dot(y, z_bar))
 
-    #@jax.jit
-    #def apgd(apgd_state: APGDState) -> APGDState:
-    #    momentum = apgd_state.i / (apgd_state.i + 3)  # set this to 0.0 for standard PGD
-    #    #momentum = 0.0
-    #    S = apgd_state.S_curr +  momentum * (apgd_state.S_curr - apgd_state.S_past)
-    #    eta = apgd_state.eta_curr + momentum * (apgd_state.eta_curr - apgd_state.eta_past)
-    #    S_eigvals, S_eigvecs = jnp.linalg.eigh(S)
-    #    S_eigvals = jnp.clip(S_eigvals, a_min=0)    # numerical instability handling
-
-    #    # compute gradients
-    #    grad_S = grad_S_base
-    #    grad_eta = grad_eta_base
-
-    #    # compute unprojected steps
-    #    S_unproj = S - (apgd_step_size * grad_S)
-    #    eta_unproj = eta - (apgd_step_size * grad_eta)
-
-    #    S_unproj_eigvals, S_eigvecs = jnp.linalg.eigh(S_unproj)
-    #    trace_vals = jnp.append(S_unproj_eigvals, eta_unproj)
-
-    #    def proj_simplex(unsorted_vals: Array) -> Array:
-    #        inv_sort_indices = jnp.argsort(jnp.argsort(unsorted_vals))
-    #        sorted_vals = jnp.sort(unsorted_vals)
-    #        descend_vals = jnp.flip(sorted_vals)
-    #        weighted_vals = (descend_vals
-    #                        + (1.0 / jnp.arange(1, len(descend_vals)+1))
-    #                            * (1 - jnp.cumsum(descend_vals)))
-    #        idx = jnp.sum(weighted_vals > 0) - 1
-    #        offset = weighted_vals[idx] - descend_vals[idx]
-    #        proj_descend_vals = descend_vals + offset
-    #        proj_descend_vals = proj_descend_vals * (proj_descend_vals > 0)
-    #        proj_unsorted_vals = jnp.flip(proj_descend_vals)[inv_sort_indices]
-    #        return proj_unsorted_vals
-
-    #    # check to see if we do not need to project onto the simplex
-    #    no_projection_needed = jnp.logical_and(jnp.sum(trace_vals) < 1,
-    #                                           jnp.all(trace_vals > -1e-6))
-    #    proj_trace_vals = lax.cond(
-    #        no_projection_needed,
-    #        lambda arr: arr,
-    #        lambda arr: proj_simplex(arr),
-    #        trace_vals)
-
-    #    # get projected next step values
-    #    eta_next = proj_trace_vals[-1]
-    #    proj_S_eigvals = proj_trace_vals[:-1]
-    #    S_next = (S_eigvecs * proj_S_eigvals.reshape(1, -1)) @ S_eigvecs.T
-    #    max_value_change = jnp.max(
-    #        jnp.append(jnp.abs(apgd_state.S_curr - S_next).reshape(-1,),
-    #                    jnp.abs(apgd_state.eta_curr - eta_next)))
-
-    #    return APGDState(
-    #        i=apgd_state.i+1,
-    #        eta_curr=eta_next,
-    #        eta_past=apgd_state.eta_curr,
-    #        S_curr=S_next,
-    #        S_curr_eigvals=proj_S_eigvals,
-    #        S_curr_eigvecs=S_eigvecs,
-    #        S_past=apgd_state.S_curr,
-    #        max_value_change=max_value_change)
-
-    #init_apgd_state = APGDState(
-    #    i=0.0,
-    #    eta_curr=jnp.array(0.0),
-    #    eta_past=jnp.array(0.0),
-    #    S_curr=jnp.zeros((k,k)),
-    #    S_curr_eigvals=jnp.zeros((k,)),
-    #    S_curr_eigvecs=jnp.eye(k),
-    #    S_past=jnp.zeros((k,k)),
-    #    max_value_change=jnp.array(1.1*apgd_eps))
-
-    #final_apgd_state = bounded_while_loop(
-    #    lambda apgd_state: apgd_state.max_value_change > apgd_eps,
-    #    apgd, 
-    #    init_apgd_state,
-    #    max_steps=1)
-    
-    # TODO: check to make sure `trace_ub` is enough of a multiplicative factor
-    S_unproj = -trace_ub * grad_S_base
-    eta_unproj = -trace_ub * grad_eta_base
+    step_size = jnp.clip(1.0/jnp.max(jnp.abs(jnp.append(grad_S.flatten(), grad_eta))), a_min=1.0)
+    S_unproj = -step_size * grad_S
+    eta_unproj = -step_size * grad_eta
 
     S_unproj_eigvals, S_eigvecs = jnp.linalg.eigh(S_unproj)
     trace_vals = jnp.append(S_unproj_eigvals, eta_unproj)
@@ -319,7 +224,6 @@ def compute_lb_spec_est(
         proj_unsorted_vals = jnp.flip(proj_descend_vals)[inv_sort_indices]
         return proj_unsorted_vals
 
-    # get projected next step values
     proj_trace_vals = proj_simplex(trace_vals)
     eta_next = proj_trace_vals[-1]
     proj_S_eigvals = proj_trace_vals[:-1]
@@ -329,6 +233,7 @@ def compute_lb_spec_est(
     lb_spec_est = (jnp.dot(-b, y) + eta_next*jnp.dot(y, z_bar) + jnp.dot(y, A_operator_VSV_T)
                    - eta_next*bar_primal_obj - jnp.trace(VSV_T_factor.T @ C_matmat(VSV_T_factor)))
     return lb_spec_est 
+
 
 def specbm(
     X: Array,
@@ -524,21 +429,16 @@ def specbm(
             A_adjoint_batched=A_adjoint_batched,
             b=b,
             trace_ub=trace_ub,
-            rho=rho,
             bar_primal_obj=state.bar_primal_obj,
             tr_X_bar=state.tr_X_bar,
             z_bar=state.z_bar,
             y=y_cand,
-            V=state.V,
-            k=k,
-            apgd_step_size=apgd_step_size,
-            apgd_max_iters=apgd_max_iters,
-            apgd_eps=apgd_eps)
+            V=state.V)
 
         y_next, pen_dual_obj_next = lax.cond(
             beta * (state.pen_dual_obj - lb_spec_est) <= state.pen_dual_obj - cand_pen_dual_obj,
             lambda _: (y_cand, cand_pen_dual_obj),
-            lambda _: (y, state.pen_dual_obj),
+            lambda _: (state.y, state.pen_dual_obj),
             None)
 
         curr_VSV_T_factor = (state.V @ S_eigvecs[:, :k_curr]) * jnp.sqrt(S_eigvals[:k_curr]).reshape(1, -1)
@@ -585,6 +485,7 @@ def specbm(
         rng=jax.random.PRNGKey(0))
     prev_eigvals = -prev_eigvals
     pen_dual_obj = jnp.dot(-b, y) + trace_ub*jnp.clip(prev_eigvals[0], a_min=0)
+    # TODO: use `prev_eigvecs` for initializing `V`?
 
     init_state = StateStruct(
         t=0,
@@ -602,21 +503,22 @@ def specbm(
 
     #final_state = bounded_while_loop(cond_func, body_func, init_state, max_steps=10)
     state = init_state
-    for _ in range(10):
+    for _ in range(12):
         state = body_func(state)
 
     embed()
     exit()
 
     import pickle
-    #with open("state1.pkl", "wb") as f:
-    #    pickle.dump(tuple(state1), f)
+    with open("state10.pkl", "wb") as f:
+        pickle.dump(tuple(state), f)
 
-    with open("state1.pkl", "rb") as f:
-        state1 = pickle.load(f)
-        state1 = StateStruct(*state1)
 
-    state2 = body_func(state1)
+    with open("state10.pkl", "rb") as f:
+        state10 = pickle.load(f)
+        state10 = StateStruct(*state10)
+
+    next_state = body_func(state10)
 
     embed()
     exit()
