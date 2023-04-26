@@ -14,6 +14,7 @@ from typing import Any, Callable
 
 from solver.cgal import cgal
 from solver.specbm import specbm
+from solver.eigen import approx_grad_k_min_eigen
 
 from IPython import embed
 
@@ -160,8 +161,16 @@ if __name__ == "__main__":
 
     # generate a random orthonormal matrix
     rng = jax.random.PRNGKey(0)
-    M = jax.random.normal(rng, shape=(n, k_curr + k_past))
-    V = jnp.linalg.qr(M)[0]
+    #M = jax.random.normal(rng, shape=(n, k_curr + k_past))
+    #V = jnp.linalg.qr(M)[0]
+    _, V = approx_grad_k_min_eigen(
+        C_matvec=C_matvec,
+        A_adjoint_slim=A_adjoint_slim,
+        adjoint_left_vec=-y,
+        n=n,
+        k=k_curr+k_past,
+        num_iters=100,
+        rng=rng)
 
     X, y = specbm(
         X=X,
@@ -190,7 +199,7 @@ if __name__ == "__main__":
         eps=1e-3,
         max_iters=500,
         lanczos_num_iters=100,
-        apgd_step_size=1e-7,
+        apgd_step_size=1e-6,
         apgd_max_iters=1000,
         apgd_eps=1e-5)
 
