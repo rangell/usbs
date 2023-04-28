@@ -6,6 +6,7 @@ import jax
 import jax.numpy as jnp
 from jax import lax
 from jax._src.typing import Array
+from jaxopt import Bisection
 from typing import Any, Callable, Tuple
 
 from scipy.sparse import csc_matrix  # type: ignore
@@ -15,7 +16,7 @@ from solver.eigen import approx_grad_k_min_eigen
 from IPython import embed
 
 
-@partial(jax.jit, static_argnames=["C_matmat", "A_operator_batched", "A_adjoint_batched", "k", "apgd_max_iters", "apgd_eps"])
+#@partial(jax.jit, static_argnames=["C_matmat", "A_operator_batched", "A_adjoint_batched", "k", "apgd_max_iters", "apgd_eps"])
 def solve_subproblem(
     C_matmat: Callable[[Array], Array],
     A_operator_batched: Callable[[Array], Array],
@@ -24,6 +25,7 @@ def solve_subproblem(
     trace_ub: float,
     rho: float,
     bar_primal_obj: Array,
+    func_lb: Array,
     z_bar: Array,
     tr_X_bar: Array,
     y: Array,
@@ -37,6 +39,8 @@ def solve_subproblem(
     APGDState = namedtuple(
         "APGDState",
         ["i",
+         "wealth",
+         "wealth_ub",
          "eta_curr",
          "eta_past",
          "S_curr",
@@ -55,36 +59,73 @@ def solve_subproblem(
     grad_eta_base -= (trace_ratio_X_bar / rho) * jnp.dot(z_bar, b)
     grad_eta_part = (trace_ratio_X_bar**2 / rho) * jnp.sum(jnp.square(z_bar))
 
-    @jax.jit
+    #@jax.jit
     def apgd(apgd_state: APGDState) -> APGDState:
-        momentum = apgd_state.i / (apgd_state.i + 3)  # set this to 0.0 for standard PGD
-        #momentum = 0.0
+        #momentum = apgd_state.i / (apgd_state.i + 3)  # set this to 0.0 for standard PGD
+        momentum = 0.0
         S = apgd_state.S_curr +  momentum * (apgd_state.S_curr - apgd_state.S_past)
         eta = apgd_state.eta_curr + momentum * (apgd_state.eta_curr - apgd_state.eta_past)
-        S_eigvals, S_eigvecs = jnp.linalg.eigh(S)
+
+        scaling_factor = (apgd_state.wealth / apgd_state.wealth_ub)
+        scaled_S = scaling_factor * S
+        scaled_eta = scaling_factor * eta
+
+        S_eigvals, S_eigvecs = jnp.linalg.eigh(scaled_S)
         S_eigvals = jnp.clip(S_eigvals, a_min=0)    # numerical instability handling
 
         # compute gradients
         VSV_T_factor = (V @ (S_eigvecs)) * jnp.sqrt(trace_ub * S_eigvals).reshape(1, -1)
         A_operator_VSV_T = jnp.sum(A_operator_batched(VSV_T_factor), axis=1)
-
-        subproblem_obj_val = jnp.dot(b, y) + eta*bar_primal_obj - eta*jnp.dot(y, z_bar)
-        ##jax.debug.print("subproblem_obj_val1: {subproblem_obj_val}", subproblem_obj_val=subproblem_obj_val)
-        subproblem_obj_val += jnp.trace(VSV_T_factor.T @ C_matmat(VSV_T_factor))
-        ##jax.debug.print("subproblem_obj_val2: {subproblem_obj_val}", subproblem_obj_val=subproblem_obj_val)
-        subproblem_obj_val -= jnp.dot(y, A_operator_VSV_T)
-        ##jax.debug.print("subproblem_obj_val3: {subproblem_obj_val}", subproblem_obj_val=subproblem_obj_val)
-        subproblem_obj_val += (0.5 / rho) * jnp.linalg.norm(eta*z_bar + A_operator_VSV_T - b)**2
-        jax.debug.print("subproblem_obj_val4: {subproblem_obj_val}", subproblem_obj_val=subproblem_obj_val)
-
-        grad_S = grad_S_base + eta * grad_S_part
+        grad_S = grad_S_base + scaled_eta * grad_S_part
         grad_S += trace_ub_over_rho * V.T @ A_adjoint_batched(A_operator_VSV_T, V)
-        grad_eta = grad_eta_base + eta * grad_eta_part
+        grad_eta = grad_eta_base + scaled_eta * grad_eta_part
         grad_eta += (trace_ratio_X_bar / rho) * jnp.dot(z_bar, A_operator_VSV_T)
 
+        # normalize the gradients if we need to
+        grad_norm = jnp.sqrt(jnp.sum(jnp.square(grad_S)) + grad_eta**2)
+        grad_S, grad_eta = lax.cond(
+            grad_norm > 1.0,
+            lambda _: (grad_S/grad_norm, grad_eta/grad_norm),
+            lambda _: (grad_S, grad_eta),
+            None)
+
+        # evaluate the objective function at the current scaled point
+        scaled_func_val = jnp.dot(y, b) + scaled_eta * bar_primal_obj - scaled_eta * jnp.dot(z_bar, y)
+        scaled_func_val += jnp.trace(VSV_T_factor.T @ C_matmat(VSV_T_factor))
+        scaled_func_val -= jnp.dot(y, A_operator_VSV_T)
+        scaled_func_val += (0.5 / rho) * jnp.sum(jnp.square(scaled_eta * z_bar + A_operator_VSV_T - b))
+
+        def wealth_growth_factor(h: Array) -> Array:
+            return jnp.exp((-(jnp.dot(grad_S.flatten(), S.flatten()) + grad_eta * eta)
+                            * jnp.log(1 + h / apgd_state.wealth_ub))
+                           + (jnp.min(grad_norm, initial=1.0)**2
+                            * (h + apgd_state.wealth_ub
+                               * jnp.log(apgd_state.wealth_ub / (apgd_state.wealth_ub + h)))))
+
+        def potential_func(h: Array) -> Array:
+            update_scale = apgd_state.wealth * wealth_growth_factor(h) / (apgd_state.wealth_ub + h)
+            update_S = update_scale * (S - h * grad_S)
+            update_eta = update_scale * (eta - h * grad_eta)
+            potential = scaled_func_val - func_lb + grad_eta * (update_eta - scaled_eta)
+            potential += jnp.dot(grad_S.flatten(), update_S.flatten() - scaled_S.flatten())
+            return potential
+
+        step_size = lax.cond(
+            potential_func(1.0) < 0.0,
+            lambda _: Bisection(
+                optimality_fun=potential_func,
+                lower=0.0,
+                upper=1.0,
+                check_bracket=False).run().params,
+            lambda _: 1.0,
+            None)
+
         # compute unprojected steps
-        S_unproj = S - (apgd_step_size * grad_S)
-        eta_unproj = eta - (apgd_step_size * grad_eta)
+        S_unproj = S - (step_size * grad_S)
+        eta_unproj = eta - (step_size * grad_eta)
+
+        embed()
+        exit()
 
         S_unproj_eigvals, S_eigvecs = jnp.linalg.eigh(S_unproj)
         trace_vals = jnp.append(S_unproj_eigvals, eta_unproj)
@@ -122,6 +163,8 @@ def solve_subproblem(
 
         return APGDState(
             i=apgd_state.i+1,
+            wealth=apgd_state.wealth*wealth_growth_factor(step_size),
+            wealth_ub=apgd_state.wealth+step_size,
             eta_curr=eta_next,
             eta_past=apgd_state.eta_curr,
             S_curr=S_next,
@@ -132,6 +175,8 @@ def solve_subproblem(
 
     init_apgd_state = APGDState(
         i=0.0,
+        wealth=1.0,
+        wealth_ub=1.0,
         eta_curr=jnp.array(0.0),
         eta_past=jnp.array(0.0),
         S_curr=jnp.zeros((k,k)),
@@ -140,11 +185,16 @@ def solve_subproblem(
         S_past=jnp.zeros((k,k)),
         max_value_change=jnp.array(1.1*apgd_eps))
 
-    final_apgd_state = bounded_while_loop(
-        lambda apgd_state: apgd_state.max_value_change > apgd_eps,
-        apgd, 
-        init_apgd_state,
-        max_steps=apgd_max_iters)
+    #final_apgd_state = bounded_while_loop(
+    #    lambda apgd_state: apgd_state.max_value_change > apgd_eps,
+    #    apgd, 
+    #    init_apgd_state,
+    #    max_steps=apgd_max_iters)
+    
+    apgd_state = apgd(init_apgd_state)
+
+    embed()
+    exit()
 
     #eta = final_apgd_state.eta_curr
     #S = final_apgd_state.S_curr
@@ -435,6 +485,7 @@ def specbm(
             trace_ub=trace_ub,
             rho=rho,
             bar_primal_obj=state.bar_primal_obj,
+            func_lb=-state.pen_dual_obj,
             tr_X_bar=state.tr_X_bar,
             z_bar=state.z_bar,
             y=state.y,
