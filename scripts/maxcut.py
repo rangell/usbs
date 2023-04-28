@@ -199,8 +199,8 @@ if __name__ == "__main__":
         eps=1e-3,
         max_iters=500,
         lanczos_num_iters=100,
-        apgd_step_size=1e-6,
-        apgd_max_iters=1000,
+        apgd_step_size=1e-7,
+        apgd_max_iters=10000,
         apgd_eps=1e-5)
 
     embed()
