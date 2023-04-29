@@ -61,8 +61,8 @@ def solve_subproblem(
 
     #@jax.jit
     def apgd(apgd_state: APGDState) -> APGDState:
-        #momentum = apgd_state.i / (apgd_state.i + 3)  # set this to 0.0 for standard PGD
-        momentum = 0.0
+        momentum = apgd_state.i / (apgd_state.i + 3)  # set this to 0.0 for standard PGD
+        #momentum = 0.0
         S = apgd_state.S_curr +  momentum * (apgd_state.S_curr - apgd_state.S_past)
         eta = apgd_state.eta_curr + momentum * (apgd_state.eta_curr - apgd_state.eta_past)
 
@@ -90,7 +90,7 @@ def solve_subproblem(
             None)
 
         # evaluate the objective function at the current scaled point
-        scaled_func_val = jnp.dot(y, b) + scaled_eta * bar_primal_obj - scaled_eta * jnp.dot(z_bar, y)
+        scaled_func_val = jnp.dot(y, b) + scaled_eta * (bar_primal_obj - jnp.dot(z_bar, y))
         scaled_func_val += jnp.trace(VSV_T_factor.T @ C_matmat(VSV_T_factor))
         scaled_func_val -= jnp.dot(y, A_operator_VSV_T)
         scaled_func_val += (0.5 / rho) * jnp.sum(jnp.square(scaled_eta * z_bar + A_operator_VSV_T - b))
@@ -123,9 +123,6 @@ def solve_subproblem(
         # compute unprojected steps
         S_unproj = S - (step_size * grad_S)
         eta_unproj = eta - (step_size * grad_eta)
-
-        embed()
-        exit()
 
         S_unproj_eigvals, S_eigvecs = jnp.linalg.eigh(S_unproj)
         trace_vals = jnp.append(S_unproj_eigvals, eta_unproj)
@@ -161,10 +158,21 @@ def solve_subproblem(
             jnp.append(jnp.abs(apgd_state.S_curr - S_next).reshape(-1,),
                         jnp.abs(apgd_state.eta_curr - eta_next)))
 
+        jax.debug.print("i: {i} - scaled_func_val: {scaled_func_val} - step_size: {step_size}"
+                        " - wealth: {wealth} - wealth_ub: {wealth_ub} - grad_norm: {grad_norm}"
+                        " - max_value_change: {max_value_change}",
+                        i=apgd_state.i,
+                        scaled_func_val=scaled_func_val,
+                        step_size=step_size,
+                        wealth=apgd_state.wealth,
+                        wealth_ub=apgd_state.wealth_ub,
+                        grad_norm=grad_norm,
+                        max_value_change=max_value_change)
+
         return APGDState(
             i=apgd_state.i+1,
             wealth=apgd_state.wealth*wealth_growth_factor(step_size),
-            wealth_ub=apgd_state.wealth+step_size,
+            wealth_ub=apgd_state.wealth_ub+step_size,
             eta_curr=eta_next,
             eta_past=apgd_state.eta_curr,
             S_curr=S_next,
@@ -191,10 +199,10 @@ def solve_subproblem(
     #    init_apgd_state,
     #    max_steps=apgd_max_iters)
     
-    apgd_state = apgd(init_apgd_state)
-
-    embed()
-    exit()
+    apgd_state = init_apgd_state
+    for _ in range(1000):
+        apgd_state = apgd(apgd_state)
+    final_apgd_state = apgd_state
 
     #eta = final_apgd_state.eta_curr
     #S = final_apgd_state.S_curr
