@@ -68,19 +68,23 @@ def solve_subproblem(
         VSV_T_factor = (V @ (S_eigvecs)) * jnp.sqrt(trace_ub * S_eigvals).reshape(1, -1)
         A_operator_VSV_T = jnp.sum(A_operator_batched(VSV_T_factor), axis=1)
 
-        subproblem_obj_val = jnp.dot(b, y) + eta*bar_primal_obj - eta*jnp.dot(y, z_bar)
-        ##jax.debug.print("subproblem_obj_val1: {subproblem_obj_val}", subproblem_obj_val=subproblem_obj_val)
-        subproblem_obj_val += jnp.trace(VSV_T_factor.T @ C_matmat(VSV_T_factor))
-        ##jax.debug.print("subproblem_obj_val2: {subproblem_obj_val}", subproblem_obj_val=subproblem_obj_val)
-        subproblem_obj_val -= jnp.dot(y, A_operator_VSV_T)
-        ##jax.debug.print("subproblem_obj_val3: {subproblem_obj_val}", subproblem_obj_val=subproblem_obj_val)
-        subproblem_obj_val += (0.5 / rho) * jnp.linalg.norm(eta*z_bar + A_operator_VSV_T - b)**2
-        jax.debug.print("subproblem_obj_val4: {subproblem_obj_val}", subproblem_obj_val=subproblem_obj_val)
+        #subproblem_obj_val = jnp.dot(b, y) + eta*bar_primal_obj - eta*jnp.dot(y, z_bar)
+        #jax.debug.print("subproblem_obj_val1: {subproblem_obj_val}", subproblem_obj_val=subproblem_obj_val)
+        #subproblem_obj_val += jnp.trace(VSV_T_factor.T @ C_matmat(VSV_T_factor))
+        #jax.debug.print("subproblem_obj_val2: {subproblem_obj_val}", subproblem_obj_val=subproblem_obj_val)
+        #subproblem_obj_val -= jnp.dot(y, A_operator_VSV_T)
+        #jax.debug.print("subproblem_obj_val3: {subproblem_obj_val}", subproblem_obj_val=subproblem_obj_val)
+        #subproblem_obj_val += (0.5 / rho) * jnp.linalg.norm(eta*z_bar + A_operator_VSV_T - b)**2
+        #jax.debug.print("subproblem_obj_val: {subproblem_obj_val}", subproblem_obj_val=subproblem_obj_val)
 
         grad_S = grad_S_base + eta * grad_S_part
         grad_S += trace_ub_over_rho * V.T @ A_adjoint_batched(A_operator_VSV_T, V)
         grad_eta = grad_eta_base + eta * grad_eta_part
         grad_eta += (trace_ratio_X_bar / rho) * jnp.dot(z_bar, A_operator_VSV_T)
+
+        grad_norm = jnp.sqrt(jnp.sum(jnp.square(grad_S.flatten())) + grad_eta**2)
+        grad_S /= grad_norm
+        grad_eta /= grad_norm
 
         # compute unprojected steps
         S_unproj = S - (apgd_step_size * grad_S)
