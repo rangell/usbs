@@ -201,7 +201,7 @@ if __name__ == "__main__":
         lanczos_num_iters=100,
         apgd_step_size=1.0,
         apgd_max_iters=10000,
-        apgd_eps=1e-5)
+        apgd_eps=1e-6)
 
     embed()
     exit()
