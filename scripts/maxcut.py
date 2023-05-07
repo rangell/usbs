@@ -77,18 +77,29 @@ def create_proj_K(n: int, SCALE_X: float) -> Callable[[Array], Array]:
         return jnp.ones((n,)) * SCALE_X
     return proj_K
 
-
-def create_svec_matrix(n: int) -> BCOO:
-    U = np.zeros((int(0.5*n*(n+1)), n**2))
-    for a, (b, c) in enumerate(list(zip(*np.tril_indices(n)))):
+# TODO: put this in some utils file
+def create_svec_matrix(k: int) -> BCOO:
+    U = np.zeros((int(0.5*k*(k+1)), k**2))
+    for a, (b, c) in enumerate(list(zip(*np.tril_indices(k)))):
         if b == c:
-            U[a, b*n + c] = 1.0
+            U[a, b*k + c] = 1.0
         else:
-            U[a, b*n + c] = 1.0 / np.sqrt(2.0)
-            U[a, c*n + b] = U[a, b*n + c]
+            U[a, b*k + c] = 1.0 / np.sqrt(2.0)
+            U[a, c*k + b] = U[a, b*k + c]
     U = coo_matrix(U)
     U = BCOO((U.data, jnp.stack((U.row, U.col)).T), shape=U.shape)
     return U
+
+
+def create_Q_base(m: int, k: int, U: BCOO) -> Callable[[Array], Array]:
+    @jax.jit
+    def Q_base(V: Array) -> Array:
+        flat_outer_prod = (V.T.reshape(1, k, m) * V.T.reshape(k, 1, m)).reshape(k**2, m)
+        svec_proj = U @ flat_outer_prod
+        expanded_mx = svec_proj.reshape(-1, 1, m) * svec_proj.reshape(1, -1, m)
+        final_mx = jnp.sum(expanded_mx, axis=-1)
+        return final_mx
+    return Q_base
 
 
 def solve_scs(C: csc_matrix) -> np.ndarray[Any, Any]:
@@ -113,6 +124,7 @@ if __name__ == "__main__":
     problem = loadmat(MAT_PATH)
     C = problem["Problem"][0][0][1]
     n = C.shape[0]
+    m = n
 
     C = scipy.sparse.spdiags((C @ np.ones((n,1))).T, 0, n, n) - C
     C = 0.5*(C + C.T)
@@ -174,11 +186,22 @@ if __name__ == "__main__":
     y = jnp.zeros((n,))
     z = jnp.zeros((n,))
 
+    # for interior point methods
     U = create_svec_matrix(k)
 
-    rng = jax.random.PRNGKey(0)
-    M = jax.random.normal(rng, shape=(k, k))
-    M = M + M.T
+    # for quadratic subproblem solved by interior point method
+    Q_base = create_Q_base(m, k, U)
+
+    V = jax.random.normal(jax.random.PRNGKey(0), shape=(m, k))
+    S = jax.random.normal(jax.random.PRNGKey(1), shape=(k, k))
+    S = S + S.T
+
+    A_operator_VSV_T = A_operator(V @ S @ V.T)
+    val_slow = jnp.dot(A_operator_VSV_T, A_operator_VSV_T)
+
+    svec_S = (U @ S.reshape(-1,)).reshape(-1, 1)
+    Q_base_V = Q_base(V)
+    val_fast = svec_S.T @ Q_base_V @ svec_S
 
     embed()
     exit()
@@ -202,7 +225,7 @@ if __name__ == "__main__":
         primal_obj=0.0,
         V=V,
         n=n,
-        m=n,
+        m=m,
         trace_ub=trace_ub,
         C=C,
         C_innerprod=C_innerprod,
