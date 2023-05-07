@@ -3,9 +3,10 @@ import cvxpy as cp
 from equinox.internal._loop.bounded import bounded_while_loop # type: ignore
 from functools import partial
 import jax
+from jax._src.typing import Array
+from jax.experimental.sparse import BCOO
 import jax.numpy as jnp
 from jax import lax
-from jax._src.typing import Array
 from typing import Any, Callable, Tuple
 
 from scipy.sparse import csc_matrix  # type: ignore
@@ -15,11 +16,13 @@ from solver.eigen import approx_grad_k_min_eigen
 from IPython import embed
 
 
-@partial(jax.jit, static_argnames=["C_matmat", "A_operator_batched", "A_adjoint_batched", "k", "apgd_max_iters", "apgd_eps"])
-def solve_subproblem(
+#@partial(jax.jit, static_argnames=["C_matmat", "A_operator_batched", "A_adjoint_batched", "k", "apgd_max_iters", "apgd_eps"])
+def solve_quadratic_subproblem(
     C_matmat: Callable[[Array], Array],
     A_operator_batched: Callable[[Array], Array],
     A_adjoint_batched: Callable[[Array, Array], Array],
+    Q_base: Callable[[Array], Array],
+    U: BCOO,
     b: Array,
     trace_ub: float,
     rho: float,
@@ -33,6 +36,26 @@ def solve_subproblem(
     apgd_max_iters: int,
     apgd_eps: float
 ) -> Tuple[Array, Array, Array, Array]:
+
+    # TODO: create svec and svec_inv lambdas?
+
+    # create problem constants
+    Q_11 = (trace_ub**2 / rho) * Q_base(V)
+    q_12 = (trace_ub**2 / (rho * tr_X_bar)) * (U @ (V.T @ A_adjoint_batched(z_bar, V)).reshape(-1,))
+    q_22 = (trace_ub**2 / (rho * tr_X_bar**2)) * jnp.dot(z_bar, z_bar)
+    h_1 = trace_ub * U @ (V.T @ (C_matmat(V)
+                                 - A_adjoint_batched(y, V)
+                                 - (A_adjoint_batched(b, V) / rho))).reshape(-1,)
+    h_2 = (trace_ub / tr_X_bar) * (bar_primal_obj - jnp.dot(z_bar, y) - (jnp.dot(z_bar, b) / rho))
+    svec_I = U @ jnp.eye(k).reshape(-1,)
+
+    # initialize all variables
+
+    S_init = jnp.eye(k) / (k + 1.0)
+    eta_init = 1.0 / (k + 1.0)
+
+    embed()
+    exit()
 
     APGDState = namedtuple(
         "APGDState",
@@ -390,6 +413,8 @@ def specbm(
     A_operator_slim: Callable[[Array], Array],
     A_adjoint: Callable[[Array], Array],
     A_adjoint_slim: Callable[[Array, Array], Array],
+    Q_base: Callable[[Array], Array],
+    U: BCOO,
     b: Array,
     rho: float,
     beta: float,
@@ -447,22 +472,24 @@ def specbm(
     #@jax.jit
     def body_func(state: StateStruct) -> StateStruct:
 
-        #eta, S, S_eigvals, S_eigvecs = solve_subproblem(
-        #    C_matmat=C_matmat,
-        #    A_operator_batched=A_operator_batched,
-        #    A_adjoint_batched=A_adjoint_batched,
-        #    b=b,
-        #    trace_ub=trace_ub,
-        #    rho=rho,
-        #    bar_primal_obj=state.bar_primal_obj,
-        #    tr_X_bar=state.tr_X_bar,
-        #    z_bar=state.z_bar,
-        #    y=state.y,
-        #    V=state.V,
-        #    k=k,
-        #    apgd_step_size=apgd_step_size,
-        #    apgd_max_iters=apgd_max_iters,
-        #    apgd_eps=apgd_eps)
+        eta, S, S_eigvals, S_eigvecs = solve_quadratic_subproblem(
+            C_matmat=C_matmat,
+            A_operator_batched=A_operator_batched,
+            A_adjoint_batched=A_adjoint_batched,
+            Q_base=Q_base,
+            U=U,
+            b=b,
+            trace_ub=trace_ub,
+            rho=rho,
+            bar_primal_obj=state.bar_primal_obj,
+            tr_X_bar=state.tr_X_bar,
+            z_bar=state.z_bar,
+            y=state.y,
+            V=state.V,
+            k=k,
+            apgd_step_size=apgd_step_size,
+            apgd_max_iters=apgd_max_iters,
+            apgd_eps=apgd_eps)
 
         ###################################################################################
 
@@ -633,16 +660,16 @@ def specbm(
         lb_spec_est=0.0)
 
     #final_state = bounded_while_loop(cond_func, body_func, init_state, max_steps=10)
-    state = init_state
-    for _ in range(11):
-        state = body_func(state)
+    #state = init_state
+    #for _ in range(11):
+    #    state = body_func(state)
 
-    import pickle
-    with open("state.pkl", "wb") as f:
-        pickle.dump(tuple(state), f)
+    #import pickle
+    #with open("state.pkl", "wb") as f:
+    #    pickle.dump(tuple(state), f)
 
-    embed()
-    exit()
+    #embed()
+    #exit()
 
     import pickle
     with open("state.pkl", "rb") as f:

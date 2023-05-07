@@ -192,23 +192,8 @@ if __name__ == "__main__":
     # for quadratic subproblem solved by interior point method
     Q_base = create_Q_base(m, k, U)
 
-    V = jax.random.normal(jax.random.PRNGKey(0), shape=(m, k))
-    S = jax.random.normal(jax.random.PRNGKey(1), shape=(k, k))
-    S = S + S.T
-
-    A_operator_VSV_T = A_operator(V @ S @ V.T)
-    val_slow = jnp.dot(A_operator_VSV_T, A_operator_VSV_T)
-
-    svec_S = (U @ S.reshape(-1,)).reshape(-1, 1)
-    Q_base_V = Q_base(V)
-    val_fast = svec_S.T @ Q_base_V @ svec_S
-
-    embed()
-    exit()
-
-    # generate a random orthonormal matrix
-    #M = jax.random.normal(rng, shape=(n, k_curr + k_past))
-    #V = jnp.linalg.qr(M)[0]
+    # generate an initial orthonormal matrix
+    rng = jax.random.PRNGKey(0)
     _, V = approx_grad_k_min_eigen(
         C_matvec=C_matvec,
         A_adjoint_slim=A_adjoint_slim,
@@ -235,6 +220,8 @@ if __name__ == "__main__":
         A_operator_slim=A_operator_slim,
         A_adjoint=A_adjoint,
         A_adjoint_slim=A_adjoint_slim,
+        Q_base=Q_base,
+        U=U,
         b=b,
         rho=0.5,
         beta=0.25,
