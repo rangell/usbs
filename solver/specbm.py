@@ -634,18 +634,15 @@ def specbm(
 
     #final_state = bounded_while_loop(cond_func, body_func, init_state, max_steps=10)
     state = init_state
-    for _ in range(500):
+    for _ in range(11):
         state = body_func(state)
+
+    import pickle
+    with open("state.pkl", "wb") as f:
+        pickle.dump(tuple(state), f)
 
     embed()
     exit()
-
-    #import pickle
-    #with open("state.pkl", "wb") as f:
-    #    pickle.dump(tuple(state), f)
-
-    #embed()
-    #exit()
 
     import pickle
     with open("state.pkl", "rb") as f:

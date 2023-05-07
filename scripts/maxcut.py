@@ -9,7 +9,7 @@ from pathlib import Path
 import pickle
 import scipy  # type: ignore
 from scipy.io import loadmat  # type: ignore
-from scipy.sparse import csc_matrix  # type: ignore
+from scipy.sparse import coo_matrix, csc_matrix  # type: ignore
 from typing import Any, Callable
 
 from solver.cgal import cgal
@@ -78,6 +78,19 @@ def create_proj_K(n: int, SCALE_X: float) -> Callable[[Array], Array]:
     return proj_K
 
 
+def create_svec_matrix(n: int) -> BCOO:
+    U = np.zeros((int(0.5*n*(n+1)), n**2))
+    for a, (b, c) in enumerate(list(zip(*np.tril_indices(n)))):
+        if b == c:
+            U[a, b*n + c] = 1.0
+        else:
+            U[a, b*n + c] = 1.0 / np.sqrt(2.0)
+            U[a, c*n + b] = U[a, b*n + c]
+    U = coo_matrix(U)
+    U = BCOO((U.data, jnp.stack((U.row, U.col)).T), shape=U.shape)
+    return U
+
+
 def solve_scs(C: csc_matrix) -> np.ndarray[Any, Any]:
     n = C.shape[0]
     X = cp.Variable((n,n), symmetric=True)
@@ -111,7 +124,7 @@ if __name__ == "__main__":
     #trace_ub = 1.0
     SCALE_C = 1.0
     SCALE_X = 1.0
-    trace_ub = 2.0*float(n)
+    trace_ub = float(n)
 
     scs_soln_cache = str(Path(MAT_PATH).with_suffix("")) + "_scs_soln.pkl"
     if Path(scs_soln_cache).is_file():
@@ -154,14 +167,23 @@ if __name__ == "__main__":
     
 
     # initialize variables here
-    k_curr = 10
+    k_curr = 5
     k_past = 0
+    k = k_curr + k_past
     X = jnp.zeros((n, n))  # used to track primal solution
     y = jnp.zeros((n,))
     z = jnp.zeros((n,))
 
-    # generate a random orthonormal matrix
+    U = create_svec_matrix(k)
+
     rng = jax.random.PRNGKey(0)
+    M = jax.random.normal(rng, shape=(k, k))
+    M = M + M.T
+
+    embed()
+    exit()
+
+    # generate a random orthonormal matrix
     #M = jax.random.normal(rng, shape=(n, k_curr + k_past))
     #V = jnp.linalg.qr(M)[0]
     _, V = approx_grad_k_min_eigen(
