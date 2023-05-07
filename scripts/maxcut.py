@@ -94,6 +94,7 @@ def solve_scs(C: csc_matrix) -> np.ndarray[Any, Any]:
 
 
 if __name__ == "__main__":
+    jax.config.update("jax_enable_x64", True)
     np.random.seed(0)
     MAT_PATH = "./data/maxcut/Gset/G1.mat"
     problem = loadmat(MAT_PATH)
@@ -110,7 +111,7 @@ if __name__ == "__main__":
     #trace_ub = 1.0
     SCALE_C = 1.0
     SCALE_X = 1.0
-    trace_ub = float(n)
+    trace_ub = 2.0*float(n)
 
     scs_soln_cache = str(Path(MAT_PATH).with_suffix("")) + "_scs_soln.pkl"
     if Path(scs_soln_cache).is_file():
@@ -153,7 +154,7 @@ if __name__ == "__main__":
     
 
     # initialize variables here
-    k_curr = 5
+    k_curr = 10
     k_past = 0
     X = jnp.zeros((n, n))  # used to track primal solution
     y = jnp.zeros((n,))
@@ -199,9 +200,9 @@ if __name__ == "__main__":
         eps=1e-3,
         max_iters=500,
         lanczos_num_iters=100,
-        apgd_step_size=1.0,
+        apgd_step_size=0.0001,
         apgd_max_iters=10000,
-        apgd_eps=1e-6)
+        apgd_eps=1e-8)
 
     embed()
     exit()
