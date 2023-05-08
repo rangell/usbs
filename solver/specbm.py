@@ -52,10 +52,10 @@ def solve_quadratic_subproblem(
 
     # initialize all Lagrangian variables
     S_init = 0.9999 * (jnp.eye(k) / (k + 1.0))
-    eta_init = 0.9999 * (1.0 / (k + 1.0))
+    eta_init = jnp.asarray([0.9999 * (1.0 / (k + 1.0))])
     T_init = svec_inv(Q_11 @ svec(S_init) + eta_init * q_12 + h_1)
     zeta_init = jnp.dot(q_12, svec(S_init)) + eta_init * q_22 + h_2
-    omega_init = -1.00001 * jnp.min(jnp.append(jnp.diag(T_init), zeta_init))
+    omega_init = jnp.asarray([-1.00001 * jnp.min(jnp.append(jnp.diag(T_init), zeta_init))])
     T_init += omega_init * jnp.eye(k)
     zeta_init += omega_init
     mu_init = (jnp.dot(svec(S_init), svec(T_init))
@@ -106,8 +106,45 @@ def solve_quadratic_subproblem(
         delta_svec_T = Q_11 @ delta_svec_S + delta_eta * q_12 + delta_omega * svec_I + F_1
         delta_zeta = jnp.dot(q_12, delta_svec_S) + delta_eta * q_22 + delta_omega + F_2
 
-        embed()
-        exit()
+        # compute step size
+        delta_S = svec_inv(delta_svec_S)
+        delta_T = svec_inv(delta_svec_T)
+
+        step_size_numers = jnp.concatenate(
+            [jnp.diag(ipm_state.S),
+             ipm_state.eta,
+             jnp.diag(ipm_state.T),
+             ipm_state.zeta,
+             ipm_state.omega])
+        step_size_denoms = jnp.concatenate(
+            [jnp.diag(delta_S),
+             delta_eta,
+             jnp.diag(delta_T),
+             delta_zeta,
+             delta_omega])
+        step_size = 0.9999 * jnp.max(
+            jnp.clip(-jnp.clip(step_size_numers / step_size_denoms, a_max=0.0), a_max=1.0))
+
+        S_next = ipm_state.S + step_size * delta_S
+        eta_next = ipm_state.eta + step_size * delta_eta
+        T_next = ipm_state.T + step_size * delta_T
+        zeta_next = ipm_state.zeta + step_size * delta_zeta
+        omega_next = ipm_state.omega + step_size * delta_omega
+
+        mu_next = (jnp.dot(svec(S_next), svec(T_next))
+                   + eta_next * zeta_next
+                   + omega_next*(1 - jnp.dot(svec_I, svec(S_next)) - eta_next)) / (k + 2.0)
+        mu_next *= lax.cond(step_size > 0.2, lambda _: 0.5 - 0.4 * step_size**2, lambda _: 1.0, None)
+        mu_next = jnp.clip(mu_next, a_max=ipm_state.mu)
+    
+        return IPMState(
+            i=ipm_state.i + 1,
+            S=S_next,
+            eta=eta_next,
+            T=T_next,
+            zeta=zeta_next,
+            omega=omega_next,
+            mu=mu_next)
 
     init_ipm_state = IPMState(
         i=0, S=S_init, eta=eta_init, T=T_init, zeta=zeta_init, omega=omega_init, mu=mu_init)
