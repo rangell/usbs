@@ -45,12 +45,12 @@ def solve_quadratic_subproblem(
     q_12 = (trace_ub**2 / (rho * tr_X_bar)) * svec(V.T @ A_adjoint_batched(z_bar, V))
     q_22 = (trace_ub**2 / (rho * tr_X_bar**2)) * jnp.dot(z_bar, z_bar)
     h_1 = trace_ub * svec(V.T @ (C_matmat(V)
-                          - A_adjoint_batched(y, V)
-                          - (A_adjoint_batched(b, V) / rho)))
+                                 - A_adjoint_batched(y, V)
+                                 - (A_adjoint_batched(b, V) / rho)))
     h_2 = (trace_ub / tr_X_bar) * (bar_primal_obj - jnp.dot(z_bar, y) - (jnp.dot(z_bar, b) / rho))
     svec_I = svec(jnp.eye(k))
 
-    # initialize all variables
+    # initialize all Lagrangian variables
     S_init = 0.9999 * (jnp.eye(k) / (k + 1.0))
     eta_init = 0.9999 * (1.0 / (k + 1.0))
     T_init = svec_inv(Q_11 @ svec(S_init) + eta_init * q_12 + h_1)
@@ -58,6 +58,47 @@ def solve_quadratic_subproblem(
     omega_init = -1.00001 * jnp.min(jnp.append(jnp.diag(T_init), zeta_init))
     T_init += omega_init * jnp.eye(k)
     zeta_init += omega_init
+    mu_init = (jnp.dot(svec(S_init), svec(T_init))
+               + eta_init * zeta_init
+               + omega_init*(1 - jnp.dot(svec_I, svec(S_init)) - eta_init)) / (k + 2.0)
+
+    IPMState = namedtuple("IPMState", ["i", "S", "eta", "T", "zeta", "omega", "mu"])
+
+    def body_func(ipm_state: IPMState) -> IPMState:
+        kappa_1 = (1 - jnp.dot(svec_I, svec(ipm_state.S)) - ipm_state.eta) / ipm_state.omega
+        kappa_2 = (ipm_state.zeta / ipm_state.eta) + q_22
+        F_1 = Q_11 @ svec(ipm_state.S) + ipm_state.eta * q_12 + h_1
+        F_1 += -svec(ipm_state.T) + ipm_state.omega * svec_I
+        F_2 = jnp.dot(q_12, svec(ipm_state.S)) + ipm_state.eta * q_22 + h_2
+        F_2 += -ipm_state.zeta + ipm_state.omega
+
+        # create and solve linear system for delta_S
+        S_inv = jnp.linalg.inv(ipm_state.S)
+        T_sym_kron_S_inv = 0.5 * U @ (jnp.kron(ipm_state.T, S_inv)
+                                      + jnp.kron(S_inv, ipm_state.T)) @ U.T
+        coeff_mx = Q_11 + T_sym_kron_S_inv
+        coeff_mx -= (jnp.outer(q_12, kappa_1 * q_12 + svec_I)
+                     + jnp.outer(svec_I, q_12 - kappa_2 * svec_I)) / (kappa_1 * kappa_2 + 1)
+        ordinate_vals = -F_1 + ipm_state.mu * svec(S_inv) - svec(ipm_state.T)
+        ordinate_vals += ((ipm_state.mu / ipm_state.omega
+                           + jnp.dot(svec_I, svec(ipm_state.S))
+                           + ipm_state.eta - 1
+                           + kappa_1 * (F_2 - ipm_state.mu / ipm_state.eta + ipm_state.zeta))
+                          / (kappa_1 * kappa_2 + 1)) * q_12
+        ordinate_vals += ((F_2 - ipm_state.mu / ipm_state.eta + ipm_state.zeta
+                           - kappa_2*(ipm_state.mu / ipm_state.omega
+                                      + jnp.dot(svec_I, svec(ipm_state.S))
+                                      + ipm_state.eta - 1))
+                          / (kappa_1 * kappa_2 + 1)) * svec_I
+        delta_svec_S = jnp.linalg.solve(coeff_mx, ordinate_vals)
+        delta_S = svec_inv(delta_svec_S)
+        embed()
+        exit()
+
+    init_ipm_state = IPMState(
+        i=0, S=S_init, eta=eta_init, T=T_init, zeta=zeta_init, omega=omega_init, mu=mu_init)
+
+    body_func(init_ipm_state)
 
     embed()
     exit()
