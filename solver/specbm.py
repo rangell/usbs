@@ -34,25 +34,30 @@ def solve_quadratic_subproblem(
     k: int,
     apgd_step_size: float,
     apgd_max_iters: int,
-    apgd_eps: float
+    apgd_eps: float,
 ) -> Tuple[Array, Array, Array, Array]:
 
-    # TODO: create svec and svec_inv lambdas?
+    svec = lambda mx: U @ mx.reshape(-1)
+    svec_inv = lambda vec: (U.T @ vec).reshape(k, k)
 
     # create problem constants
     Q_11 = (trace_ub**2 / rho) * Q_base(V)
-    q_12 = (trace_ub**2 / (rho * tr_X_bar)) * (U @ (V.T @ A_adjoint_batched(z_bar, V)).reshape(-1,))
+    q_12 = (trace_ub**2 / (rho * tr_X_bar)) * svec(V.T @ A_adjoint_batched(z_bar, V))
     q_22 = (trace_ub**2 / (rho * tr_X_bar**2)) * jnp.dot(z_bar, z_bar)
-    h_1 = trace_ub * U @ (V.T @ (C_matmat(V)
-                                 - A_adjoint_batched(y, V)
-                                 - (A_adjoint_batched(b, V) / rho))).reshape(-1,)
+    h_1 = trace_ub * svec(V.T @ (C_matmat(V)
+                          - A_adjoint_batched(y, V)
+                          - (A_adjoint_batched(b, V) / rho)))
     h_2 = (trace_ub / tr_X_bar) * (bar_primal_obj - jnp.dot(z_bar, y) - (jnp.dot(z_bar, b) / rho))
-    svec_I = U @ jnp.eye(k).reshape(-1,)
+    svec_I = svec(jnp.eye(k))
 
     # initialize all variables
-
-    S_init = jnp.eye(k) / (k + 1.0)
-    eta_init = 1.0 / (k + 1.0)
+    S_init = 0.9999 * (jnp.eye(k) / (k + 1.0))
+    eta_init = 0.9999 * (1.0 / (k + 1.0))
+    T_init = svec_inv(Q_11 @ svec(S_init) + eta_init * q_12 + h_1)
+    zeta_init = jnp.dot(q_12, svec(S_init)) + eta_init * q_22 + h_2
+    omega_init = -1.00001 * jnp.min(jnp.append(jnp.diag(T_init), zeta_init))
+    T_init += omega_init * jnp.eye(k)
+    zeta_init += omega_init
 
     embed()
     exit()
@@ -491,6 +496,9 @@ def specbm(
             apgd_max_iters=apgd_max_iters,
             apgd_eps=apgd_eps)
 
+        embed()
+        exit()
+
         ###################################################################################
 
         X = state.X_bar
@@ -507,10 +515,13 @@ def specbm(
                         + cp.trace((eta_ * X + V @ S_ @ V.T) @ (C - cp.diag(y)))
                         + (0.5 / rho) * cp.sum_squares(b - cp.diag(eta_ * X + V @ S_ @ V.T))),
             constraints)
-        prob.solve(solver=cp.SCS, verbose=False)
+        prob.solve(solver=cp.SCS, verbose=True)
 
         S = S_.value
         eta = eta_.value
+
+        embed()
+        exit()
 
         del S_
         del eta_
