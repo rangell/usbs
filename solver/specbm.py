@@ -122,8 +122,10 @@ def solve_quadratic_subproblem(
              jnp.diag(delta_T),
              delta_zeta,
              delta_omega])
-        step_size = 0.9999 * jnp.max(
+
+        step_size = jnp.max(
             jnp.clip(-jnp.clip(step_size_numers / step_size_denoms, a_max=0.0), a_max=1.0))
+        step_size = 0.9999 * lax.cond(step_size == 0.0, lambda _: 1.0, lambda _: step_size, None)
 
         S_next = ipm_state.S + step_size * delta_S
         eta_next = ipm_state.eta + step_size * delta_eta
@@ -136,9 +138,18 @@ def solve_quadratic_subproblem(
                    + omega_next*(1 - jnp.dot(svec_I, svec(S_next)) - eta_next)) / (k + 2.0)
         mu_next *= lax.cond(step_size > 0.2, lambda _: 0.5 - 0.4 * step_size**2, lambda _: 1.0, None)
         mu_next = jnp.clip(mu_next, a_max=ipm_state.mu)
+
+        jax.debug.print("i: {i} - step_size: {step_size} - mu: {mu} - mu_next: {mu_next}"
+                        " - eta: {eta} - eta_next: {eta_next}",
+                        i=ipm_state.i,
+                        mu=ipm_state.mu.squeeze(),
+                        eta=ipm_state.eta.squeeze(),
+                        step_size=step_size,
+                        mu_next=mu_next.squeeze(),
+                        eta_next=eta_next.squeeze())
     
         return IPMState(
-            i=ipm_state.i + 1,
+            i=ipm_state.i+1,
             S=S_next,
             eta=eta_next,
             T=T_next,
@@ -149,7 +160,11 @@ def solve_quadratic_subproblem(
     init_ipm_state = IPMState(
         i=0, S=S_init, eta=eta_init, T=T_init, zeta=zeta_init, omega=omega_init, mu=mu_init)
 
-    body_func(init_ipm_state)
+    state = init_ipm_state
+    for _ in range(14):
+        state = body_func(state)
+
+    
 
     embed()
     exit()
@@ -417,27 +432,27 @@ def specbm(
     #@jax.jit
     def body_func(state: StateStruct) -> StateStruct:
 
-        eta, S, S_eigvals, S_eigvecs = solve_quadratic_subproblem(
-            C_matmat=C_matmat,
-            A_operator_batched=A_operator_batched,
-            A_adjoint_batched=A_adjoint_batched,
-            Q_base=Q_base,
-            U=U,
-            b=b,
-            trace_ub=trace_ub,
-            rho=rho,
-            bar_primal_obj=state.bar_primal_obj,
-            tr_X_bar=state.tr_X_bar,
-            z_bar=state.z_bar,
-            y=state.y,
-            V=state.V,
-            k=k,
-            apgd_step_size=apgd_step_size,
-            apgd_max_iters=apgd_max_iters,
-            apgd_eps=apgd_eps)
+        #eta, S, S_eigvals, S_eigvecs = solve_quadratic_subproblem(
+        #    C_matmat=C_matmat,
+        #    A_operator_batched=A_operator_batched,
+        #    A_adjoint_batched=A_adjoint_batched,
+        #    Q_base=Q_base,
+        #    U=U,
+        #    b=b,
+        #    trace_ub=trace_ub,
+        #    rho=rho,
+        #    bar_primal_obj=state.bar_primal_obj,
+        #    tr_X_bar=state.tr_X_bar,
+        #    z_bar=state.z_bar,
+        #    y=state.y,
+        #    V=state.V,
+        #    k=k,
+        #    apgd_step_size=apgd_step_size,
+        #    apgd_max_iters=apgd_max_iters,
+        #    apgd_eps=apgd_eps)
 
-        embed()
-        exit()
+        #embed()
+        #exit()
 
         ###################################################################################
 
