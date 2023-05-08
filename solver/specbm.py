@@ -16,10 +16,9 @@ from solver.eigen import approx_grad_k_min_eigen
 from IPython import embed
 
 
-#@partial(jax.jit, static_argnames=["C_matmat", "A_operator_batched", "A_adjoint_batched", "k", "apgd_max_iters", "apgd_eps"])
+@partial(jax.jit, static_argnames=["C_matmat", "A_adjoint_batched", "Q_base", "k", "ipm_eps", "ipm_max_iters"])
 def solve_quadratic_subproblem(
     C_matmat: Callable[[Array], Array],
-    A_operator_batched: Callable[[Array], Array],
     A_adjoint_batched: Callable[[Array, Array], Array],
     Q_base: Callable[[Array], Array],
     U: BCOO,
@@ -32,10 +31,9 @@ def solve_quadratic_subproblem(
     y: Array,
     V: Array,
     k: int,
-    apgd_step_size: float,
-    apgd_max_iters: int,
-    apgd_eps: float,
-) -> Tuple[Array, Array, Array, Array]:
+    ipm_eps: float = 1e-7,
+    ipm_max_iters: int = 100
+) -> Tuple[Array, Array]:
 
     svec = lambda mx: U @ mx.reshape(-1)
     svec_inv = lambda vec: (U.T @ vec).reshape(k, k)
@@ -64,6 +62,7 @@ def solve_quadratic_subproblem(
 
     IPMState = namedtuple("IPMState", ["i", "S", "eta", "T", "zeta", "omega", "mu"])
 
+    @jax.jit
     def body_func(ipm_state: IPMState) -> IPMState:
         kappa_1 = (1 - jnp.dot(svec_I, svec(ipm_state.S)) - ipm_state.eta) / ipm_state.omega
         kappa_2 = (ipm_state.zeta / ipm_state.eta) + q_22
@@ -160,19 +159,13 @@ def solve_quadratic_subproblem(
     init_ipm_state = IPMState(
         i=0, S=S_init, eta=eta_init, T=T_init, zeta=zeta_init, omega=omega_init, mu=mu_init)
 
-    state = init_ipm_state
-    for _ in range(14):
-        state = body_func(state)
+    final_ipm_state = bounded_while_loop(
+        lambda ipm_state: ipm_state.mu.squeeze() > ipm_eps,
+        body_func, 
+        init_ipm_state,
+        max_steps=ipm_max_iters)
 
-    
-
-    embed()
-    exit()
-
-    return (final_apgd_state.eta_curr,
-            trace_ub * final_apgd_state.S_curr,
-            trace_ub * final_apgd_state.S_curr_eigvals,
-            final_apgd_state.S_curr_eigvecs)
+    return final_ipm_state.eta.squeeze(), trace_ub * final_ipm_state.S
 
 
 @partial(jax.jit, static_argnames=["C_matmat", "A_operator_batched", "A_adjoint_batched"])
@@ -432,60 +425,55 @@ def specbm(
     #@jax.jit
     def body_func(state: StateStruct) -> StateStruct:
 
-        #eta, S, S_eigvals, S_eigvecs = solve_quadratic_subproblem(
-        #    C_matmat=C_matmat,
-        #    A_operator_batched=A_operator_batched,
-        #    A_adjoint_batched=A_adjoint_batched,
-        #    Q_base=Q_base,
-        #    U=U,
-        #    b=b,
-        #    trace_ub=trace_ub,
-        #    rho=rho,
-        #    bar_primal_obj=state.bar_primal_obj,
-        #    tr_X_bar=state.tr_X_bar,
-        #    z_bar=state.z_bar,
-        #    y=state.y,
-        #    V=state.V,
-        #    k=k,
-        #    apgd_step_size=apgd_step_size,
-        #    apgd_max_iters=apgd_max_iters,
-        #    apgd_eps=apgd_eps)
+        eta, S = solve_quadratic_subproblem(
+            C_matmat=C_matmat,
+            A_adjoint_batched=A_adjoint_batched,
+            Q_base=Q_base,
+            U=U,
+            b=b,
+            trace_ub=trace_ub,
+            rho=rho,
+            bar_primal_obj=state.bar_primal_obj,
+            tr_X_bar=state.tr_X_bar,
+            z_bar=state.z_bar,
+            y=state.y,
+            V=state.V,
+            k=k)
+
+        ###################################################################################
+
+        #X = state.X_bar
+        #y = state.y
+        #V = state.V
+
+        #S_ = cp.Variable((k,k), symmetric=True)
+        #eta_ = cp.Variable((1,))
+        #constraints = [S_ >> 0]
+        #constraints += [eta_ >= 0]
+        #constraints += [cp.trace(S_) + eta_*cp.trace(X) <= trace_ub]
+        #prob = cp.Problem(
+        #    cp.Minimize(y @ b
+        #                + cp.trace((eta_ * X + V @ S_ @ V.T) @ (C - cp.diag(y)))
+        #                + (0.5 / rho) * cp.sum_squares(b - cp.diag(eta_ * X + V @ S_ @ V.T))),
+        #    constraints)
+        #prob.solve(solver=cp.SCS, verbose=True)
+
+        ##S = S_.value
+        ##eta = eta_.value
 
         #embed()
         #exit()
 
-        ###################################################################################
+        #del S_
+        #del eta_
 
-        X = state.X_bar
-        y = state.y
-        V = state.V
-
-        S_ = cp.Variable((k,k), symmetric=True)
-        eta_ = cp.Variable((1,))
-        constraints = [S_ >> 0]
-        constraints += [eta_ >= 0]
-        constraints += [cp.trace(S_) + eta_*cp.trace(X) <= trace_ub]
-        prob = cp.Problem(
-            cp.Minimize(y @ b
-                        + cp.trace((eta_ * X + V @ S_ @ V.T) @ (C - cp.diag(y)))
-                        + (0.5 / rho) * cp.sum_squares(b - cp.diag(eta_ * X + V @ S_ @ V.T))),
-            constraints)
-        prob.solve(solver=cp.SCS, verbose=True)
-
-        S = S_.value
-        eta = eta_.value
-
-        embed()
-        exit()
-
-        del S_
-        del eta_
-
-        S_eigvals, S_eigvecs = jnp.linalg.eigh(S)
-        S_eigvals = jnp.clip(S_eigvals, a_min=0)    # numerical instability handling
+        #S_eigvals, S_eigvecs = jnp.linalg.eigh(S)
+        #S_eigvals = jnp.clip(S_eigvals, a_min=0)    # numerical instability handling
 
         ################################################################################
 
+        S_eigvals, S_eigvecs = jnp.linalg.eigh(S)
+        S_eigvals = jnp.clip(S_eigvals, a_min=0)    # numerical instability handling
         VSV_T_factor = (state.V @ S_eigvecs) * jnp.sqrt(S_eigvals).reshape(1, -1)
         A_operator_VSV_T = jnp.sum(A_operator_batched(VSV_T_factor), axis=1)
         X_next = eta * state.X_bar + state.V @ S @ state.V.T
@@ -505,6 +493,11 @@ def specbm(
         cand_pen_dual_obj = jnp.dot(-b, y_cand) + trace_ub*jnp.clip(cand_eigvals[0], a_min=0)
 
         #####################################################################################
+
+        # TODO: write IPM for `lb_spec_est`
+
+        embed()
+        exit()
 
         X = state.X_bar
         y = y_cand
