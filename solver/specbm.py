@@ -39,6 +39,7 @@ def solve_quadratic_subproblem(
     svec_inv = lambda vec: (U.T @ vec).reshape(k, k)
 
     # create problem constants
+    tr_X_bar = lax.cond(tr_X_bar > 0.0, lambda _: tr_X_bar, lambda _: 1.0, None)
     Q_11 = (trace_ub**2 / rho) * Q_base(V)
     q_12 = (trace_ub**2 / (rho * tr_X_bar)) * svec(V.T @ A_adjoint_batched(z_bar, V))
     q_22 = (trace_ub**2 / (rho * tr_X_bar**2)) * jnp.dot(z_bar, z_bar)
@@ -53,7 +54,8 @@ def solve_quadratic_subproblem(
     eta_init = jnp.asarray([0.9999 * (1.0 / (k + 1.0))])
     T_init = svec_inv(Q_11 @ svec(S_init) + eta_init * q_12 + h_1)
     zeta_init = jnp.dot(q_12, svec(S_init)) + eta_init * q_22 + h_2
-    omega_init = jnp.asarray([-1.00001 * jnp.min(jnp.append(jnp.diag(T_init), zeta_init))])
+    omega_init = jnp.asarray([-1.0001 * jnp.min(jnp.append(jnp.diag(T_init), zeta_init))])
+    omega_init = jnp.clip(omega_init, a_min=0.0001)
     T_init += omega_init * jnp.eye(k)
     zeta_init += omega_init
     mu_init = (jnp.dot(svec(S_init), svec(T_init))
@@ -137,14 +139,14 @@ def solve_quadratic_subproblem(
         mu_next *= lax.cond(step_size > 0.2, lambda _: 0.5 - 0.4 * step_size**2, lambda _: 1.0, None)
         mu_next = jnp.clip(mu_next, a_max=ipm_state.mu)
 
-        jax.debug.print("i: {i} - step_size: {step_size} - mu: {mu} - mu_next: {mu_next}"
-                        " - eta: {eta} - eta_next: {eta_next}",
-                        i=ipm_state.i,
-                        mu=ipm_state.mu.squeeze(),
-                        eta=ipm_state.eta.squeeze(),
-                        step_size=step_size,
-                        mu_next=mu_next.squeeze(),
-                        eta_next=eta_next.squeeze())
+        #jax.debug.print("i: {i} - step_size: {step_size} - mu: {mu} - mu_next: {mu_next}"
+        #                " - eta: {eta} - eta_next: {eta_next}",
+        #                i=ipm_state.i,
+        #                mu=ipm_state.mu.squeeze(),
+        #                eta=ipm_state.eta.squeeze(),
+        #                step_size=step_size,
+        #                mu_next=mu_next.squeeze(),
+        #                eta_next=eta_next.squeeze())
     
         return IPMState(
             i=ipm_state.i+1,
@@ -165,6 +167,7 @@ def solve_quadratic_subproblem(
         max_steps=ipm_max_iters)
 
     return final_ipm_state.eta.squeeze(), trace_ub * final_ipm_state.S
+
 
 @partial(jax.jit, static_argnames=["C_matmat", "A_adjoint_batched", "k", "ipm_eps", "ipm_max_iters"])
 def compute_lb_spec_est(
@@ -187,6 +190,7 @@ def compute_lb_spec_est(
     svec_inv = lambda vec: (U.T @ vec).reshape(k, k)
 
     # create problem constants
+    tr_X_bar = lax.cond(tr_X_bar > 0.0, lambda _: tr_X_bar, lambda _: 1.0, None)
     g_1 = trace_ub * svec(V.T @ (C_matmat(V) - A_adjoint_batched(y, V)))
     g_2 = (trace_ub / tr_X_bar) * (bar_primal_obj - jnp.dot(z_bar, y))
     svec_I = svec(jnp.eye(k))
@@ -197,6 +201,7 @@ def compute_lb_spec_est(
     T_init = svec_inv(g_1)
     zeta_init = g_2
     omega_init = jnp.asarray([-1.0001* jnp.min(jnp.append(jnp.diag(T_init), zeta_init))])
+    omega_init = jnp.clip(omega_init, a_min=0.0001)
     T_init += omega_init * jnp.eye(k)
     zeta_init += omega_init
     mu_init = (jnp.dot(svec(S_init), svec(T_init))
@@ -205,7 +210,7 @@ def compute_lb_spec_est(
 
     IPMState = namedtuple("IPMState", ["i", "S", "eta", "T", "zeta", "omega", "mu"])
 
-    #@jax.jit
+    @jax.jit
     def body_func(ipm_state: IPMState) -> IPMState:
         kappa_1 = (1 - jnp.dot(svec_I, svec(ipm_state.S)) - ipm_state.eta) / ipm_state.omega
 
@@ -268,14 +273,14 @@ def compute_lb_spec_est(
         mu_next *= lax.cond(step_size > 0.2, lambda _: 0.5 - 0.4 * step_size**2, lambda _: 1.0, None)
         mu_next = jnp.clip(mu_next, a_max=ipm_state.mu)
 
-        jax.debug.print("i: {i} - step_size: {step_size} - mu: {mu} - mu_next: {mu_next}"
-                        " - eta: {eta} - eta_next: {eta_next}",
-                        i=ipm_state.i,
-                        mu=ipm_state.mu.squeeze(),
-                        eta=ipm_state.eta.squeeze(),
-                        step_size=step_size,
-                        mu_next=mu_next.squeeze(),
-                        eta_next=eta_next.squeeze())
+        #jax.debug.print("i: {i} - step_size: {step_size} - mu: {mu} - mu_next: {mu_next}"
+        #                " - eta: {eta} - eta_next: {eta_next}",
+        #                i=ipm_state.i,
+        #                mu=ipm_state.mu.squeeze(),
+        #                eta=ipm_state.eta.squeeze(),
+        #                step_size=step_size,
+        #                mu_next=mu_next.squeeze(),
+        #                eta_next=eta_next.squeeze())
     
         return IPMState(
             i=ipm_state.i+1,
@@ -549,9 +554,12 @@ def specbm(
         lb_spec_est=0.0)
 
     #final_state = bounded_while_loop(cond_func, body_func, init_state, max_steps=10)
-    #state = init_state
-    #for _ in range(11):
-    #    state = body_func(state)
+    state = init_state
+    for _ in range(11):
+        state = body_func(state)
+
+    embed()
+    exit()
 
     #import pickle
     #with open("state.pkl", "wb") as f:
@@ -560,15 +568,15 @@ def specbm(
     #embed()
     #exit()
 
-    import pickle
-    with open("state.pkl", "rb") as f:
-        state = pickle.load(f)
-        state = StateStruct(*state)
+    #import pickle
+    #with open("state.pkl", "rb") as f:
+    #    state = pickle.load(f)
+    #    state = StateStruct(*state)
 
-    next_state = body_func(state)
+    #next_state = body_func(state)
 
-    embed()
-    exit()
+    #embed()
+    #exit()
 
 
 
