@@ -166,7 +166,7 @@ def solve_quadratic_subproblem(
 
     return final_ipm_state.eta.squeeze(), trace_ub * final_ipm_state.S
 
-#@partial(jax.jit, static_argnames=["C_matmat", "A_adjoint_batched", "k", "ipm_eps", "ipm_max_iters"])
+@partial(jax.jit, static_argnames=["C_matmat", "A_adjoint_batched", "k", "ipm_eps", "ipm_max_iters"])
 def compute_lb_spec_est(
     C_matmat: Callable[[Array], Array],
     A_adjoint_batched: Callable[[Array, Array], Array],
@@ -194,10 +194,6 @@ def compute_lb_spec_est(
     # initialize all Lagrangian variables
     S_init = 0.9999 * (jnp.eye(k) / (k + 1.0))
     eta_init = jnp.asarray([0.9999 * (1.0 / (k + 1.0))])
-
-    #S_init = 0.01 * jnp.eye(k)
-    #eta_init = jnp.asarray([0.9])
-
     T_init = svec_inv(g_1)
     zeta_init = g_2
     omega_init = jnp.asarray([-1.0001* jnp.min(jnp.append(jnp.diag(T_init), zeta_init))])
