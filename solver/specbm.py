@@ -347,10 +347,7 @@ def specbm(
     eps: float,
     max_iters: int,
     lanczos_num_iters: int,
-    apgd_step_size: float,
-    apgd_max_iters: int,
-    apgd_eps: float
-) -> Tuple[Array, Array]:
+) -> Tuple[Array, Array, Array, Array, Array]:
 
     C_matmat = jax.vmap(C_matvec, 1, 1)
     A_adjoint_batched = jax.vmap(A_adjoint_slim, (None, 1), 1)
@@ -358,23 +355,11 @@ def specbm(
 
     k = k_curr + k_past
 
-    # State:
-    #   X
-    #   X_bar
-    #   tr_X_bar
-    #   z
-    #   z_bar
-    #   y
-    #   V
-    #   pen_dual_obj, i.e. f(y)
-    #   primal_obj, i.e. <C, X>
-    #   bar_primal_obj, i.e. <C, X_bar>    
-    #   lb_spec_est, i.e. f_hat(y, X_bar)
-
     StateStruct = namedtuple(
         "StateStruct",
         ["t", 
          "X",
+         "tr_X",
          "X_bar",
          "tr_X_bar",
          "z",
@@ -391,7 +376,7 @@ def specbm(
         return jnp.logical_or(
             state.t == 0, (state.pen_dual_obj - state.lb_spec_est) / (1.0 + state.pen_dual_obj) > eps)
 
-    #@jax.jit
+    @jax.jit
     def body_func(state: StateStruct) -> StateStruct:
 
         eta, S = solve_quadratic_subproblem(
@@ -513,22 +498,26 @@ def specbm(
         bar_primal_obj_next = eta * state.bar_primal_obj
         bar_primal_obj_next += jnp.trace(curr_VSV_T_factor.T @ C_matmat(curr_VSV_T_factor))
         
-        #infeas_gap = jnp.linalg.norm(z_next - b) 
-        #infeas_gap /= 1.0 + jnp.linalg.norm(b)
-        #max_infeas = jnp.max(jnp.abs(z_next - b)) 
+        infeas_gap = jnp.linalg.norm(z_next - b) 
+        infeas_gap /= 1.0 + jnp.linalg.norm(b)
+        max_infeas = jnp.max(jnp.abs(z_next - b)) 
         jax.debug.print("t: {t} - pen_dual_obj: {pen_dual_obj} - cand_pen_dual_obj: {cand_pen_dual_obj}"
-                        " - lb_spec_est: {lb_spec_est} - pen_dual_obj_next: {pen_dual_obj_next}",
+                        " - lb_spec_est: {lb_spec_est} - pen_dual_obj_next: {pen_dual_obj_next}"
+                        " - infeas_gap: {infeas_gap} - max_infeas: {max_infeas}",
                         t=state.t,
                         pen_dual_obj=state.pen_dual_obj,
                         cand_pen_dual_obj=cand_pen_dual_obj,
                         lb_spec_est=lb_spec_est,
-                        pen_dual_obj_next=pen_dual_obj_next)
+                        pen_dual_obj_next=pen_dual_obj_next,
+                        infeas_gap=infeas_gap,
+                        max_infeas=max_infeas)
 
         return StateStruct(
             t=state.t+1,
             X=X_next,
+            tr_X=jnp.trace(X_next),
             X_bar=X_bar_next,
-            tr_X_bar=jnp.trace(X_bar_next),  # TODO: implement space efficient version
+            tr_X_bar=jnp.trace(X_bar_next),
             z=z_next,
             z_bar=z_bar_next,
             y=y_next,
@@ -555,6 +544,7 @@ def specbm(
     init_state = StateStruct(
         t=0,
         X=X,
+        tr_X=jnp.trace(X),
         X_bar=X,
         tr_X_bar=jnp.trace(X),
         z=z,
@@ -566,52 +556,6 @@ def specbm(
         pen_dual_obj=pen_dual_obj,
         lb_spec_est=0.0)
 
-    #final_state = bounded_while_loop(cond_func, body_func, init_state, max_steps=10)
-    state = init_state
-    for _ in range(500):
-        state = body_func(state)
+    final_state = bounded_while_loop(cond_func, body_func, init_state, max_steps=max_iters)
 
-    embed()
-    exit()
-
-    #import pickle
-    #with open("state.pkl", "wb") as f:
-    #    pickle.dump(tuple(state), f)
-
-    #embed()
-    #exit()
-
-    import pickle
-    with open("state.pkl", "rb") as f:
-        state = pickle.load(f)
-        state = StateStruct(*state)
-
-    next_state = body_func(state)
-
-    #embed()
-    #exit()
-
-
-
-    # TODO: check `solve_subproblem` against SCS and MOSEK
-
-    #S = cp.Variable((k,k), symmetric=True)
-    #eta = cp.Variable((1,))
-    #constraints = [S >> 0]
-    #constraints += [eta >= 0]
-    #constraints += [cp.trace(S) + eta*cp.trace(X) <= trace_ub]
-    #prob = cp.Problem(
-    #    cp.Minimize(y @ b
-    #                + cp.trace((eta * X + V @ S @ V.T) @ (C - cp.diag(y)))
-    #                + (0.5 / rho) * cp.sum_squares(b - cp.diag(eta * X + V @ S @ V.T))),
-    #    constraints)
-    #prob.solve(solver=cp.SCS, verbose=True)
-
-    #jax.debug.print("SCS eta: {eta}", eta=eta.value)
-    #jax.debug.print("SCS S: {S}", S=S.value)
-
-    embed()
-    exit()
-
-    # TODO: fix to return all things needed for warm-start
-    return jnp.zeros(n, n), jnp.zeros((m,))
+    return final_state.X, final_state.y, final_state.z, final_state.primal_obj, final_state.tr_X

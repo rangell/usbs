@@ -136,7 +136,7 @@ if __name__ == "__main__":
     #trace_ub = 1.0
     SCALE_C = 1.0
     SCALE_X = 1.0
-    trace_ub = 1.5*float(n)
+    trace_ub = 1.0*float(n)
 
     scs_soln_cache = str(Path(MAT_PATH).with_suffix("")) + "_scs_soln.pkl"
     if Path(scs_soln_cache).is_file():
@@ -179,7 +179,7 @@ if __name__ == "__main__":
     
 
     # initialize variables here
-    k_curr = 5
+    k_curr = 4
     k_past = 0
     k = k_curr + k_past
     X = jnp.zeros((n, n))  # used to track primal solution
@@ -203,7 +203,7 @@ if __name__ == "__main__":
         num_iters=100,
         rng=rng)
 
-    X, y = specbm(
+    X, y, z, primal_obj, tr_X = specbm(
         X=X,
         y=y,
         z=z,
@@ -229,12 +229,9 @@ if __name__ == "__main__":
         k_past=k_past,
         SCALE_C=SCALE_C,
         SCALE_X=SCALE_X,
-        eps=1e-3,
+        eps=1e-4,
         max_iters=500,
-        lanczos_num_iters=100,
-        apgd_step_size=0.0001,
-        apgd_max_iters=10000,
-        apgd_eps=1e-8)
+        lanczos_num_iters=100)
 
     embed()
     exit()
