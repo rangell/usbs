@@ -192,7 +192,6 @@ if __name__ == "__main__":
     # for quadratic subproblem solved by interior point method
     Q_base = create_Q_base(m, k, U)
 
-    # TODO: pass tr_X as input
     X, y, z, primal_obj, tr_X = specbm(
         X=X,
         y=y,
