@@ -136,7 +136,7 @@ if __name__ == "__main__":
     #trace_ub = 1.0
     SCALE_C = 1.0
     SCALE_X = 1.0
-    trace_ub = 1.1*float(n)
+    trace_ub = 1.5*float(n)
 
     scs_soln_cache = str(Path(MAT_PATH).with_suffix("")) + "_scs_soln.pkl"
     if Path(scs_soln_cache).is_file():
