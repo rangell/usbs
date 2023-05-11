@@ -323,7 +323,7 @@ def specbm(
     y: Array,
     z: Array,
     primal_obj: float,
-    V: Array,
+    tr_X: float,
     n: int,
     m: int,
     trace_ub: float,
@@ -527,19 +527,17 @@ def specbm(
             pen_dual_obj=pen_dual_obj_next,
             lb_spec_est=lb_spec_est)
 
-
     # compute current `pen_dual_obj` for `init_state`
     prev_eigvals, prev_eigvecs = approx_grad_k_min_eigen(
         C_matvec=C_matvec,
         A_adjoint_slim=A_adjoint_slim,
         adjoint_left_vec=-y,
         n=n,
-        k=1,
+        k=k,
         num_iters=lanczos_num_iters,
         rng=jax.random.PRNGKey(0))
     prev_eigvals = -prev_eigvals
     pen_dual_obj = jnp.dot(-b, y) + trace_ub*jnp.clip(prev_eigvals[0], a_min=0)
-    # TODO: use `prev_eigvecs` for initializing `V`?
 
     init_state = StateStruct(
         t=0,
@@ -550,7 +548,7 @@ def specbm(
         z=z,
         z_bar=z,
         y=y,
-        V=V,
+        V=prev_eigvecs,
         primal_obj=primal_obj,
         bar_primal_obj=primal_obj,
         pen_dual_obj=pen_dual_obj,
@@ -558,4 +556,8 @@ def specbm(
 
     final_state = bounded_while_loop(cond_func, body_func, init_state, max_steps=max_iters)
 
-    return final_state.X, final_state.y, final_state.z, final_state.primal_obj, final_state.tr_X
+    return (final_state.X,
+            final_state.y,
+            final_state.z,
+            final_state.primal_obj,
+            final_state.tr_X)

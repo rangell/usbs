@@ -192,23 +192,13 @@ if __name__ == "__main__":
     # for quadratic subproblem solved by interior point method
     Q_base = create_Q_base(m, k, U)
 
-    # generate an initial orthonormal matrix
-    rng = jax.random.PRNGKey(0)
-    _, V = approx_grad_k_min_eigen(
-        C_matvec=C_matvec,
-        A_adjoint_slim=A_adjoint_slim,
-        adjoint_left_vec=-y,
-        n=n,
-        k=k_curr+k_past,
-        num_iters=100,
-        rng=rng)
-
+    # TODO: pass tr_X as input
     X, y, z, primal_obj, tr_X = specbm(
         X=X,
         y=y,
         z=z,
         primal_obj=0.0,
-        V=V,
+        tr_X=jnp.trace(X),
         n=n,
         m=m,
         trace_ub=trace_ub,
