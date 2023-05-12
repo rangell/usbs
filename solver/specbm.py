@@ -4,9 +4,11 @@ from equinox.internal._loop.bounded import bounded_while_loop # type: ignore
 from functools import partial
 import jax
 from jax._src.typing import Array
+import jax.experimental.host_callback as hcb
 from jax.experimental.sparse import BCOO
 import jax.numpy as jnp
 from jax import lax
+import time
 from typing import Any, Callable, Tuple
 
 from scipy.sparse import csc_matrix  # type: ignore
@@ -393,6 +395,9 @@ def specbm(
     @jax.jit
     def body_func(state: StateStruct) -> StateStruct:
 
+        jax.debug.print("time: {time}",
+                        time=hcb.call(lambda _: time.time(), arg=0, result_shape=float))
+
         eta, S = solve_quadratic_subproblem(
             C_matmat=C_matmat,
             A_adjoint_batched=A_adjoint_batched,
@@ -515,9 +520,11 @@ def specbm(
         infeas_gap = jnp.linalg.norm(z_next - b) 
         infeas_gap /= 1.0 + jnp.linalg.norm(b)
         max_infeas = jnp.max(jnp.abs(z_next - b)) 
-        jax.debug.print("t: {t} - pen_dual_obj: {pen_dual_obj} - cand_pen_dual_obj: {cand_pen_dual_obj}"
-                        " - lb_spec_est: {lb_spec_est} - pen_dual_obj_next: {pen_dual_obj_next}"
-                        " - infeas_gap: {infeas_gap} - max_infeas: {max_infeas}",
+
+        jax.debug.print("t: {t} - pen_dual_obj: {pen_dual_obj}"
+                        "- cand_pen_dual_obj: {cand_pen_dual_obj} - lb_spec_est: {lb_spec_est}"
+                        " - pen_dual_obj_next: {pen_dual_obj_next} - infeas_gap: {infeas_gap}"
+                        " - max_infeas: {max_infeas}",
                         t=state.t,
                         pen_dual_obj=state.pen_dual_obj,
                         cand_pen_dual_obj=cand_pen_dual_obj,
@@ -570,12 +577,13 @@ def specbm(
 
     final_state = bounded_while_loop(cond_func, body_func, init_state, max_steps=max_iters)
 
-    #state = init_state
-    #for _ in range(20):
-    #    state = body_func(state)
+    embed()
+    exit()
 
-    #embed()
-    #exit()
+    state = init_state
+    for _ in range(20):
+        state = body_func(state)
+
 
     return (final_state.X,
             final_state.y,

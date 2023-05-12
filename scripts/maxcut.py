@@ -149,7 +149,7 @@ if __name__ == "__main__":
         with open(scs_soln_cache, "wb") as f_out:
             pickle.dump(X_scs, f_out)
 
-    warm_start_frac = 0.99
+    warm_start_frac = 1.0
     warm_start_n = int(warm_start_frac * n)
     warm_start_m = warm_start_n
     warm_start_trace_ub = warm_start_frac * trace_ub
