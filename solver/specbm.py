@@ -395,7 +395,7 @@ def specbm(
     @jax.jit
     def body_func(state: StateStruct) -> StateStruct:
 
-        jax.debug.print("time: {time}",
+        jax.debug.print("start_time: {time}",
                         time=hcb.call(lambda _: time.time(), arg=0, result_shape=float))
 
         eta, S = solve_quadratic_subproblem(
@@ -521,20 +521,19 @@ def specbm(
         infeas_gap /= 1.0 + jnp.linalg.norm(b)
         max_infeas = jnp.max(jnp.abs(z_next - b)) 
 
-        jax.debug.print("t: {t} - pen_dual_obj: {pen_dual_obj}"
+        end_time = hcb.call(lambda _: time.time(), arg=0, result_shape=float)
+        jax.debug.print("t: {t} - end_time: {end_time} - pen_dual_obj: {pen_dual_obj}"
                         "- cand_pen_dual_obj: {cand_pen_dual_obj} - lb_spec_est: {lb_spec_est}"
                         " - pen_dual_obj_next: {pen_dual_obj_next} - infeas_gap: {infeas_gap}"
                         " - max_infeas: {max_infeas}",
                         t=state.t,
+                        end_time=end_time,
                         pen_dual_obj=state.pen_dual_obj,
                         cand_pen_dual_obj=cand_pen_dual_obj,
                         lb_spec_est=lb_spec_est,
                         pen_dual_obj_next=pen_dual_obj_next,
                         infeas_gap=infeas_gap,
                         max_infeas=max_infeas)
-
-        jax.debug.print("time: {time}",
-                        time=hcb.call(lambda _: time.time(), arg=0, result_shape=float))
 
         return StateStruct(
             t=state.t+1,
