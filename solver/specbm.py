@@ -50,12 +50,20 @@ def solve_quadratic_subproblem(
     svec_I = svec(jnp.eye(k))
 
     # initialize all Lagrangian variables
-    S_init = 0.99 * (jnp.eye(k) / (k + 1.0))
-    eta_init = jnp.asarray([0.99 * (1.0 / (k + 1.0))])
+    #S_init = 0.99 * (jnp.eye(k) / (k + 1.0))
+    #eta_init = jnp.asarray([0.99 * (1.0 / (k + 1.0))])
+    S_init = 0.5 * (jnp.eye(k) / (k + 1.0))
+    eta_init = lax.cond(
+        bar_primal_obj == 0.0,
+        lambda _: jnp.asarray([0.00001]),
+        lambda _: jnp.asarray([0.5 * (1.0 / (k + 1.0))]),
+        None)
     T_init = svec_inv(Q_11 @ svec(S_init) + eta_init * q_12 + h_1)
     zeta_init = jnp.dot(q_12, svec(S_init)) + eta_init * q_22 + h_2
-    omega_init = jnp.asarray([-1.01 * jnp.min(jnp.append(jnp.diag(T_init), zeta_init))])
-    omega_init = jnp.clip(omega_init, a_min=1.0)
+    dual_infeas_vals = jnp.append(jnp.diag(T_init), zeta_init)
+    dual_infeas_width = jnp.clip(jnp.max(dual_infeas_vals) - jnp.min(dual_infeas_vals), a_min=1.0)
+    omega_init = jnp.asarray([-1.01 * jnp.min(dual_infeas_vals)])
+    omega_init = jnp.clip(omega_init, a_min=dual_infeas_width)
     T_init += omega_init * jnp.eye(k)
     zeta_init += omega_init
     mu_init = (jnp.dot(svec(S_init), svec(T_init))
@@ -147,7 +155,7 @@ def solve_quadratic_subproblem(
         #                step_size=step_size,
         #                mu_next=mu_next.squeeze(),
         #                eta_next=eta_next.squeeze())
-    
+        #
         return IPMState(
             i=ipm_state.i+1,
             S=S_next,
@@ -197,16 +205,25 @@ def compute_lb_spec_est(
     svec_I = svec(jnp.eye(k))
 
     # initialize all Lagrangian variables
-    S_init = 0.99 * (jnp.eye(k) / (k + 1.0))
+    #S_init = 0.99 * (jnp.eye(k) / (k + 1.0))
+    #eta_init = lax.cond(
+    #    bar_primal_obj == 0.0,
+    #    lambda _: jnp.asarray([0.00001]),
+    #    lambda _: jnp.asarray([0.99 * (1.0 / (k + 1.0))]),
+    #    None)
+    S_init = 0.5 * (jnp.eye(k) / (k + 1.0))
     eta_init = lax.cond(
         bar_primal_obj == 0.0,
         lambda _: jnp.asarray([0.00001]),
-        lambda _: jnp.asarray([0.99 * (1.0 / (k + 1.0))]),
+        lambda _: jnp.asarray([0.5 * (1.0 / (k + 1.0))]),
         None)
+
     T_init = svec_inv(g_1)
     zeta_init = g_2
-    omega_init = jnp.asarray([-1.01 * jnp.min(jnp.append(jnp.diag(T_init), zeta_init))])
-    omega_init = jnp.clip(omega_init, a_min=10.0)
+    dual_infeas_vals = jnp.append(jnp.diag(T_init), zeta_init)
+    dual_infeas_width = jnp.clip(jnp.max(dual_infeas_vals) - jnp.min(dual_infeas_vals), a_min=1.0)
+    omega_init = jnp.asarray([-1.01 * jnp.min(dual_infeas_vals)])
+    omega_init = jnp.clip(omega_init, a_min=dual_infeas_width)
     T_init += omega_init * jnp.eye(k)
     zeta_init += omega_init
     mu_init = (jnp.dot(svec(S_init), svec(T_init))
@@ -303,9 +320,6 @@ def compute_lb_spec_est(
     #ipm_state = init_ipm_state
     #for _ in range(12):
     #    ipm_state = body_func(ipm_state)
-
-    #embed()
-    #exit()
 
     final_ipm_state = bounded_while_loop(
         lambda ipm_state: ipm_state.mu.squeeze() > ipm_eps,
@@ -555,6 +569,13 @@ def specbm(
         lb_spec_est=0.0)
 
     final_state = bounded_while_loop(cond_func, body_func, init_state, max_steps=max_iters)
+
+    #state = init_state
+    #for _ in range(20):
+    #    state = body_func(state)
+
+    #embed()
+    #exit()
 
     return (final_state.X,
             final_state.y,

@@ -134,6 +134,8 @@ if __name__ == "__main__":
     #SCALE_C = 1.0 / scipy.sparse.linalg.norm(C, ord="fro") 
     #SCALE_X = 1.0 / n
     #trace_ub = 1.0
+    SCALE_WARM_START_C = 1.0
+    SCALE_WARM_START_X = 1.0
     SCALE_C = 1.0
     SCALE_X = 1.0
     trace_ub = 1.0*float(n)
@@ -146,6 +148,100 @@ if __name__ == "__main__":
         X_scs = solve_scs(C)
         with open(scs_soln_cache, "wb") as f_out:
             pickle.dump(X_scs, f_out)
+
+    warm_start_frac = 0.99
+    warm_start_n = int(warm_start_frac * n)
+    warm_start_m = warm_start_n
+    warm_start_trace_ub = warm_start_frac * trace_ub
+
+    warm_start_C = C.tolil()[:warm_start_n, :warm_start_n].tocsr()
+    scaled_warm_start_C = warm_start_C.tocoo().T * SCALE_WARM_START_C
+
+    ## just as a sanity check
+    #warm_start_X_scs = solve_scs(scaled_warm_start_C.tocsr())
+    
+    scaled_warm_start_C = BCOO(
+        (scaled_warm_start_C.data,
+         jnp.stack((scaled_warm_start_C.row, scaled_warm_start_C.col)).T),
+        shape=scaled_warm_start_C.shape)
+
+    warm_start_C_innerprod = create_C_innerprod(scaled_warm_start_C)
+    warm_start_C_add = create_C_add(scaled_warm_start_C)
+    warm_start_C_matvec = create_C_matvec(scaled_warm_start_C)
+    warm_start_A_operator = create_A_operator()
+    warm_start_A_operator_slim = create_A_operator_slim()
+    warm_start_A_adjoint = create_A_adjoint(warm_start_n)
+    warm_start_A_adjoint_slim = create_A_adjoint_slim()
+    warm_start_proj_K = create_proj_K(warm_start_n, SCALE_WARM_START_X)
+    warm_start_b = jnp.ones((warm_start_n,)) * SCALE_WARM_START_X
+
+    k_curr = 4
+    k_past = 0
+    k = k_curr + k_past
+    warm_start_X = jnp.zeros((warm_start_n, warm_start_n))
+    warm_start_y = jnp.zeros((warm_start_m,))
+    warm_start_z = jnp.zeros((warm_start_n,))
+
+    # for interior point methods
+    U = create_svec_matrix(k)
+
+    # for quadratic subproblem solved by interior point method
+    Q_base = create_Q_base(warm_start_m, k, U)
+
+    (warm_start_X,
+     warm_start_y,
+     warm_start_z,
+     warm_start_primal_obj,
+     warm_start_tr_X) = specbm(
+        X=warm_start_X,
+        y=warm_start_y,
+        z=warm_start_z,
+        primal_obj=0.0,
+        tr_X=jnp.trace(warm_start_X),
+        n=warm_start_n,
+        m=warm_start_m,
+        trace_ub=warm_start_trace_ub,
+        C=warm_start_C,
+        C_innerprod=warm_start_C_innerprod,
+        C_add=warm_start_C_add,
+        C_matvec=warm_start_C_matvec,
+        A_operator=warm_start_A_operator,
+        A_operator_slim=warm_start_A_operator_slim,
+        A_adjoint=warm_start_A_adjoint,
+        A_adjoint_slim=warm_start_A_adjoint_slim,
+        Q_base=Q_base,
+        U=U,
+        b=warm_start_b,
+        rho=0.5,
+        beta=0.25,
+        k_curr=k_curr,
+        k_past=k_past,
+        SCALE_C=SCALE_WARM_START_C,
+        SCALE_X=SCALE_WARM_START_X,
+        eps=1e-3,
+        max_iters=1000,
+        lanczos_num_iters=100)
+
+    X = jnp.zeros((n, n))
+    y = jnp.zeros((n,))
+    z = jnp.zeros((n,))
+
+    # warm-start variables
+    X = X.at[:warm_start_n, :warm_start_n].set(warm_start_X)
+    y = y.at[:warm_start_n].set(warm_start_y)
+    z = z.at[:warm_start_n].set(warm_start_z)
+
+    #with open("warm_start_state.pkl", "wb") as f:
+    #    pickle.dump((X, y, z, warm_start_X, warm_start_y, warm_start_z), f)
+
+    #embed()
+    #exit()
+
+    #with open("warm_start_state.pkl", "rb") as f:
+    #    (X, y, z, warm_start_X, warm_start_y, warm_start_z) = pickle.load(f)
+
+
+    print("\n\n +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++ \n\n")
 
     scaled_C = C * SCALE_C
     scaled_C = scaled_C.tocoo().T
@@ -161,6 +257,8 @@ if __name__ == "__main__":
     A_adjoint_slim = create_A_adjoint_slim()
     proj_K = create_proj_K(n, SCALE_X)
     b = jnp.ones((n,)) * SCALE_X
+
+    warm_start_primal_obj = C_innerprod(X)
 
     #X, y = cgal(
     #   n=n,
@@ -182,9 +280,9 @@ if __name__ == "__main__":
     k_curr = 4
     k_past = 0
     k = k_curr + k_past
-    X = jnp.zeros((n, n))  # used to track primal solution
-    y = jnp.zeros((n,))
-    z = jnp.zeros((n,))
+    #X = jnp.zeros((n, n))  # used to track primal solution
+    #y = jnp.zeros((n,))
+    #z = jnp.zeros((n,))
 
     # for interior point methods
     U = create_svec_matrix(k)
@@ -196,7 +294,7 @@ if __name__ == "__main__":
         X=X,
         y=y,
         z=z,
-        primal_obj=0.0,
+        primal_obj=warm_start_primal_obj,
         tr_X=jnp.trace(X),
         n=n,
         m=m,
@@ -218,8 +316,8 @@ if __name__ == "__main__":
         k_past=k_past,
         SCALE_C=SCALE_C,
         SCALE_X=SCALE_X,
-        eps=1e-4,
-        max_iters=500,
+        eps=1e-3,
+        max_iters=1000,
         lanczos_num_iters=100)
 
     embed()
