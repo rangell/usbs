@@ -533,6 +533,9 @@ def specbm(
                         infeas_gap=infeas_gap,
                         max_infeas=max_infeas)
 
+        jax.debug.print("time: {time}",
+                        time=hcb.call(lambda _: time.time(), arg=0, result_shape=float))
+
         return StateStruct(
             t=state.t+1,
             X=X_next,
@@ -576,14 +579,6 @@ def specbm(
         lb_spec_est=0.0)
 
     final_state = bounded_while_loop(cond_func, body_func, init_state, max_steps=max_iters)
-
-    embed()
-    exit()
-
-    state = init_state
-    for _ in range(20):
-        state = body_func(state)
-
 
     return (final_state.X,
             final_state.y,
