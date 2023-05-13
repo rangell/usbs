@@ -10,7 +10,7 @@ import pickle
 import scipy  # type: ignore
 from scipy.io import loadmat  # type: ignore
 from scipy.sparse import coo_matrix, csc_matrix  # type: ignore
-from typing import Any, Callable
+from typing import Any, Callable, Tuple
 
 from solver.cgal import cgal
 from solver.specbm import specbm
@@ -100,6 +100,21 @@ def create_Q_base(m: int, k: int, U: BCOO) -> Callable[[Array], Array]:
         final_mx = jnp.sum(expanded_mx, axis=-1)
         return final_mx
     return Q_base
+
+
+def reconstruct(Omega: Array, P: Array, approx_eps: float = 1e-6) -> Tuple[np.ndarray, np.ndarray]:
+    n = Omega.shape[0]
+    rho = jnp.sqrt(n) * approx_eps * jnp.linalg.norm(P, ord=2)
+    P_rho = P + rho * Omega
+    B = Omega.T @ P_rho
+    B = 0.5 * (B + B.T)
+    L = jnp.linalg.cholesky(B)
+    W, Rho, _ = jnp.linalg.svd(
+        jnp.linalg.lstsq(L, P_rho.T, rcond=-1)[0].T,
+        full_matrices=False,  # this compresses the output to be rank `R`
+    )
+    Lambda = jnp.clip(Rho ** 2 - rho, 0, np.inf)
+    return W, Lambda
 
 
 def solve_scs(C: csc_matrix) -> np.ndarray[Any, Any]:
@@ -337,9 +352,15 @@ if __name__ == "__main__":
             SCALE_X=1.0,
             eps=1e-4,
             max_iters=1000,
-            lanczos_num_iters=100)
+            lanczos_num_iters=200)
     elif SOLVER == "cgal":
         raise NotImplementedError("Need to add CGAL here!")
+
+    W, Lambda = reconstruct(Omega, P)
+
+    # compute cuts
+    W_bin = 2 * (W > 0).astype(float) - 1
+    max_cut_size = jnp.max(jnp.diag(-W_bin.T @ scaled_C @ W_bin))
 
     embed()
     exit()
