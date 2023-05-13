@@ -122,10 +122,10 @@ if __name__ == "__main__":
     # variables controlling experiment
     MAT_PATH = "./data/maxcut/Gset/G1.mat"
     WARM_START = False
-    WARM_START_FRAC = 0.95
+    WARM_START_FRAC = 0.99
     SOLVER = "specbm"           # either "specbm" or "cgal"
     K = 5                       # number of eigenvectors to compute for specbm
-    #R = 100                     # size of the sketch
+    R = 100                     # size of the sketch
 
     # print out all of the variable for this experiment
     print("MAT_PATH: ", MAT_PATH)
@@ -133,10 +133,10 @@ if __name__ == "__main__":
     print("WARM_START: ", WARM_START)
     print("SOLVER: ", SOLVER)
     print("K: ", K)
+    print("R: ", R)
     print()
 
     jax.config.update("jax_enable_x64", True)
-    np.random.seed(0)
 
     # load the problem data
     problem = loadmat(MAT_PATH)
@@ -156,8 +156,12 @@ if __name__ == "__main__":
         X_scs = solve_scs(C)
         with open(scs_soln_cache, "wb") as f_out:
             pickle.dump(X_scs, f_out)
+        
+    # construct the test matrix for the sketch
+    Omega = jax.random.normal(jax.random.PRNGKey(0), shape=(n, R))
 
-    X = jnp.zeros((n, n))
+    X = None
+    S = jnp.zeros((n, R))
     y = jnp.zeros((n,))
     z = jnp.zeros((n,))
     tr_X = 0.0
@@ -195,7 +199,14 @@ if __name__ == "__main__":
         warm_start_A_adjoint_slim = create_A_adjoint_slim()
         warm_start_b = jnp.ones((warm_start_n,))
 
-        warm_start_X = jnp.zeros((warm_start_n, warm_start_n))
+        if Omega is None:
+            warm_start_X = jnp.zeros((warm_start_n, warm_start_n))
+            warm_start_Omega = None
+            warm_start_S = None
+        else:
+            warm_start_X = None
+            warm_start_Omega = Omega[:warm_start_n, :]
+            warm_start_S = jnp.zeros((warm_start_n, R))
         warm_start_y = jnp.zeros((warm_start_m,))
         warm_start_z = jnp.zeros((warm_start_n,))
 
@@ -204,15 +215,17 @@ if __name__ == "__main__":
 
         if SOLVER == "specbm":
             (warm_start_X,
+             warm_start_S,
              warm_start_y,
              warm_start_z,
              warm_start_primal_obj,
              warm_start_tr_X) = specbm(
                 X=warm_start_X,
+                S=warm_start_S,
                 y=warm_start_y,
                 z=warm_start_z,
                 primal_obj=0.0,
-                tr_X=jnp.trace(warm_start_X),
+                tr_X=0.0,
                 n=warm_start_n,
                 m=warm_start_m,
                 trace_ub=warm_start_trace_ub,
@@ -226,6 +239,7 @@ if __name__ == "__main__":
                 A_adjoint_slim=warm_start_A_adjoint_slim,
                 Q_base=Q_base,
                 U=U,
+                Omega=warm_start_Omega,
                 b=warm_start_b,
                 rho=0.5,
                 beta=0.25,
@@ -236,6 +250,7 @@ if __name__ == "__main__":
                 eps=1e-3,
                 max_iters=1000,
                 lanczos_num_iters=100)
+
         elif SOLVER == "cgal":
             # TODO: fix the output here to give back the same things as specbm
             X, y = cgal(
@@ -249,18 +264,20 @@ if __name__ == "__main__":
                beta0=1.0,
                SCALE_C=1.0,
                SCALE_X=1.0,
-               eps=1e-3,
+               eps=1e-2,
                max_iters=10000,
                lanczos_num_iters=100)
         else:
             raise ValueError("Invalid SOLVER")
 
-        X = X.at[:warm_start_n, :warm_start_n].set(warm_start_X)
+        if Omega is None:
+            X = X.at[:warm_start_n, :warm_start_n].set(warm_start_X)
+        else:
+            S = S.at[:warm_start_n, :].set(warm_start_S)
         y = y.at[:warm_start_n].set(warm_start_y)
         z = z.at[:warm_start_n].set(warm_start_z)
         tr_X = warm_start_tr_X
         primal_obj = warm_start_primal_obj
-
 
     print("\n+++++++++++++++++++++++++++++ BEGIN ++++++++++++++++++++++++++++++++++\n")
 
@@ -285,8 +302,9 @@ if __name__ == "__main__":
     Q_base = create_Q_base(m, k, U)
 
     if SOLVER == "specbm":
-        X, y, z, primal_obj, tr_X = specbm(
+        X, S, y, z, primal_obj, tr_X = specbm(
             X=X,
+            S=S,
             y=y,
             z=z,
             primal_obj=primal_obj,
@@ -304,6 +322,7 @@ if __name__ == "__main__":
             A_adjoint_slim=A_adjoint_slim,
             Q_base=Q_base,
             U=U,
+            Omega=Omega,
             b=b,
             rho=0.5,
             beta=0.25,

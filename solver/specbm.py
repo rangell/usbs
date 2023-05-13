@@ -9,7 +9,7 @@ from jax.experimental.sparse import BCOO
 import jax.numpy as jnp
 from jax import lax
 import time
-from typing import Any, Callable, Tuple
+from typing import Any, Callable, Optional, Tuple, Union
 
 from scipy.sparse import csc_matrix  # type: ignore
 
@@ -327,7 +327,8 @@ def compute_lb_spec_est(
 
 
 def specbm(
-    X: Array,
+    X: Union[Array, None],
+    S: Union[Array, None],
     y: Array,
     z: Array,
     primal_obj: float,
@@ -345,6 +346,7 @@ def specbm(
     A_adjoint_slim: Callable[[Array, Array], Array],
     Q_base: Callable[[Array], Array],
     U: BCOO,
+    Omega: Union[Array, None],
     b: Array,
     rho: float,
     beta: float,
@@ -370,6 +372,8 @@ def specbm(
          "tr_X",
          "X_bar",
          "tr_X_bar",
+         "S",
+         "S_bar",
          "z",
          "z_bar",
          "y",
@@ -443,7 +447,12 @@ def specbm(
 
         VSV_T_factor = (state.V @ S_eigvecs) * jnp.sqrt(S_eigvals).reshape(1, -1)
         A_operator_VSV_T = jnp.sum(A_operator_batched(VSV_T_factor), axis=1)
-        X_next = eta * state.X_bar + state.V @ S @ state.V.T
+        if Omega is None:
+            X_next = eta * state.X_bar + state.V @ S @ state.V.T
+            S_next = None
+        else:
+            X_next = None
+            S_next = eta * state.S_bar + VSV_T_factor @ (VSV_T_factor.T @ Omega)
         tr_X_next = eta * state.tr_X_bar + jnp.trace(S)
         z_next = eta * state.z_bar + A_operator_VSV_T
         y_cand = state.y + (1.0 / rho) * (b - z_next)
@@ -506,8 +515,13 @@ def specbm(
             None)
 
         curr_VSV_T_factor = (state.V @ S_eigvecs[:, :k_curr]) * jnp.sqrt(S_eigvals[:k_curr]).reshape(1, -1)
-        X_bar_next = eta * state.X_bar + curr_VSV_T_factor @ curr_VSV_T_factor.T
-        tr_X_bar_next = tr_X_next
+        if Omega is None:
+            X_bar_next = eta * state.X_bar + curr_VSV_T_factor @ curr_VSV_T_factor.T
+            S_bar_next = None
+        else:
+            X_bar_next = None
+            S_bar_next = eta * state.S_bar + curr_VSV_T_factor @ (curr_VSV_T_factor.T @ Omega)
+        tr_X_bar_next = eta * state.tr_X_bar + jnp.sum(S_eigvals[:k_curr])
         z_bar_next =  eta * state.z_bar + jnp.sum(A_operator_batched(curr_VSV_T_factor), axis=1)
         V_next = jnp.concatenate([state.V @ S_eigvecs[:,k_curr:], cand_eigvecs], axis=1)
         bar_primal_obj_next = eta * state.bar_primal_obj
@@ -539,6 +553,8 @@ def specbm(
             tr_X=tr_X_next,
             X_bar=X_bar_next,
             tr_X_bar=tr_X_bar_next,
+            S=S_next,
+            S_bar=S_bar_next,
             z=z_next,
             z_bar=z_bar_next,
             y=y_next,
@@ -566,6 +582,8 @@ def specbm(
         tr_X=tr_X,
         X_bar=X,
         tr_X_bar=tr_X,
+        S=S,
+        S_bar=S,
         z=z,
         z_bar=z,
         y=y,
@@ -578,6 +596,7 @@ def specbm(
     final_state = bounded_while_loop(cond_func, body_func, init_state, max_steps=max_iters)
 
     return (final_state.X,
+            final_state.S,
             final_state.y,
             final_state.z,
             final_state.primal_obj,
