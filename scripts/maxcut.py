@@ -159,9 +159,14 @@ if __name__ == "__main__":
         
     # construct the test matrix for the sketch
     Omega = jax.random.normal(jax.random.PRNGKey(0), shape=(n, R))
+    #Omega = None
 
-    X = None
-    S = jnp.zeros((n, R))
+    if Omega is None:
+        X = jnp.zeros((n, n))
+        P = None
+    else:
+        X = None
+        P = jnp.zeros((n, R))
     y = jnp.zeros((n,))
     z = jnp.zeros((n,))
     tr_X = 0.0
@@ -202,11 +207,11 @@ if __name__ == "__main__":
         if Omega is None:
             warm_start_X = jnp.zeros((warm_start_n, warm_start_n))
             warm_start_Omega = None
-            warm_start_S = None
+            warm_start_P = None
         else:
             warm_start_X = None
             warm_start_Omega = Omega[:warm_start_n, :]
-            warm_start_S = jnp.zeros((warm_start_n, R))
+            warm_start_P = jnp.zeros((warm_start_n, R))
         warm_start_y = jnp.zeros((warm_start_m,))
         warm_start_z = jnp.zeros((warm_start_n,))
 
@@ -215,13 +220,13 @@ if __name__ == "__main__":
 
         if SOLVER == "specbm":
             (warm_start_X,
-             warm_start_S,
+             warm_start_P,
              warm_start_y,
              warm_start_z,
              warm_start_primal_obj,
              warm_start_tr_X) = specbm(
                 X=warm_start_X,
-                S=warm_start_S,
+                P=warm_start_P,
                 y=warm_start_y,
                 z=warm_start_z,
                 primal_obj=0.0,
@@ -247,7 +252,7 @@ if __name__ == "__main__":
                 k_past=k_past,
                 SCALE_C=1.0,
                 SCALE_X=1.0,
-                eps=1e-3,
+                eps=1e-4,
                 max_iters=1000,
                 lanczos_num_iters=100)
 
@@ -264,7 +269,7 @@ if __name__ == "__main__":
                beta0=1.0,
                SCALE_C=1.0,
                SCALE_X=1.0,
-               eps=1e-2,
+               eps=1e-3,
                max_iters=10000,
                lanczos_num_iters=100)
         else:
@@ -273,7 +278,7 @@ if __name__ == "__main__":
         if Omega is None:
             X = X.at[:warm_start_n, :warm_start_n].set(warm_start_X)
         else:
-            S = S.at[:warm_start_n, :].set(warm_start_S)
+            P = P.at[:warm_start_n, :].set(warm_start_P)
         y = y.at[:warm_start_n].set(warm_start_y)
         z = z.at[:warm_start_n].set(warm_start_z)
         tr_X = warm_start_tr_X
@@ -286,7 +291,7 @@ if __name__ == "__main__":
     scaled_C = BCOO(
         (scaled_C.data, jnp.stack((scaled_C.row, scaled_C.col)).T), shape=scaled_C.shape)
 
-    trace_ub = float(n)
+    trace_ub = 1.0 * float(n)
     m = n
 
     C_innerprod = create_C_innerprod(scaled_C)
@@ -302,9 +307,9 @@ if __name__ == "__main__":
     Q_base = create_Q_base(m, k, U)
 
     if SOLVER == "specbm":
-        X, S, y, z, primal_obj, tr_X = specbm(
+        X, P, y, z, primal_obj, tr_X = specbm(
             X=X,
-            S=S,
+            P=P,
             y=y,
             z=z,
             primal_obj=primal_obj,
@@ -330,7 +335,7 @@ if __name__ == "__main__":
             k_past=k_past,
             SCALE_C=1.0,
             SCALE_X=1.0,
-            eps=1e-3,
+            eps=1e-4,
             max_iters=1000,
             lanczos_num_iters=100)
     elif SOLVER == "cgal":
