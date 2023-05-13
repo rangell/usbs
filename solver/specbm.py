@@ -338,7 +338,7 @@ def compute_lb_spec_est(
 
     final_ipm_state = bounded_while_loop(
         lambda ipm_state: jnp.logical_and(ipm_state.mu.squeeze() > ipm_eps,
-                                          ipm_state.obj_gap > 0.01 * ipm_eps),
+                                          ipm_state.obj_gap > ipm_eps),
         body_func, 
         init_ipm_state,
         max_steps=ipm_max_iters)
