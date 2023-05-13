@@ -19,7 +19,7 @@ def cgal(
     C_matvec: Callable[[Array], Array],
     A_operator_slim: Callable[[Array], Array],
     A_adjoint_slim: Callable[[Array, Array], Array],
-    proj_K: Callable[[Array], Array],
+    b: Array,
     beta0: float,
     SCALE_C: float,
     SCALE_X: float,
@@ -39,7 +39,6 @@ def cgal(
     @jax.jit
     def body_func(state: StateStruct) -> StateStruct:
         beta = beta0 * jnp.sqrt(state.t + 1)
-        b = proj_K(state.z + (state.y / beta))
         adjoint_left_vec = state.y + beta*(state.z - b)
 
         _, eigvecs = approx_grad_k_min_eigen(
@@ -63,9 +62,9 @@ def cgal(
         obj_gap -= 0.5*beta*jnp.linalg.norm(state.z - b)**2
         obj_gap = obj_gap / (SCALE_C * SCALE_X)
         obj_gap /= 1.0 + (jnp.abs(state.obj_val) / (SCALE_C * SCALE_X))
-        infeas_gap = jnp.linalg.norm((state.z - proj_K(state.z)) / SCALE_X) 
-        infeas_gap /= 1.0 + jnp.linalg.norm(proj_K(state.z) / SCALE_X)
-        max_infeas = jnp.max(jnp.abs(state.z - proj_K(state.z))) / SCALE_X
+        infeas_gap = jnp.linalg.norm((state.z - b) / SCALE_X) 
+        infeas_gap /= 1.0 + jnp.linalg.norm(b / SCALE_X)
+        max_infeas = jnp.max(jnp.abs(state.z - b)) / SCALE_X
         jax.debug.print("t: {t} - obj_val: {obj_val} - obj_gap: {obj_gap} -"
                         " infeas_gap: {infeas_gap} - max_infeas: {max_infeas}",
                         t=state.t,
@@ -79,7 +78,7 @@ def cgal(
         z_next = (1-eta)*state.z + eta*trace_ub*A_operator_slim(min_eigvec)
 
         # TODO: fix dual step size here
-        y_next = state.y + 0.5*(z_next - proj_K(z_next + (state.y / beta)))
+        y_next = state.y + 0.5*(z_next - b)
 
         obj_val_next = (1-eta)*state.obj_val + eta*trace_ub*jnp.dot(min_eigvec, C_matvec(min_eigvec))
 

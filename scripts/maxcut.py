@@ -118,28 +118,36 @@ def solve_scs(C: csc_matrix) -> np.ndarray[Any, Any]:
 
 
 if __name__ == "__main__":
+
+    # variables controlling experiment
+    MAT_PATH = "./data/maxcut/Gset/G1.mat"
+    WARM_START = False
+    WARM_START_FRAC = 0.95
+    SOLVER = "specbm"           # either "specbm" or "cgal"
+    K = 5                       # number of eigenvectors to compute for specbm
+    #R = 100                     # size of the sketch
+
+    # print out all of the variable for this experiment
+    print("MAT_PATH: ", MAT_PATH)
+    print("WARM_START_FRAC: ", WARM_START_FRAC)
+    print("WARM_START: ", WARM_START)
+    print("SOLVER: ", SOLVER)
+    print("K: ", K)
+    print()
+
     jax.config.update("jax_enable_x64", True)
     np.random.seed(0)
-    MAT_PATH = "./data/maxcut/Gset/G1.mat"
+
+    # load the problem data
     problem = loadmat(MAT_PATH)
     C = problem["Problem"][0][0][1]
     n = C.shape[0]
-    m = n
-
     C = scipy.sparse.spdiags((C @ np.ones((n,1))).T, 0, n, n) - C
     C = 0.5*(C + C.T)
     C = -0.25*C
     C = C.tocsc()
 
-    #SCALE_C = 1.0 / scipy.sparse.linalg.norm(C, ord="fro") 
-    #SCALE_X = 1.0 / n
-    #trace_ub = 1.0
-    SCALE_WARM_START_C = 1.0
-    SCALE_WARM_START_X = 1.0
-    SCALE_C = 1.0
-    SCALE_X = 1.0
-    trace_ub = 1.0*float(n)
-
+    # solve with SCS if we have not already
     scs_soln_cache = str(Path(MAT_PATH).with_suffix("")) + "_scs_soln.pkl"
     if Path(scs_soln_cache).is_file():
         with open(scs_soln_cache, "rb") as f_in:
@@ -149,104 +157,120 @@ if __name__ == "__main__":
         with open(scs_soln_cache, "wb") as f_out:
             pickle.dump(X_scs, f_out)
 
-    warm_start_frac = 1.0
-    warm_start_n = int(warm_start_frac * n)
-    warm_start_m = warm_start_n
-    warm_start_trace_ub = warm_start_frac * trace_ub
+    X = jnp.zeros((n, n))
+    y = jnp.zeros((n,))
+    z = jnp.zeros((n,))
+    tr_X = 0.0
+    primal_obj = 0.0
 
-    warm_start_C = C.tolil()[:warm_start_n, :warm_start_n].tocsr()
-    scaled_warm_start_C = warm_start_C.tocoo().T * SCALE_WARM_START_C
-
-    ## just as a sanity check
-    #warm_start_X_scs = solve_scs(scaled_warm_start_C.tocsr())
-    
-    scaled_warm_start_C = BCOO(
-        (scaled_warm_start_C.data,
-         jnp.stack((scaled_warm_start_C.row, scaled_warm_start_C.col)).T),
-        shape=scaled_warm_start_C.shape)
-
-    warm_start_C_innerprod = create_C_innerprod(scaled_warm_start_C)
-    warm_start_C_add = create_C_add(scaled_warm_start_C)
-    warm_start_C_matvec = create_C_matvec(scaled_warm_start_C)
-    warm_start_A_operator = create_A_operator()
-    warm_start_A_operator_slim = create_A_operator_slim()
-    warm_start_A_adjoint = create_A_adjoint(warm_start_n)
-    warm_start_A_adjoint_slim = create_A_adjoint_slim()
-    warm_start_proj_K = create_proj_K(warm_start_n, SCALE_WARM_START_X)
-    warm_start_b = jnp.ones((warm_start_n,)) * SCALE_WARM_START_X
-
-    k_curr = 4
+    k_curr = K
     k_past = 0
     k = k_curr + k_past
-    warm_start_X = jnp.zeros((warm_start_n, warm_start_n))
-    warm_start_y = jnp.zeros((warm_start_m,))
-    warm_start_z = jnp.zeros((warm_start_n,))
 
     # for interior point methods
     U = create_svec_matrix(k)
 
-    # for quadratic subproblem solved by interior point method
-    Q_base = create_Q_base(warm_start_m, k, U)
+    #### Do the warm-start
+    if WARM_START:
+        print("\n+++++++++++++++++++++++++++++ WARM-START ++++++++++++++++++++++++++++++++++\n")
 
-    (warm_start_X,
-     warm_start_y,
-     warm_start_z,
-     warm_start_primal_obj,
-     warm_start_tr_X) = specbm(
-        X=warm_start_X,
-        y=warm_start_y,
-        z=warm_start_z,
-        primal_obj=0.0,
-        tr_X=jnp.trace(warm_start_X),
-        n=warm_start_n,
-        m=warm_start_m,
-        trace_ub=warm_start_trace_ub,
-        C=warm_start_C,
-        C_innerprod=warm_start_C_innerprod,
-        C_add=warm_start_C_add,
-        C_matvec=warm_start_C_matvec,
-        A_operator=warm_start_A_operator,
-        A_operator_slim=warm_start_A_operator_slim,
-        A_adjoint=warm_start_A_adjoint,
-        A_adjoint_slim=warm_start_A_adjoint_slim,
-        Q_base=Q_base,
-        U=U,
-        b=warm_start_b,
-        rho=0.5,
-        beta=0.25,
-        k_curr=k_curr,
-        k_past=k_past,
-        SCALE_C=SCALE_WARM_START_C,
-        SCALE_X=SCALE_WARM_START_X,
-        eps=1e-3,
-        max_iters=1000,
-        lanczos_num_iters=100)
+        warm_start_n = int(WARM_START_FRAC * n)
+        warm_start_C = C.tolil()[:warm_start_n, :warm_start_n].tocsr()
 
-    X = jnp.zeros((n, n))
-    y = jnp.zeros((n,))
-    z = jnp.zeros((n,))
+        warm_start_m = warm_start_n
+        warm_start_trace_ub = 1.0 * float(warm_start_n)
 
-    # warm-start variables
-    X = X.at[:warm_start_n, :warm_start_n].set(warm_start_X)
-    y = y.at[:warm_start_n].set(warm_start_y)
-    z = z.at[:warm_start_n].set(warm_start_z)
+        scaled_warm_start_C = warm_start_C.tocoo().T
+        scaled_warm_start_C = BCOO(
+            (scaled_warm_start_C.data,
+            jnp.stack((scaled_warm_start_C.row, scaled_warm_start_C.col)).T),
+            shape=scaled_warm_start_C.shape)
 
-    #with open("warm_start_state.pkl", "wb") as f:
-    #    pickle.dump((X, y, z, warm_start_X, warm_start_y, warm_start_z), f)
+        warm_start_C_innerprod = create_C_innerprod(scaled_warm_start_C)
+        warm_start_C_add = create_C_add(scaled_warm_start_C)
+        warm_start_C_matvec = create_C_matvec(scaled_warm_start_C)
+        warm_start_A_operator = create_A_operator()
+        warm_start_A_operator_slim = create_A_operator_slim()
+        warm_start_A_adjoint = create_A_adjoint(warm_start_n)
+        warm_start_A_adjoint_slim = create_A_adjoint_slim()
+        warm_start_b = jnp.ones((warm_start_n,))
 
-    #embed()
-    #exit()
+        warm_start_X = jnp.zeros((warm_start_n, warm_start_n))
+        warm_start_y = jnp.zeros((warm_start_m,))
+        warm_start_z = jnp.zeros((warm_start_n,))
 
-    #with open("warm_start_state.pkl", "rb") as f:
-    #    (X, y, z, warm_start_X, warm_start_y, warm_start_z) = pickle.load(f)
+        # for quadratic subproblem solved by interior point method
+        Q_base = create_Q_base(warm_start_m, k, U)
+
+        if SOLVER == "specbm":
+            (warm_start_X,
+             warm_start_y,
+             warm_start_z,
+             warm_start_primal_obj,
+             warm_start_tr_X) = specbm(
+                X=warm_start_X,
+                y=warm_start_y,
+                z=warm_start_z,
+                primal_obj=0.0,
+                tr_X=jnp.trace(warm_start_X),
+                n=warm_start_n,
+                m=warm_start_m,
+                trace_ub=warm_start_trace_ub,
+                C=warm_start_C,
+                C_innerprod=warm_start_C_innerprod,
+                C_add=warm_start_C_add,
+                C_matvec=warm_start_C_matvec,
+                A_operator=warm_start_A_operator,
+                A_operator_slim=warm_start_A_operator_slim,
+                A_adjoint=warm_start_A_adjoint,
+                A_adjoint_slim=warm_start_A_adjoint_slim,
+                Q_base=Q_base,
+                U=U,
+                b=warm_start_b,
+                rho=0.5,
+                beta=0.25,
+                k_curr=k_curr,
+                k_past=k_past,
+                SCALE_C=1.0,
+                SCALE_X=1.0,
+                eps=1e-3,
+                max_iters=1000,
+                lanczos_num_iters=100)
+        elif SOLVER == "cgal":
+            # TODO: fix the output here to give back the same things as specbm
+            X, y = cgal(
+               n=warm_start_n,
+               m=warm_start_n,
+               trace_ub=warm_start_trace_ub,
+               C_matvec=warm_start_C_matvec,
+               A_operator_slim=warm_start_A_operator_slim,
+               A_adjoint_slim=warm_start_A_adjoint_slim,
+               b=warm_start_b,
+               beta0=1.0,
+               SCALE_C=1.0,
+               SCALE_X=1.0,
+               eps=1e-3,
+               max_iters=10000,
+               lanczos_num_iters=100)
+        else:
+            raise ValueError("Invalid SOLVER")
+
+        X = X.at[:warm_start_n, :warm_start_n].set(warm_start_X)
+        y = y.at[:warm_start_n].set(warm_start_y)
+        z = z.at[:warm_start_n].set(warm_start_z)
+        tr_X = warm_start_tr_X
+        primal_obj = warm_start_primal_obj
 
 
-    print("\n\n +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++ \n\n")
+    print("\n+++++++++++++++++++++++++++++ BEGIN ++++++++++++++++++++++++++++++++++\n")
 
-    scaled_C = C * SCALE_C
+    scaled_C = C
     scaled_C = scaled_C.tocoo().T
     scaled_C = BCOO(
         (scaled_C.data, jnp.stack((scaled_C.row, scaled_C.col)).T), shape=scaled_C.shape)
+
+    trace_ub = float(n)
+    m = n
 
     C_innerprod = create_C_innerprod(scaled_C)
     C_add = create_C_add(scaled_C)
@@ -255,70 +279,43 @@ if __name__ == "__main__":
     A_operator_slim = create_A_operator_slim()
     A_adjoint = create_A_adjoint(n)
     A_adjoint_slim = create_A_adjoint_slim()
-    proj_K = create_proj_K(n, SCALE_X)
-    b = jnp.ones((n,)) * SCALE_X
-
-    warm_start_primal_obj = C_innerprod(X)
-
-    #X, y = cgal(
-    #   n=n,
-    #   m=n,
-    #   trace_ub=trace_ub,
-    #   C_matvec=C_matvec,
-    #   A_operator_slim=A_operator_slim,
-    #   A_adjoint_slim=A_adjoint_slim,
-    #   proj_K=proj_K,
-    #   beta0=1.0,
-    #   SCALE_C=SCALE_C,
-    #   SCALE_X=SCALE_X,
-    #   eps=1e-3,
-    #   max_iters=10000,
-    #   lanczos_num_iters=50)
-    
-
-    # initialize variables here
-    k_curr = 4
-    k_past = 0
-    k = k_curr + k_past
-    #X = jnp.zeros((n, n))  # used to track primal solution
-    #y = jnp.zeros((n,))
-    #z = jnp.zeros((n,))
-
-    # for interior point methods
-    U = create_svec_matrix(k)
+    b = jnp.ones((n,))
 
     # for quadratic subproblem solved by interior point method
     Q_base = create_Q_base(m, k, U)
 
-    X, y, z, primal_obj, tr_X = specbm(
-        X=X,
-        y=y,
-        z=z,
-        primal_obj=warm_start_primal_obj,
-        tr_X=jnp.trace(X),
-        n=n,
-        m=m,
-        trace_ub=trace_ub,
-        C=C,
-        C_innerprod=C_innerprod,
-        C_add=C_add,
-        C_matvec=C_matvec,
-        A_operator=A_operator,
-        A_operator_slim=A_operator_slim,
-        A_adjoint=A_adjoint,
-        A_adjoint_slim=A_adjoint_slim,
-        Q_base=Q_base,
-        U=U,
-        b=b,
-        rho=0.5,
-        beta=0.25,
-        k_curr=k_curr,
-        k_past=k_past,
-        SCALE_C=SCALE_C,
-        SCALE_X=SCALE_X,
-        eps=1e-3,
-        max_iters=1000,
-        lanczos_num_iters=100)
+    if SOLVER == "specbm":
+        X, y, z, primal_obj, tr_X = specbm(
+            X=X,
+            y=y,
+            z=z,
+            primal_obj=primal_obj,
+            tr_X=tr_X,
+            n=n,
+            m=n,
+            trace_ub=trace_ub,
+            C=C,
+            C_innerprod=C_innerprod,
+            C_add=C_add,
+            C_matvec=C_matvec,
+            A_operator=A_operator,
+            A_operator_slim=A_operator_slim,
+            A_adjoint=A_adjoint,
+            A_adjoint_slim=A_adjoint_slim,
+            Q_base=Q_base,
+            U=U,
+            b=b,
+            rho=0.5,
+            beta=0.25,
+            k_curr=k_curr,
+            k_past=k_past,
+            SCALE_C=1.0,
+            SCALE_X=1.0,
+            eps=1e-3,
+            max_iters=1000,
+            lanczos_num_iters=100)
+    elif SOLVER == "cgal":
+        raise NotImplementedError("Need to add CGAL here!")
 
     embed()
     exit()
