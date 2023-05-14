@@ -88,7 +88,7 @@ def cgal(
         else:
             X_next = None
             min_eigvec = min_eigvec.reshape(-1, 1)
-            P_next = eta * state.P + trace_ub * min_eigvec @ (min_eigvec.T @ Omega)
+            P_next = (1 - eta) * state.P + eta * trace_ub * min_eigvec @ (min_eigvec.T @ Omega)
             min_eigvec = min_eigvec.reshape(-1,)
 
         z_next = (1 - eta) * state.z + eta * trace_ub * A_operator_slim(min_eigvec)
