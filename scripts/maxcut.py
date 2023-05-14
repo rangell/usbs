@@ -119,10 +119,10 @@ def reconstruct(Omega: Array, P: Array, approx_eps: float = 1e-6) -> Tuple[np.nd
 
 
 @jax.jit
-def compute_max_cut(Omega: Array, P: Array) -> int:
+def compute_max_cut(C: BCOO, Omega: Array, P: Array) -> int:
     W, _ = reconstruct(Omega, P)
     W_bin = 2 * (W > 0).astype(float) - 1
-    return jnp.max(jnp.diag(-W_bin.T @ scaled_C @ W_bin))
+    return jnp.max(jnp.diag(-W_bin.T @ C @ W_bin))
 
 
 def solve_scs(C: csc_matrix) -> np.ndarray[Any, Any]:
@@ -146,7 +146,7 @@ if __name__ == "__main__":
     MAT_PATH = "./data/maxcut/Gset/G1.mat"
     WARM_START = False
     WARM_START_FRAC = 0.99
-    SOLVER = "cgal"           # either "specbm" or "cgal"
+    SOLVER = "specbm"           # either "specbm" or "cgal"
     K = 5                       # number of eigenvectors to compute for specbm
     R = 100                     # size of the sketch
 
@@ -182,7 +182,7 @@ if __name__ == "__main__":
         
     # construct the test matrix for the sketch
     Omega = jax.random.normal(jax.random.PRNGKey(0), shape=(n, R))
-    #Omega = None
+    Omega = None
 
     if Omega is None:
         X = jnp.zeros((n, n))
@@ -309,15 +309,18 @@ if __name__ == "__main__":
 
     print("\n+++++++++++++++++++++++++++++ BEGIN ++++++++++++++++++++++++++++++++++\n")
 
-    SCALE_X = 1.0 / float(n)
-    SCALE_C = 1.0 / scipy.sparse.linalg.norm(C, ord="fro") 
-    #SCALE_X = 1.0
-    #SCALE_C = 1.0
+    #SCALE_X = 1.0 / float(n)
+    #SCALE_C = 1.0 / scipy.sparse.linalg.norm(C, ord="fro") 
+    SCALE_X = 1.0
+    SCALE_C = 1.0
 
     scaled_C = C * SCALE_C
     scaled_C = scaled_C.tocoo().T
     scaled_C = BCOO(
         (scaled_C.data, jnp.stack((scaled_C.row, scaled_C.col)).T), shape=scaled_C.shape)
+    C = C.tocoo()
+    C = BCOO(
+        (C.data, jnp.stack((C.row, C.col)).T), shape=C.shape)
 
     trace_ub = 1.0 * float(n) * SCALE_X
     m = n
@@ -363,7 +366,7 @@ if __name__ == "__main__":
             k_past=k_past,
             SCALE_C=1.0,
             SCALE_X=1.0,
-            eps=1e-6,
+            eps=1e-3,
             max_iters=1000,
             lanczos_num_iters=200)
     elif SOLVER == "cgal":
@@ -386,11 +389,14 @@ if __name__ == "__main__":
             SCALE_C=SCALE_C,
             SCALE_X=SCALE_X,
             eps=1e-3,
-            max_iters=2500,
+            max_iters=1200,
             lanczos_num_iters=50)
 
+    Omega = jax.random.normal(jax.random.PRNGKey(0), shape=(n, R))
+    P = X @ Omega
+
     # compute max cut size
-    max_cut_size = compute_max_cut(Omega, P)
+    max_cut_size = compute_max_cut(C, Omega, P)
 
     embed()
     exit()
