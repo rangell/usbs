@@ -488,9 +488,22 @@ def specbm(
             n=n,
             k=k_curr,
             num_iters=lanczos_num_iters,
-            rng=jax.random.PRNGKey(0))
+            rng=jax.random.PRNGKey(state.t))
         cand_eigvals = -cand_eigvals
         cand_pen_dual_obj = jnp.dot(-b, y_cand) + trace_ub*jnp.clip(cand_eigvals[0], a_min=0)
+
+        # recompute this everytime for safety
+        prev_eigvals, _ = approx_grad_k_min_eigen(
+            C_matvec=C_matvec,
+            A_adjoint_slim=A_adjoint_slim,
+            adjoint_left_vec=-state.y,
+            n=n,
+            k=1,
+            num_iters=lanczos_num_iters,
+            rng=jax.random.PRNGKey(state.t))
+        prev_eigvals = -prev_eigvals
+        pen_dual_obj = jnp.dot(-b, state.y) + trace_ub*jnp.clip(prev_eigvals[0], a_min=0)
+        pen_dual_obj = jnp.clip(state.pen_dual_obj, a_min=pen_dual_obj)
 
         #####################################################################################
 
@@ -531,10 +544,15 @@ def specbm(
             V=state.V,
             k=k)
 
+        #y_next, pen_dual_obj_next = lax.cond(
+        #    beta * (state.pen_dual_obj - lb_spec_est) <= state.pen_dual_obj - cand_pen_dual_obj,
+        #    lambda _: (y_cand, cand_pen_dual_obj),
+        #    lambda _: (state.y, state.pen_dual_obj),
+        #    None)
         y_next, pen_dual_obj_next = lax.cond(
-            beta * (state.pen_dual_obj - lb_spec_est) <= state.pen_dual_obj - cand_pen_dual_obj,
+            beta * (pen_dual_obj - lb_spec_est) <= pen_dual_obj - cand_pen_dual_obj,
             lambda _: (y_cand, cand_pen_dual_obj),
-            lambda _: (state.y, state.pen_dual_obj),
+            lambda _: (state.y, pen_dual_obj),
             None)
 
         curr_VSV_T_factor = (state.V @ S_eigvecs[:, :k_curr]) * jnp.sqrt(S_eigvals[:k_curr]).reshape(1, -1)
