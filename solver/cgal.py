@@ -5,7 +5,7 @@ import jax
 import jax.numpy as jnp
 from jax import lax
 from jax._src.typing import Array
-from typing import Any, Callable, Tuple
+from typing import Any, Callable, Tuple, Union
 
 from solver.eigen import approx_grad_k_min_eigen
 
@@ -13,12 +13,19 @@ from IPython import embed
 
 
 def cgal(
+    X: Union[Array, None],
+    P: Union[Array, None],
+    y: Array,
+    z: Array,
+    primal_obj: float,
+    tr_X: float,
     n: int,
     m: int,
     trace_ub: float,
     C_matvec: Callable[[Array], Array],
     A_operator_slim: Callable[[Array], Array],
     A_adjoint_slim: Callable[[Array, Array], Array],
+    Omega: Union[Array, None],
     b: Array,
     beta0: float,
     SCALE_C: float,
@@ -30,7 +37,7 @@ def cgal(
 
     StateStruct = namedtuple(
         "StateStruct",
-        ["t", "X", "y", "z", "obj_val", "obj_gap", "infeas_gap"])
+        ["t", "X", "P", "y", "z", "primal_obj", "obj_gap", "infeas_gap"])
 
     @jax.jit
     def cond_func(state: StateStruct) -> bool:
@@ -55,51 +62,68 @@ def cgal(
         X_update_dir = trace_ub * min_eigvec @ min_eigvec.T
         min_eigvec = min_eigvec.reshape(-1,)
 
-        surrogate_dual_gap = state.obj_val - trace_ub*jnp.dot(min_eigvec, C_matvec(min_eigvec))
+        surrogate_dual_gap = state.primal_obj - trace_ub*jnp.dot(min_eigvec, C_matvec(min_eigvec))
         surrogate_dual_gap += jnp.dot(adjoint_left_vec, state.z)
         surrogate_dual_gap -= trace_ub * jnp.dot(min_eigvec, A_adjoint_slim(adjoint_left_vec, min_eigvec))
         obj_gap = surrogate_dual_gap - jnp.dot(state.y, state.z - b)
         obj_gap -= 0.5*beta*jnp.linalg.norm(state.z - b)**2
         obj_gap = obj_gap / (SCALE_C * SCALE_X)
-        obj_gap /= 1.0 + (jnp.abs(state.obj_val) / (SCALE_C * SCALE_X))
+        obj_gap /= 1.0 + (jnp.abs(state.primal_obj) / (SCALE_C * SCALE_X))
         infeas_gap = jnp.linalg.norm((state.z - b) / SCALE_X) 
         infeas_gap /= 1.0 + jnp.linalg.norm(b / SCALE_X)
         max_infeas = jnp.max(jnp.abs(state.z - b)) / SCALE_X
-        jax.debug.print("t: {t} - obj_val: {obj_val} - obj_gap: {obj_gap} -"
+        jax.debug.print("t: {t} - primal_obj: {primal_obj} - obj_gap: {obj_gap} -"
                         " infeas_gap: {infeas_gap} - max_infeas: {max_infeas}",
                         t=state.t,
-                        obj_val=state.obj_val / (SCALE_C * SCALE_X),
+                        primal_obj=state.primal_obj / (SCALE_C * SCALE_X),
                         obj_gap=obj_gap,
                         infeas_gap=infeas_gap,
                         max_infeas=max_infeas)
 
         eta = 2.0 / (state.t + 2.0)
-        X_next = (1-eta)*state.X + eta*X_update_dir
-        z_next = (1-eta)*state.z + eta*trace_ub*A_operator_slim(min_eigvec)
+
+        if Omega is None:
+            X_next = (1 - eta) * state.X + eta * X_update_dir
+            P_next = None
+        else:
+            X_next = None
+            min_eigvec = min_eigvec.reshape(-1, 1)
+            P_next = eta * state.P + trace_ub * min_eigvec @ (min_eigvec.T @ Omega)
+            min_eigvec = min_eigvec.reshape(-1,)
+
+        z_next = (1 - eta) * state.z + eta * trace_ub * A_operator_slim(min_eigvec)
 
         # TODO: fix dual step size here
-        y_next = state.y + 0.5*(z_next - b)
+        y_next = state.y + 0.5 * (z_next - b)
 
-        obj_val_next = (1-eta)*state.obj_val + eta*trace_ub*jnp.dot(min_eigvec, C_matvec(min_eigvec))
+        primal_obj_next = (1 - eta) * state.primal_obj
+        primal_obj_next += eta * trace_ub * jnp.dot(min_eigvec, C_matvec(min_eigvec))
 
         return StateStruct(
             t=state.t+1,
             X=X_next,
+            P=P_next,
             y=y_next,
             z=z_next,
-            obj_val=obj_val_next,
+            primal_obj=primal_obj_next,
             obj_gap=obj_gap,
             infeas_gap=infeas_gap)
 
     init_state = StateStruct(
         t=0,
-        X=jnp.zeros((n, n)) * SCALE_X,
-        y=jnp.zeros((m,)),
-        z=jnp.zeros((m,)),
-        obj_val=0.0,
+        X=X,
+        P=P,
+        y=y,
+        z=z,
+        primal_obj=primal_obj,
         obj_gap=1.1*eps,
         infeas_gap=1.1*eps)
 
     final_state = bounded_while_loop(cond_func, body_func, init_state, max_steps=max_iters)
 
-    return final_state.X, final_state.y
+    return (final_state.X,
+            final_state.P,
+            final_state.y,
+            final_state.z,
+            final_state.primal_obj,
+            trace_ub)

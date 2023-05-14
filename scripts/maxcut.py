@@ -117,6 +117,7 @@ def reconstruct(Omega: Array, P: Array, approx_eps: float = 1e-6) -> Tuple[np.nd
     Lambda = jnp.clip(Rho ** 2 - rho, 0, np.inf)
     return W, Lambda
 
+
 @jax.jit
 def compute_max_cut(Omega: Array, P: Array) -> int:
     W, _ = reconstruct(Omega, P)
@@ -145,7 +146,7 @@ if __name__ == "__main__":
     MAT_PATH = "./data/maxcut/Gset/G1.mat"
     WARM_START = False
     WARM_START_FRAC = 0.99
-    SOLVER = "specbm"           # either "specbm" or "cgal"
+    SOLVER = "cgal"           # either "specbm" or "cgal"
     K = 5                       # number of eigenvectors to compute for specbm
     R = 100                     # size of the sketch
 
@@ -276,7 +277,7 @@ if __name__ == "__main__":
                 SCALE_X=1.0,
                 eps=1e-4,
                 max_iters=1000,
-                lanczos_num_iters=150)
+                lanczos_num_iters=200)
 
         elif SOLVER == "cgal":
             # TODO: fix the output here to give back the same things as specbm
@@ -308,12 +309,17 @@ if __name__ == "__main__":
 
     print("\n+++++++++++++++++++++++++++++ BEGIN ++++++++++++++++++++++++++++++++++\n")
 
-    scaled_C = C
+    SCALE_X = 1.0 / float(n)
+    SCALE_C = 1.0 / scipy.sparse.linalg.norm(C, ord="fro") 
+    #SCALE_X = 1.0
+    #SCALE_C = 1.0
+
+    scaled_C = C * SCALE_C
     scaled_C = scaled_C.tocoo().T
     scaled_C = BCOO(
         (scaled_C.data, jnp.stack((scaled_C.row, scaled_C.col)).T), shape=scaled_C.shape)
 
-    trace_ub = 1.0 * float(n)
+    trace_ub = 1.0 * float(n) * SCALE_X
     m = n
 
     C_innerprod = create_C_innerprod(scaled_C)
@@ -323,7 +329,7 @@ if __name__ == "__main__":
     A_operator_slim = create_A_operator_slim()
     A_adjoint = create_A_adjoint(n)
     A_adjoint_slim = create_A_adjoint_slim()
-    b = jnp.ones((n,))
+    b = jnp.ones((n,)) * SCALE_X
 
     # for quadratic subproblem solved by interior point method
     Q_base = create_Q_base(m, k, U)
@@ -357,11 +363,31 @@ if __name__ == "__main__":
             k_past=k_past,
             SCALE_C=1.0,
             SCALE_X=1.0,
-            eps=1e-4,
+            eps=1e-6,
             max_iters=1000,
-            lanczos_num_iters=150)
+            lanczos_num_iters=200)
     elif SOLVER == "cgal":
-        raise NotImplementedError("Need to add CGAL here!")
+        X, P, y, z, primal_obj, tr_X = cgal(
+            X=X,
+            P=P,
+            y=y,
+            z=z,
+            primal_obj=primal_obj,
+            tr_X=tr_X,
+            n=n,
+            m=m,
+            trace_ub=trace_ub,
+            C_matvec=C_matvec,
+            A_operator_slim=A_operator_slim,
+            A_adjoint_slim=A_adjoint_slim,
+            Omega=Omega,
+            b=b,
+            beta0=1.0,
+            SCALE_C=SCALE_C,
+            SCALE_X=SCALE_X,
+            eps=1e-3,
+            max_iters=2500,
+            lanczos_num_iters=50)
 
     # compute max cut size
     max_cut_size = compute_max_cut(Omega, P)
