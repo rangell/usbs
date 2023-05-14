@@ -118,11 +118,13 @@ def reconstruct(Omega: Array, P: Array, approx_eps: float = 1e-6) -> Tuple[np.nd
     return W, Lambda
 
 
-@jax.jit
-def compute_max_cut(C: BCOO, Omega: Array, P: Array) -> int:
-    W, _ = reconstruct(Omega, P)
-    W_bin = 2 * (W > 0).astype(float) - 1
-    return jnp.max(jnp.diag(-W_bin.T @ C @ W_bin))
+def create_compute_max_cut(C: BCOO):
+    @jax.jit
+    def compute_max_cut(Omega: Array, P: Array) -> int:
+        W, _ = reconstruct(Omega, P)
+        W_bin = 2 * (W > 0).astype(float) - 1
+        return jnp.max(jnp.diag(-W_bin.T @ C @ W_bin))
+    return compute_max_cut
 
 
 def solve_scs(C: csc_matrix) -> np.ndarray[Any, Any]:
@@ -182,7 +184,7 @@ if __name__ == "__main__":
         
     # construct the test matrix for the sketch
     Omega = jax.random.normal(jax.random.PRNGKey(0), shape=(n, R))
-    Omega = None
+    #Omega = None
 
     if Omega is None:
         X = jnp.zeros((n, n))
@@ -277,7 +279,7 @@ if __name__ == "__main__":
                 SCALE_X=1.0,
                 eps=1e-4,
                 max_iters=1000,
-                lanczos_num_iters=200)
+                lanczos_num_iters=100)
 
         elif SOLVER == "cgal":
             # TODO: fix the output here to give back the same things as specbm
@@ -309,10 +311,14 @@ if __name__ == "__main__":
 
     print("\n+++++++++++++++++++++++++++++ BEGIN ++++++++++++++++++++++++++++++++++\n")
 
-    #SCALE_X = 1.0 / float(n)
-    #SCALE_C = 1.0 / scipy.sparse.linalg.norm(C, ord="fro") 
-    SCALE_X = 1.0
-    SCALE_C = 1.0
+    if SOLVER == "cgal":
+        SCALE_X = 1.0 / float(n)
+        SCALE_C = 1.0 / scipy.sparse.linalg.norm(C, ord="fro") 
+    elif SOLVER == "specbm":
+        SCALE_X = 1.0
+        SCALE_C = 1.0
+    else:
+        raise ValueError("Invalid SOLVER")
 
     scaled_C = C * SCALE_C
     scaled_C = scaled_C.tocoo().T
@@ -332,6 +338,7 @@ if __name__ == "__main__":
     A_operator_slim = create_A_operator_slim()
     A_adjoint = create_A_adjoint(n)
     A_adjoint_slim = create_A_adjoint_slim()
+    compute_max_cut = create_compute_max_cut(C)
     b = jnp.ones((n,)) * SCALE_X
 
     # for quadratic subproblem solved by interior point method
@@ -366,9 +373,10 @@ if __name__ == "__main__":
             k_past=k_past,
             SCALE_C=1.0,
             SCALE_X=1.0,
-            eps=1e-3,
+            eps=1e-4,
             max_iters=1000,
-            lanczos_num_iters=200)
+            lanczos_num_iters=100,
+            callback_fn=compute_max_cut)
     elif SOLVER == "cgal":
         X, P, y, z, primal_obj, tr_X = cgal(
             X=X,
@@ -389,14 +397,11 @@ if __name__ == "__main__":
             SCALE_C=SCALE_C,
             SCALE_X=SCALE_X,
             eps=1e-3,
-            max_iters=1200,
-            lanczos_num_iters=50)
-
-    Omega = jax.random.normal(jax.random.PRNGKey(0), shape=(n, R))
-    P = X @ Omega
-
-    # compute max cut size
-    max_cut_size = compute_max_cut(C, Omega, P)
+            max_iters=500,
+            lanczos_num_iters=50,
+            callback_fn=compute_max_cut)
+    else:
+        raise ValueError("Invalid SOLVER")
 
     embed()
     exit()

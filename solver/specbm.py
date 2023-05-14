@@ -379,6 +379,7 @@ def specbm(
     eps: float,
     max_iters: int,
     lanczos_num_iters: int,
+    callback_fn: Union[Callable[[Array, Array], Array], None]
 ) -> Tuple[Array, Array, Array, Array, Array]:
 
     C_matmat = jax.vmap(C_matvec, 1, 1)
@@ -554,20 +555,28 @@ def specbm(
         infeas_gap /= 1.0 + jnp.linalg.norm(b / SCALE_X)
         max_infeas = jnp.max(jnp.abs(state.z - b)) / SCALE_X
 
+        if Omega is not None and callback_fn is not None:
+            callback_val = callback_fn(Omega, state.P)
+        else:
+            callback_val = None
+
         end_time = hcb.call(lambda _: time.time(), arg=0, result_shape=float)
         jax.debug.print("t: {t} - end_time: {end_time} - pen_dual_obj: {pen_dual_obj}"
                         " - cand_pen_dual_obj: {cand_pen_dual_obj} - lb_spec_est: {lb_spec_est}"
-                        " - pen_dual_obj_next: {pen_dual_obj_next} - obj_val: {obj_val}"
-                        " - infeas_gap: {infeas_gap}  - max_infeas: {max_infeas}",
+                        " - pen_dual_obj_next: {pen_dual_obj_next} - primal_obj: {primal_obj}"
+                        " - obj_gap: {obj_gap} - infeas_gap: {infeas_gap}"
+                        " - max_infeas: {max_infeas} - callback_val: {callback_val}",
                         t=state.t,
                         end_time=end_time,
                         pen_dual_obj=state.pen_dual_obj,
                         cand_pen_dual_obj=cand_pen_dual_obj,
                         lb_spec_est=lb_spec_est,
                         pen_dual_obj_next=pen_dual_obj_next,
-                        obj_val=obj_val,
+                        primal_obj=primal_obj_next,
+                        obj_gap=jnp.abs(obj_val + pen_dual_obj_next) / (1.0 + jnp.abs(obj_val)),
                         infeas_gap=infeas_gap,
-                        max_infeas=max_infeas)
+                        max_infeas=max_infeas,
+                        callback_val=callback_val)
 
         return StateStruct(
             t=state.t+1,
