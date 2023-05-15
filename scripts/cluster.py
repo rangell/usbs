@@ -158,23 +158,24 @@ if __name__ == "__main__":
     # load the problem data
     try:
         problem = loadmat(MAT_PATH)
+        dict_format = False
     except:
         problem = mat73_loadmat(MAT_PATH)
+        dict_format = True
+
     if "Gset" in MAT_PATH:
         C = problem["Problem"][0][0][1]
-    elif "DIMACS" in MAT_PATH:
+    elif "DIMACS" in MAT_PATH and not dict_format:
         C = problem["Problem"][0][0][2]
+    elif "DIMACS" in MAT_PATH and dict_format:
+        C = problem["Problem"]["A"]
     else:
         raise ValueError("Unknown path type")
-    n = C.shape[0]
-
-    embed()
-    exit()
-
-    C = scipy.sparse.spdiags((C @ np.ones((n,1))).T, 0, n, n) - C
-    C = 0.5*(C + C.T)
-    C = -0.25*C
-    C = C.tocsc()
+    n_orig = C.shape[0]
+    n = n_orig + C.nnz
+    C = (C + C.T) / 2
+    C = C.tocoo()
+    C = coo_matrix((C.data, (C.row, C.col)), shape=(n, n))
 
     ## solve with SCS if we have not already
     #scs_soln_cache = str(Path(MAT_PATH).with_suffix("")) + "_scs_soln.pkl"
@@ -235,15 +236,10 @@ if __name__ == "__main__":
             (warm_start_C.data, jnp.stack((warm_start_C.row, warm_start_C.col)).T),
             shape=warm_start_C.shape)
 
-        warm_start_C_innerprod = create_C_innerprod(scaled_warm_start_C)
-        warm_start_C_add = create_C_add(scaled_warm_start_C)
         warm_start_C_matvec = create_C_matvec(scaled_warm_start_C)
-        warm_start_A_operator = create_A_operator()
         warm_start_A_operator_slim = create_A_operator_slim()
-        warm_start_A_adjoint = create_A_adjoint(warm_start_n)
         warm_start_A_adjoint_slim = create_A_adjoint_slim()
         warm_start_b = jnp.ones((warm_start_n,)) * WARM_START_SCALE_X
-        warm_start_compute_max_cut = create_compute_max_cut(warm_start_C)
 
         if Omega is None:
             warm_start_X = jnp.zeros((warm_start_n, warm_start_n))
@@ -276,12 +272,8 @@ if __name__ == "__main__":
                 m=warm_start_m,
                 trace_ub=warm_start_trace_ub,
                 C=warm_start_C,
-                C_innerprod=warm_start_C_innerprod,
-                C_add=warm_start_C_add,
                 C_matvec=warm_start_C_matvec,
-                A_operator=warm_start_A_operator,
                 A_operator_slim=warm_start_A_operator_slim,
-                A_adjoint=warm_start_A_adjoint,
                 A_adjoint_slim=warm_start_A_adjoint_slim,
                 Q_base=Q_base,
                 U=U,
@@ -296,7 +288,7 @@ if __name__ == "__main__":
                 eps=EPS,
                 max_iters=WARM_START_MAX_ITERS,
                 lanczos_num_iters=LANCZOS_NUM_ITERS,
-                callback_fn=warm_start_compute_max_cut)
+                callback_fn=None)
 
         elif SOLVER == "cgal":
             (warm_start_X,
@@ -325,7 +317,7 @@ if __name__ == "__main__":
                 eps=EPS,
                 max_iters=WARM_START_MAX_ITERS,
                 lanczos_num_iters=LANCZOS_NUM_ITERS,
-                callback_fn=warm_start_compute_max_cut)
+                callback_fn=None)
         else:
             raise ValueError("Invalid SOLVER")
 
@@ -363,14 +355,13 @@ if __name__ == "__main__":
     trace_ub = 1.0 * float(n) * SCALE_X
     m = n
 
-    C_innerprod = create_C_innerprod(scaled_C)
-    C_add = create_C_add(scaled_C)
     C_matvec = create_C_matvec(scaled_C)
-    A_operator = create_A_operator()
+
+    embed()
+    exit()
+
     A_operator_slim = create_A_operator_slim()
-    A_adjoint = create_A_adjoint(n)
     A_adjoint_slim = create_A_adjoint_slim()
-    compute_max_cut = create_compute_max_cut(C)
     b = jnp.ones((n,)) * SCALE_X
 
     # for quadratic subproblem solved by interior point method
@@ -388,12 +379,8 @@ if __name__ == "__main__":
             m=n,
             trace_ub=trace_ub,
             C=C,
-            C_innerprod=C_innerprod,
-            C_add=C_add,
             C_matvec=C_matvec,
-            A_operator=A_operator,
             A_operator_slim=A_operator_slim,
-            A_adjoint=A_adjoint,
             A_adjoint_slim=A_adjoint_slim,
             Q_base=Q_base,
             U=U,
@@ -408,7 +395,7 @@ if __name__ == "__main__":
             eps=EPS,
             max_iters=MAX_ITERS,
             lanczos_num_iters=LANCZOS_NUM_ITERS,
-            callback_fn=compute_max_cut)
+            callback_fn=None)
     elif SOLVER == "cgal":
         X, P, y, z, primal_obj, tr_X = cgal(
             X=X,
@@ -431,6 +418,6 @@ if __name__ == "__main__":
             eps=EPS,
             max_iters=MAX_ITERS,
             lanczos_num_iters=LANCZOS_NUM_ITERS,
-            callback_fn=compute_max_cut)
+            callback_fn=None)
     else:
         raise ValueError("Invalid SOLVER")
