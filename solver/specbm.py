@@ -129,15 +129,13 @@ def solve_quadratic_subproblem(
             lambda step_size: jnp.linalg.eigh(ipm_state.S + step_size * delta_S)[0][0] < 0.0,
             lambda step_size: step_size * 0.8, 
             step_size,
-            max_steps=100,
-            base=128)
+            max_steps=100)
 
         step_size = bounded_while_loop(
             lambda step_size: jnp.linalg.eigh(ipm_state.T + step_size * delta_T)[0][0] < 0.0,
             lambda step_size: step_size * 0.8, 
             step_size,
-            max_steps=100,
-            base=128)
+            max_steps=100)
 
         S_next = ipm_state.S + step_size * delta_S
         eta_next = ipm_state.eta + step_size * delta_eta
@@ -176,8 +174,7 @@ def solve_quadratic_subproblem(
         lambda ipm_state: ipm_state.mu.squeeze() > ipm_eps,
         body_func, 
         init_ipm_state,
-        max_steps=ipm_max_iters,
-        base=128)
+        max_steps=ipm_max_iters)
 
     return ((trace_ub / tr_X_bar) * final_ipm_state.eta.squeeze(),
             trace_ub * final_ipm_state.S)
@@ -276,15 +273,13 @@ def compute_lb_spec_est(
             lambda step_size: jnp.linalg.eigh(ipm_state.S + step_size * delta_S)[0][0] < 0.0,
             lambda step_size: step_size * 0.8, 
             step_size,
-            max_steps=100,
-            base=128)
+            max_steps=100)
 
         step_size = bounded_while_loop(
             lambda step_size: jnp.linalg.eigh(ipm_state.T + step_size * delta_T)[0][0] < 0.0,
             lambda step_size: step_size * 0.8, 
             step_size,
-            max_steps=100,
-            base=128)
+            max_steps=100)
 
         S_next = ipm_state.S + step_size * delta_S
         eta_next = ipm_state.eta + step_size * delta_eta
@@ -346,8 +341,7 @@ def compute_lb_spec_est(
                                           ipm_state.obj_gap > ipm_eps),
         body_func, 
         init_ipm_state,
-        max_steps=ipm_max_iters,
-        base=128)
+        max_steps=ipm_max_iters)
 
     lb_spec_est = jnp.dot(b, y) + jnp.dot(g_1, svec(final_ipm_state.S))
     lb_spec_est += final_ipm_state.eta.squeeze() * g_2
@@ -644,7 +638,7 @@ def specbm(
         pen_dual_obj=pen_dual_obj,
         lb_spec_est=0.0)
 
-    final_state = bounded_while_loop(cond_func, body_func, init_state, max_steps=max_iters, base=128)
+    final_state = bounded_while_loop(cond_func, body_func, init_state, max_steps=max_iters)
 
     return (final_state.X,
             final_state.P,

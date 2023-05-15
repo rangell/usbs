@@ -137,8 +137,7 @@ def cgal(
         obj_gap=1.1*eps,
         infeas_gap=1.1*eps)
 
-    #final_state = bounded_while_loop(cond_func, body_func, init_state, max_steps=max_iters, base=128)
-    final_state = lax.fori_loop(0, max_iters, lambda _, state: body_func(state), init_state)
+    final_state = bounded_while_loop(cond_func, body_func, init_state, max_steps=max_iters)
 
     return (final_state.X,
             final_state.P,
