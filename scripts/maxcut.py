@@ -10,6 +10,7 @@ from pathlib import Path
 import pickle
 import scipy  # type: ignore
 from scipy.io import loadmat  # type: ignore
+from mat73 import loadmat as mat73_loadmat
 from scipy.sparse import coo_matrix, csc_matrix  # type: ignore
 from typing import Any, Callable, Tuple
 
@@ -188,9 +189,18 @@ if __name__ == "__main__":
     jax.config.update("jax_enable_x64", True)
 
     # load the problem data
-    problem = loadmat(MAT_PATH)
-    C = problem["Problem"][0][0][1]
+    try:
+        problem = loadmat(MAT_PATH)
+    except:
+        problem = mat73_loadmat(MAT_PATH)
+    if "Gset" in MAT_PATH:
+        C = problem["Problem"][0][0][1]
+    elif "DIMACS" in MAT_PATH:
+        C = problem["Problem"][0][0][2]
+    else:
+        raise ValueError("Unknown path type")
     n = C.shape[0]
+
     C = scipy.sparse.spdiags((C @ np.ones((n,1))).T, 0, n, n) - C
     C = 0.5*(C + C.T)
     C = -0.25*C
