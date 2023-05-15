@@ -1,3 +1,4 @@
+import argparse
 import cvxpy as cp
 import jax
 import jax.numpy as jnp
@@ -141,18 +142,36 @@ def solve_scs(C: csc_matrix) -> np.ndarray[Any, Any]:
     X_scs = X.value
     return X_scs
 
+def get_hparams():
+    parser = argparse.ArgumentParser() 
+    parser.add_argument('--data_path', type=str, required=True, help="path to mat file")
+    parser.add_argument('--warm_start', action='store_true', help="warm-start or not")
+    parser.add_argument('--warm_start_frac', type=float, required=True,
+                        help="fraction of data used to warmkstart")
+    parser.add_argument('--solver', type=str, required=True, choices=["specbm", "cgal"],
+                        help="name of solver to use")
+    parser.add_argument('--warm_start_max_iters', type=int,
+                        help="number of iterations to run warm-start")
+    parser.add_argument('--max_iters', type=int, required=True,
+                        help="number of iterations to run solver")
+    hparams = parser.parse_args()
+    return hparams
 
 if __name__ == "__main__":
 
+    hparams = get_hparams()
+
     # variables controlling experiment
-    MAT_PATH = "./data/maxcut/Gset/G1.mat"
-    WARM_START = True
-    WARM_START_FRAC = 0.99
-    SOLVER = "cgal"           # either "specbm" or "cgal"
+    MAT_PATH = hparams.data_path
+    WARM_START = hparams.warm_start
+    WARM_START_FRAC = hparams.warm_start_frac
+    SOLVER = hparams.solver
     K = 5                       # number of eigenvectors to compute for specbm
     R = 100                     # size of the sketch
     LANCZOS_NUM_ITERS = 100
     EPS = 1e-5
+    WARM_START_MAX_ITERS = hparams.warm_start_max_iters
+    MAX_ITERS = hparams.max_iters
 
     # print out all of the variable for this experiment
     print("MAT_PATH: ", MAT_PATH)
@@ -163,6 +182,8 @@ if __name__ == "__main__":
     print("R: ", R)
     print("LANCZOS_NUM_ITERS: ", LANCZOS_NUM_ITERS)
     print("EPS: ", EPS)
+    print("WARM_START_MAX_ITERS: ", WARM_START_MAX_ITERS)
+    print("MAX_ITERS: ", MAX_ITERS)
 
     jax.config.update("jax_enable_x64", True)
 
@@ -175,15 +196,15 @@ if __name__ == "__main__":
     C = -0.25*C
     C = C.tocsc()
 
-    # solve with SCS if we have not already
-    scs_soln_cache = str(Path(MAT_PATH).with_suffix("")) + "_scs_soln.pkl"
-    if Path(scs_soln_cache).is_file():
-        with open(scs_soln_cache, "rb") as f_in:
-            X_scs = pickle.load(f_in)
-    else:
-        X_scs = solve_scs(C)
-        with open(scs_soln_cache, "wb") as f_out:
-            pickle.dump(X_scs, f_out)
+    ## solve with SCS if we have not already
+    #scs_soln_cache = str(Path(MAT_PATH).with_suffix("")) + "_scs_soln.pkl"
+    #if Path(scs_soln_cache).is_file():
+    #    with open(scs_soln_cache, "rb") as f_in:
+    #        X_scs = pickle.load(f_in)
+    #else:
+    #    X_scs = solve_scs(C)
+    #    with open(scs_soln_cache, "wb") as f_out:
+    #        pickle.dump(X_scs, f_out)
         
     # construct the test matrix for the sketch
     Omega = jax.random.normal(jax.random.PRNGKey(0), shape=(n, R))
@@ -293,7 +314,7 @@ if __name__ == "__main__":
                 SCALE_C=1.0,
                 SCALE_X=1.0,
                 eps=EPS,
-                max_iters=5000,
+                max_iters=WARM_START_MAX_ITERS,
                 lanczos_num_iters=LANCZOS_NUM_ITERS,
                 callback_fn=warm_start_compute_max_cut)
 
@@ -322,7 +343,7 @@ if __name__ == "__main__":
                 SCALE_C=WARM_START_SCALE_C,
                 SCALE_X=WARM_START_SCALE_X,
                 eps=EPS,
-                max_iters=10000,
+                max_iters=WARM_START_MAX_ITERS,
                 lanczos_num_iters=LANCZOS_NUM_ITERS,
                 callback_fn=warm_start_compute_max_cut)
         else:
@@ -405,7 +426,7 @@ if __name__ == "__main__":
             SCALE_C=1.0,
             SCALE_X=1.0,
             eps=EPS,
-            max_iters=5000,
+            max_iters=MAX_ITERS,
             lanczos_num_iters=LANCZOS_NUM_ITERS,
             callback_fn=compute_max_cut)
     elif SOLVER == "cgal":
@@ -428,7 +449,7 @@ if __name__ == "__main__":
             SCALE_C=SCALE_C,
             SCALE_X=SCALE_X,
             eps=EPS,
-            max_iters=10000,
+            max_iters=MAX_ITERS,
             lanczos_num_iters=LANCZOS_NUM_ITERS,
             callback_fn=compute_max_cut)
     else:
