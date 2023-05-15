@@ -16,6 +16,7 @@ from typing import Any, Callable, Tuple
 
 from solver.cgal import cgal
 from solver.specbm import specbm
+from solver.eigen import approx_grad_k_min_eigen
 
 from IPython import embed
 
@@ -82,15 +83,6 @@ def reconstruct(Omega: Array, P: Array, approx_eps: float = 1e-6) -> Tuple[np.nd
     return W, Lambda
 
 
-def create_compute_max_cut(C: BCOO):
-    @jax.jit
-    def compute_max_cut(Omega: Array, P: Array) -> int:
-        W, _ = reconstruct(Omega, P)
-        W_bin = 2 * (W > 0).astype(float) - 1
-        return jnp.max(jnp.diag(-W_bin.T @ C @ W_bin))
-    return compute_max_cut
-
-
 def solve_scs(C: csc_matrix) -> np.ndarray[Any, Any]:
     n = C.shape[0]
     X = cp.Variable((n,n), symmetric=True)
@@ -124,19 +116,30 @@ def get_hparams():
 
 if __name__ == "__main__":
 
-    hparams = get_hparams()
+    #hparams = get_hparams()
 
     # variables controlling experiment
-    MAT_PATH = hparams.data_path
-    WARM_START = hparams.warm_start
-    WARM_START_FRAC = hparams.warm_start_frac
-    SOLVER = hparams.solver
+    #MAT_PATH = hparams.data_path
+    #WARM_START = hparams.warm_start
+    #WARM_START_FRAC = hparams.warm_start_frac
+    #SOLVER = hparams.solver
+    #K = 5                       # number of eigenvectors to compute for specbm
+    #R = 100                     # size of the sketch
+    #LANCZOS_NUM_ITERS = 100
+    #EPS = 1e-5
+    #WARM_START_MAX_ITERS = hparams.warm_start_max_iters
+    #MAX_ITERS = hparams.max_iters
+
+    MAT_PATH = "data/maxcut/DIMACS10/chesapeake.mat"
+    WARM_START = False
+    WARM_START_FRAC = 1.0
+    SOLVER = "specbm"
     K = 5                       # number of eigenvectors to compute for specbm
     R = 100                     # size of the sketch
     LANCZOS_NUM_ITERS = 100
     EPS = 1e-5
-    WARM_START_MAX_ITERS = hparams.warm_start_max_iters
-    MAX_ITERS = hparams.max_iters
+    WARM_START_MAX_ITERS = 100
+    MAX_ITERS = 100
 
     # print out all of the variable for this experiment
     print("MAT_PATH: ", MAT_PATH)
@@ -155,21 +158,18 @@ if __name__ == "__main__":
     # load the problem data
     try:
         problem = loadmat(MAT_PATH)
-        dict_format = False
     except:
         problem = mat73_loadmat(MAT_PATH)
-        dict_format = True
-
     if "Gset" in MAT_PATH:
         C = problem["Problem"][0][0][1]
-    elif "DIMACS" in MAT_PATH and not dict_format:
+    elif "DIMACS" in MAT_PATH:
         C = problem["Problem"][0][0][2]
-    elif "DIMACS" in MAT_PATH and dict_format:
-        C = problem["Problem"]["A"]
     else:
         raise ValueError("Unknown path type")
-
     n = C.shape[0]
+
+    embed()
+    exit()
 
     C = scipy.sparse.spdiags((C @ np.ones((n,1))).T, 0, n, n) - C
     C = 0.5*(C + C.T)
@@ -235,8 +235,12 @@ if __name__ == "__main__":
             (warm_start_C.data, jnp.stack((warm_start_C.row, warm_start_C.col)).T),
             shape=warm_start_C.shape)
 
+        warm_start_C_innerprod = create_C_innerprod(scaled_warm_start_C)
+        warm_start_C_add = create_C_add(scaled_warm_start_C)
         warm_start_C_matvec = create_C_matvec(scaled_warm_start_C)
+        warm_start_A_operator = create_A_operator()
         warm_start_A_operator_slim = create_A_operator_slim()
+        warm_start_A_adjoint = create_A_adjoint(warm_start_n)
         warm_start_A_adjoint_slim = create_A_adjoint_slim()
         warm_start_b = jnp.ones((warm_start_n,)) * WARM_START_SCALE_X
         warm_start_compute_max_cut = create_compute_max_cut(warm_start_C)
@@ -272,8 +276,12 @@ if __name__ == "__main__":
                 m=warm_start_m,
                 trace_ub=warm_start_trace_ub,
                 C=warm_start_C,
+                C_innerprod=warm_start_C_innerprod,
+                C_add=warm_start_C_add,
                 C_matvec=warm_start_C_matvec,
+                A_operator=warm_start_A_operator,
                 A_operator_slim=warm_start_A_operator_slim,
+                A_adjoint=warm_start_A_adjoint,
                 A_adjoint_slim=warm_start_A_adjoint_slim,
                 Q_base=Q_base,
                 U=U,
@@ -355,8 +363,12 @@ if __name__ == "__main__":
     trace_ub = 1.0 * float(n) * SCALE_X
     m = n
 
+    C_innerprod = create_C_innerprod(scaled_C)
+    C_add = create_C_add(scaled_C)
     C_matvec = create_C_matvec(scaled_C)
+    A_operator = create_A_operator()
     A_operator_slim = create_A_operator_slim()
+    A_adjoint = create_A_adjoint(n)
     A_adjoint_slim = create_A_adjoint_slim()
     compute_max_cut = create_compute_max_cut(C)
     b = jnp.ones((n,)) * SCALE_X
@@ -376,8 +388,12 @@ if __name__ == "__main__":
             m=n,
             trace_ub=trace_ub,
             C=C,
+            C_innerprod=C_innerprod,
+            C_add=C_add,
             C_matvec=C_matvec,
+            A_operator=A_operator,
             A_operator_slim=A_operator_slim,
+            A_adjoint=A_adjoint,
             A_adjoint_slim=A_adjoint_slim,
             Q_base=Q_base,
             U=U,
