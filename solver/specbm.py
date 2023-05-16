@@ -407,7 +407,7 @@ def specbm(
         return jnp.logical_or(
             state.t == 0, (state.pen_dual_obj - state.lb_spec_est) / (1.0 + state.pen_dual_obj) > eps)
 
-    @jax.jit
+    #@jax.jit
     def body_func(state: StateStruct) -> StateStruct:
 
         jax.debug.print("start_time: {time}",
@@ -500,6 +500,7 @@ def specbm(
         prev_eigvals = -prev_eigvals
         pen_dual_obj = jnp.dot(-b, state.y) + trace_ub*jnp.clip(prev_eigvals[0], a_min=0)
         pen_dual_obj = jnp.clip(state.pen_dual_obj, a_min=pen_dual_obj)
+        #pen_dual_obj = state.pen_dual_obj
 
         #####################################################################################
 
@@ -618,6 +619,7 @@ def specbm(
         k=k,
         num_iters=lanczos_num_iters,
         rng=jax.random.PRNGKey(0))
+    
     prev_eigvals = -prev_eigvals
     pen_dual_obj = jnp.dot(-b, y) + trace_ub*jnp.clip(prev_eigvals[0], a_min=0)
 
@@ -638,7 +640,26 @@ def specbm(
         pen_dual_obj=pen_dual_obj,
         lb_spec_est=0.0)
 
+    state = init_state
+    for _ in range(80):
+        state = body_func(state)
+
+    embed()
+    exit()
+
+    import pickle
+    with open("state.pkl", "rb") as f:
+        state = StateStruct(*pickle.load(f))
+
+    state = body_func(state)
+
+    embed()
+    exit()
+
     final_state = bounded_while_loop(cond_func, body_func, init_state, max_steps=max_iters)
+
+    embed()
+    exit()
 
     return (final_state.X,
             final_state.P,

@@ -11,6 +11,7 @@ import pickle
 import scipy  # type: ignore
 from scipy.io import loadmat  # type: ignore
 from mat73 import loadmat as mat73_loadmat
+import numpy as np
 from scipy.sparse import coo_matrix, csc_matrix  # type: ignore
 from typing import Any, Callable, Tuple
 
@@ -36,7 +37,7 @@ def create_A_operator_slim(
     @jax.jit
     def A_operator_slim(u: Array) -> Array:
         outvec = jnp.zeros((n,))
-        outvec.at[A_indices[:,0]].add(
+        outvec = outvec.at[A_indices[:,0]].add(
             A_data * u.at[A_indices[:,1]].get() * u.at[A_indices[:,2]].get())
         return outvec
 
@@ -51,7 +52,7 @@ def create_A_adjoint_slim(
     @jax.jit
     def A_adjoint(z: Array, u: Array) -> Array:
         outvec = jnp.zeros((n,))
-        outvec.at[A_indices[:,2]].add(
+        outvec = outvec.at[A_indices[:,2]].add(
             A_data * z.at[A_indices[:,0]].get() * u.at[A_indices[:,1]].get())
         return outvec
     return A_adjoint
@@ -103,6 +104,7 @@ def solve_scs(C: csc_matrix) -> np.ndarray[Any, Any]:
     X = cp.Variable((n,n), symmetric=True)
     constraints = [X >> 0]
     constraints += [cp.diag(X) == np.ones((n,))]
+    constraints += [X >= 0]
     prob = cp.Problem(cp.Minimize(cp.trace(C @ X)), constraints)
     prob.solve(solver=cp.SCS, verbose=True)
 
@@ -131,6 +133,8 @@ def get_hparams():
 
 if __name__ == "__main__":
 
+    np.random.seed(0)
+
     #hparams = get_hparams()
 
     # variables controlling experiment
@@ -148,11 +152,11 @@ if __name__ == "__main__":
     MAT_PATH = "data/maxcut/DIMACS10/chesapeake.mat"
     WARM_START = False
     WARM_START_FRAC = 1.0
-    SOLVER = "cgal"
+    SOLVER = "specbm"
     K = 5                       # number of eigenvectors to compute for specbm
     R = 100                     # size of the sketch
-    LANCZOS_NUM_ITERS = 100
-    EPS = 1e-5
+    LANCZOS_NUM_ITERS = 300     
+    EPS = 1e-7
     WARM_START_MAX_ITERS = 100
     MAX_ITERS = 100
 
@@ -186,19 +190,16 @@ if __name__ == "__main__":
         C = problem["Problem"]["A"]
     else:
         raise ValueError("Unknown path type")
+
     n_orig = C.shape[0]
-    C = (C + C.T) / 2
-    n = int(n_orig + (C.nnz / 2))  # NOTE: this assumes the diagonals are all zero
-    C = C.tocoo()
-    C = coo_matrix((C.data, (C.row, C.col)), shape=(n, n))
 
-    # sample edge weights
-    edge_signs = jax.random.bernoulli(jax.random.PRNGKey(0), p=0.2, shape=(C.nnz,))
-    edge_signs = 2 * (edge_signs.astype(float)) - 1
-    edge_weights = edge_signs + jax.random.normal(jax.random.PRNGKey(1), shape=(C.nnz,))
-
+    edge_signs = 2 * np.random.binomial(1, 0.25, C.nnz) - 1
+    edge_weights = edge_signs + np.random.normal(scale=0.5, size=(C.nnz,))
+    C.data *= edge_weights
+    C = -0.5*(C + C.T)      # make matrix symmetric and negate edges for minimization
+    n = int(n_orig + (C.nnz / 2))  # NOTE: this assumes the diagonals are all zero 
     C = C.tocoo()
-    C = BCOO((edge_weights, jnp.stack((C.row, C.col)).T), shape=C.shape)
+    C = BCOO((C.data, jnp.stack((C.row, C.col)).T), shape=(n, n))
 
     if SOLVER == "cgal":
         SCALE_X = 1.0 / float(n)
@@ -206,19 +207,18 @@ if __name__ == "__main__":
     elif SOLVER == "specbm":
         SCALE_X = 1.0
         SCALE_C = 1.0
+        #SCALE_X = 1.0 / float(n)
+        #SCALE_C = 1.0 / jnp.linalg.norm(C.data)
     else:
         raise ValueError("Invalid SOLVER")
 
     scaled_C = C * SCALE_C
-
-    trace_ub = 1.0 * float(n) * SCALE_X
-    m = n
-
     C_matvec = create_C_matvec(scaled_C)
-        
+    trace_ub = 1.0 * float(n) * SCALE_X
+
     # construct the test matrix for the sketch
     Omega = jax.random.normal(jax.random.PRNGKey(0), shape=(n, R))
-    #Omega = None
+    Omega = None
 
     if Omega is None:
         X = jnp.zeros((n, n))
@@ -228,11 +228,12 @@ if __name__ == "__main__":
         P = jnp.zeros((n, R))
     y = jnp.zeros((n,))
     z = jnp.zeros((n,))
+
     tr_X = 0.0
     primal_obj = 0.0
 
     k_curr = K
-    k_past = 0
+    k_past = 1
     k = k_curr + k_past
 
     # for interior point methods
@@ -389,17 +390,16 @@ if __name__ == "__main__":
     A_data = jnp.concatenate([A_data, A_data_new], axis=0)
     A_indices = jnp.concatenate([A_indices, A_indices_new], axis=0)
     
-    # how to compute A_operator:
-    #   outvec = jnp.zeros((n,))
-    #   outvec.at[A_indices[:,0]].add(A_data * u.at[A_indices[:,1]].get() * u.at[A_indices[:,2]].get())
-
-    # how to compute A_adjoint:
-    #   outvec = jnp.zeros((n,))
-    #   outvec.at[A_indices[:,2]].add(A_data * z.at[A_indices[:,0]].get() * u.at[A_indices[:,1]].get())
-
     A_operator_slim = create_A_operator_slim(n, A_data, A_indices)
     A_adjoint_slim = create_A_adjoint_slim(n, A_data, A_indices)
     b = jnp.concatenate([jnp.ones((n_orig,)), jnp.zeros((n - n_orig,))]) * SCALE_X
+    m = b.size
+
+    # Testing a different initialization
+    # IMPORTANT: `jnp.diag(X)` is not necessarily `z`!
+    X = X.at[(jnp.arange(n), jnp.arange(n))].set(SCALE_X - b)
+    z = SCALE_X - b
+    tr_X = jnp.trace(X)
 
     # for quadratic subproblem solved by interior point method
     Q_base = create_Q_base(m, k, U)
@@ -413,7 +413,7 @@ if __name__ == "__main__":
             primal_obj=primal_obj,
             tr_X=tr_X,
             n=n,
-            m=n,
+            m=m,
             trace_ub=trace_ub,
             C=C,
             C_matvec=C_matvec,
@@ -427,8 +427,8 @@ if __name__ == "__main__":
             beta=0.25,
             k_curr=k_curr,
             k_past=k_past,
-            SCALE_C=1.0,
-            SCALE_X=1.0,
+            SCALE_C=SCALE_C,
+            SCALE_X=SCALE_X,
             eps=EPS,
             max_iters=MAX_ITERS,
             lanczos_num_iters=LANCZOS_NUM_ITERS,
@@ -458,3 +458,6 @@ if __name__ == "__main__":
             callback_fn=None)
     else:
         raise ValueError("Invalid SOLVER")
+
+    embed()
+    exit()

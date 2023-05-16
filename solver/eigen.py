@@ -23,23 +23,26 @@ def approx_grad_k_min_eigen(
 
     TriDiagStateStruct = namedtuple("TriDiagStateStruct", ["t", "V", "diag", "off_diag"])
 
-    def tri_diag_body_func(t: int, state: TriDiagStateStruct) -> TriDiagStateStruct:
+    def tri_diag_cond_func(state: TriDiagStateStruct) -> bool:
+        return jnp.logical_or(state.t == 1, state.off_diag[state.t] > 1e-6)
+
+    def tri_diag_body_func(state: TriDiagStateStruct) -> TriDiagStateStruct:
         V = state.V
         diag = state.diag
         off_diag = state.off_diag
-        transformed_v = C_matvec(V[t]) + A_adjoint_slim(adjoint_left_vec, V[t])
-        transformed_v = transformed_v - (off_diag[t] * V[t-1]) # heed the off_diag index
-        diag = diag.at[t].set(jnp.dot(V[t], transformed_v))
-        v_next = transformed_v - (diag[t] * V[t])  
+        transformed_v = C_matvec(V[state.t]) + A_adjoint_slim(adjoint_left_vec, V[state.t])
+        transformed_v = transformed_v - (off_diag[state.t] * V[state.t-1]) # heed the off_diag index
+        diag = diag.at[state.t].set(jnp.dot(V[state.t], transformed_v))
+        v_next = transformed_v - (diag[state.t] * V[state.t])  
 
         # full reorthogonalization here
         v_next -= jnp.sum((V @ v_next).reshape(-1, 1) * V, axis=0)
 
-        off_diag = off_diag.at[t+1].set(jnp.linalg.norm(v_next))
-        v_next /= off_diag[t+1]
-        V = V.at[t+1].set(v_next)
+        off_diag = off_diag.at[state.t+1].set(jnp.linalg.norm(v_next))
+        v_next /= off_diag[state.t+1]
+        V = V.at[state.t+1].set(v_next)
         return TriDiagStateStruct(
-            t=t+1, V=V, diag=diag, off_diag=off_diag
+            t=state.t+1, V=V, diag=diag, off_diag=off_diag
         )
 
     v_1 = jax.random.normal(rng, shape=(n,))
@@ -54,12 +57,29 @@ def approx_grad_k_min_eigen(
         diag=jnp.zeros((num_iters+1,)),
         off_diag=jnp.zeros((num_iters+2,)))
 
-    final_state = lax.fori_loop(1, num_iters+1, tri_diag_body_func, init_state)
+    final_state = bounded_while_loop(
+        tri_diag_cond_func, tri_diag_body_func, init_state, max_steps=num_iters)
 
     # remove dimension hacking initiated at (*)
     V = final_state.V[1:-1,:]
     diag = final_state.diag[1:]
     off_diag = final_state.off_diag[2:-1]
+
+    # handle the case where we find an invariant subspace before `num_iters` is up
+    max_eigval = jax.scipy.linalg.eigh_tridiagonal(
+        diag,
+        off_diag,
+        select="i",
+        select_range=(num_iters-1,num_iters-1),
+        eigvals_only=True)
+    off_diag = lax.cond(
+        final_state.t < num_iters,
+        lambda _: off_diag.at[final_state.t-2].set(0.0),
+        lambda _: off_diag,
+        None)
+    update_mask = (jnp.arange(num_iters) >= final_state.t - 1).astype(float)
+    update_mask *= 2.0 * jnp.abs(max_eigval) + 1.0
+    diag += update_mask
 
     # Compute eigenvectors from tridiagonal matrix
     min_k_eigvals = jax.scipy.linalg.eigh_tridiagonal(

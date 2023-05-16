@@ -198,7 +198,9 @@ if __name__ == "__main__":
         P = jnp.zeros((n, R))
     y = jnp.zeros((n,))
     z = jnp.zeros((n,))
-    tr_X = 0.0
+    #tr_X = 0.0
+    X = jnp.eye(n)
+    tr_X = n
     primal_obj = 0.0
 
     k_curr = K

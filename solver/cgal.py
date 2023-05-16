@@ -46,7 +46,7 @@ def cgal(
     def cond_func(state: StateStruct) -> bool:
         return jnp.logical_or(state.obj_gap > eps, state.infeas_gap > eps)
 
-    #@jax.jit
+    @jax.jit
     def body_func(state: StateStruct) -> StateStruct:
         jax.debug.print("start_time: {time}",
                         time=hcb.call(lambda _: time.time(), arg=0, result_shape=float))
@@ -62,13 +62,12 @@ def cgal(
             k=1,
             num_iters=lanczos_num_iters,
             rng=jax.random.PRNGKey(state.t))
-
-        # TODO: fix trace_ub cgal issue
-        embed()
-        exit()
+        # fix trace_ub here to allow for <= trace
+        eigvecs = lax.cond(
+            (eigvals >= 0).squeeze(), lambda _: 0.0 * eigvecs, lambda _: eigvecs, None)
+        jax.debug.print("eigval: {eigval}", eigval=eigvals.squeeze())
 
         min_eigvec = eigvecs[:, 0:1]  # gives the right shape for next line
-        # TODO: fix trace_ub here to allow for <= trace
         X_update_dir = trace_ub * min_eigvec @ min_eigvec.T
         min_eigvec = min_eigvec.reshape(-1,)
 
@@ -85,7 +84,7 @@ def cgal(
         eta = 2.0 / (state.t + 2.0)
 
         if Omega is None:
-            X_next = (1 - eta) * state.X + eta * X_update_dir
+            X_next = (1 - eta) * state.X + eta * trace_ub * X_update_dir
             P_next = None
         else:
             X_next = None
@@ -142,14 +141,14 @@ def cgal(
         obj_gap=1.1*eps,
         infeas_gap=1.1*eps)
 
-    #final_state = bounded_while_loop(cond_func, body_func, init_state, max_steps=max_iters)
+    final_state = bounded_while_loop(cond_func, body_func, init_state, max_steps=10000)
 
-    state = init_state
-    for _ in range(6):
-        state = body_func(state)
+    #state = init_state
+    #for _ in range(1000):
+    #    state = body_func(state)
 
-    embed()
-    exit()
+    #embed()
+    #exit()
 
     return (final_state.X,
             final_state.P,
