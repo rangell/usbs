@@ -46,14 +46,15 @@ def cgal(
     def cond_func(state: StateStruct) -> bool:
         return jnp.logical_or(state.obj_gap > eps, state.infeas_gap > eps)
 
-    @jax.jit
+    #@jax.jit
     def body_func(state: StateStruct) -> StateStruct:
         jax.debug.print("start_time: {time}",
                         time=hcb.call(lambda _: time.time(), arg=0, result_shape=float))
         beta = beta0 * jnp.sqrt(state.t + 1)
+
         adjoint_left_vec = state.y + beta*(state.z - b)
 
-        _, eigvecs = approx_grad_k_min_eigen(
+        eigvals, eigvecs = approx_grad_k_min_eigen(
             C_matvec=C_matvec,
             A_adjoint_slim=A_adjoint_slim,
             adjoint_left_vec=adjoint_left_vec,
@@ -61,6 +62,10 @@ def cgal(
             k=1,
             num_iters=lanczos_num_iters,
             rng=jax.random.PRNGKey(state.t))
+
+        # TODO: fix trace_ub cgal issue
+        embed()
+        exit()
 
         min_eigvec = eigvecs[:, 0:1]  # gives the right shape for next line
         # TODO: fix trace_ub here to allow for <= trace
@@ -137,7 +142,14 @@ def cgal(
         obj_gap=1.1*eps,
         infeas_gap=1.1*eps)
 
-    final_state = bounded_while_loop(cond_func, body_func, init_state, max_steps=max_iters)
+    #final_state = bounded_while_loop(cond_func, body_func, init_state, max_steps=max_iters)
+
+    state = init_state
+    for _ in range(6):
+        state = body_func(state)
+
+    embed()
+    exit()
 
     return (final_state.X,
             final_state.P,
