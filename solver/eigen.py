@@ -2,18 +2,22 @@ from collections import namedtuple
 from equinox.internal._loop.bounded import bounded_while_loop # type: ignore
 from functools import partial
 import jax
-import jax.numpy as jnp
 from jax import lax
+from jax.experimental.sparse import BCOO
+import jax.numpy as jnp
 from jax._src.typing import Array
-from typing import Any, Callable, Tuple
+from typing import Tuple
+
+from solver.utils import apply_A_adjoint_slim
 
 from IPython import embed
 
 
-@partial(jax.jit, static_argnames=["C_matvec", "A_adjoint_slim", "n", "k", "num_iters"])
+@partial(jax.jit, static_argnames=["n", "k", "num_iters"])
 def approx_grad_k_min_eigen(
-    C_matvec: Callable[[Array], Array],
-    A_adjoint_slim: Callable[[Array, Array], Array],
+    C: BCOO,
+    A_data: Array,
+    A_indices: Array,
     adjoint_left_vec: Array,
     n: int,
     k: int,
@@ -30,8 +34,10 @@ def approx_grad_k_min_eigen(
         V = state.V
         diag = state.diag
         off_diag = state.off_diag
-        transformed_v = C_matvec(V[state.t]) + A_adjoint_slim(adjoint_left_vec, V[state.t])
-        transformed_v = transformed_v - (off_diag[state.t] * V[state.t-1]) # heed the off_diag index
+        transformed_v = C @ V[state.t]
+        transformed_v += apply_A_adjoint_slim(
+            n, A_data, A_indices, adjoint_left_vec, V[state.t])
+        transformed_v -= off_diag[state.t] * V[state.t-1] # heed the off_diag index
         diag = diag.at[state.t].set(jnp.dot(V[state.t], transformed_v))
         v_next = transformed_v - (diag[state.t] * V[state.t])  
 

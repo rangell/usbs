@@ -16,6 +16,7 @@ from scipy.sparse import coo_matrix, csc_matrix  # type: ignore
 from typing import Any, Callable, Tuple
 
 from solver.specbm_slow import specbm_slow
+from solver.utils import apply_A_adjoint_batched, apply_A_operator_batched
 
 from IPython import embed
 
@@ -131,38 +132,6 @@ if __name__ == "__main__":
 
     A_data = jnp.concatenate([A_data, jnp.array(A_data_new)], axis=0)
     A_indices = jnp.concatenate([A_indices, jnp.array(A_indices_new)], axis=0)
-
-    A_tensor = BCOO((A_data, A_indices), shape=(n, n, n)).todense()
-
-    def apply_A_operator_slim(u: Array):
-        outvec = jnp.zeros((n,))
-        outvec = outvec.at[A_indices[:,0]].add(
-            A_data * u.at[A_indices[:,1]].get() * u.at[A_indices[:,2]].get())
-        return outvec
-
-    def apply_A_adjoint_slim(z: Array, u: Array) -> Array:
-        outvec = jnp.zeros((n,))
-        outvec = outvec.at[A_indices[:,2]].add(
-            A_data * z.at[A_indices[:,0]].get() * u.at[A_indices[:,1]].get())
-        return outvec
-    
-    v1 = jax.random.normal(jax.random.PRNGKey(1), (n,))
-    v2 = jax.random.normal(jax.random.PRNGKey(2), (n,))
-    v3 = jax.random.normal(jax.random.PRNGKey(3), (n,))
-
-    M1 = v1.reshape((-1, 1)) @ v1.reshape((1, -1))
-    M2 = v2.reshape((-1, 1)) @ v2.reshape((1, -1))
-    M12 = M1 + M2
-
-    z1_slow = jnp.sum(jnp.sum(A_tensor * M1.reshape((1, n, n)), axis=2), axis=1)
-    z1_fast = apply_A_operator_slim(v1)
-
-    # TODO: fix this! we don't want constant folding with A_data & A_indices!
-    A_operator_batched = jax.vmap(apply_A_operator_slim, 1, 1)
-
-    embed()
-    exit()
-
     b = jnp.concatenate([jnp.ones((n_orig,)), jnp.zeros((n - n_orig,))])
     m = b.size
 
@@ -173,8 +142,8 @@ if __name__ == "__main__":
     tr_X = jnp.trace(X)
 
     # make everything dense for ease of use with SCS
-    C = C.todense()
-    A_tensor = A_tensor.todense()
+    C_dense = C.todense()
+    A_tensor = BCOO((A_data, A_indices), shape=(n, n, n)).todense()
 
     X, y, z, primal_obj, tr_X = specbm_slow(
         X=X,
@@ -186,6 +155,9 @@ if __name__ == "__main__":
         m=m,
         trace_ub=trace_ub,
         C=C,
+        C_dense=C_dense,
+        A_data=A_data,
+        A_indices=A_indices,
         A_tensor=A_tensor,
         b=b,
         rho=0.5,

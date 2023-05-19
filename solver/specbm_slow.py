@@ -16,6 +16,7 @@ from typing import Any, Callable, Optional, Tuple, Union
 from scipy.sparse import csc_matrix  # type: ignore
 
 from solver.eigen import approx_grad_k_min_eigen
+from solver.utils import apply_A_operator_batched, apply_A_adjoint_batched
 
 from IPython import embed
 
@@ -120,7 +121,10 @@ def specbm_slow(
     n: int,
     m: int,
     trace_ub: float,
-    C: Array,
+    C: BCOO,
+    C_dense: Array,
+    A_data: Array,
+    A_indices: Array,
     A_tensor: Array,
     b: Array,
     rho: float,
@@ -136,8 +140,8 @@ def specbm_slow(
 ) -> Tuple[Array, Array, Array, Array, Array]:
 
     k = k_curr + k_past
-    solve_quad_subprob = create_solve_quad_subprob(n, m, k, C, A_tensor, b, trace_ub, rho)
-    compute_lb_spec_est = create_lb_spec_est(n, m, k, C, A_tensor, b, trace_ub)
+    solve_quad_subprob = create_solve_quad_subprob(n, m, k, C_dense, A_tensor, b, trace_ub, rho)
+    compute_lb_spec_est = create_lb_spec_est(n, m, k, C_dense, A_tensor, b, trace_ub)
 
     StateStruct = namedtuple(
         "StateStruct",
@@ -249,11 +253,25 @@ def specbm_slow(
             pen_dual_obj=pen_dual_obj_next,
             lb_spec_est=lb_spec_est)
 
-    init_eigvals, init_eigvecs = jnp.linalg.eigh(
-        C - jnp.sum(A_tensor * y.reshape(m, 1, 1), axis=0))
-    init_eigvals = init_eigvals[:k]
-    init_eigvecs = init_eigvecs[:, :k]
-    init_eigvals = -init_eigvals
+    init_eigvals_slow, init_eigvecs_slow = jnp.linalg.eigh(
+        C_dense - jnp.sum(A_tensor * y.reshape(m, 1, 1), axis=0))
+    init_eigvals_slow = init_eigvals_slow[:k]
+    init_eigvecs_slow = init_eigvecs_slow[:, :k]
+    init_eigvals_slow = -init_eigvals_slow
+
+    init_eigvals, init_eigvecs = approx_grad_k_min_eigen(
+        C=C,
+        A_data=A_data,
+        A_indices=A_indices,
+        adjoint_left_vec=y,
+        n=n,
+        k=k,
+        num_iters=lanczos_num_iters,
+        rng=jax.random.PRNGKey(-1))
+
+    embed()
+    exit()
+
     init_pen_dual_obj = jnp.dot(-b, y) + trace_ub*jnp.clip(init_eigvals[0], a_min=0)
 
     init_state = StateStruct(
