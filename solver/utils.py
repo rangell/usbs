@@ -10,7 +10,7 @@ from typing import Callable, Tuple
 
 @partial(jax.jit, static_argnames=["m"])
 def apply_A_operator_slim(m: int, A_data: Array, A_indices: Array, u: Array) -> Array:
-    outvec = jnp.empty((m,))
+    outvec = jnp.zeros((m,))
     outvec = outvec.at[A_indices[:,0]].add(
         A_data * u.at[A_indices[:,1]].get() * u.at[A_indices[:,2]].get())
     return outvec
@@ -18,7 +18,7 @@ def apply_A_operator_slim(m: int, A_data: Array, A_indices: Array, u: Array) -> 
 
 @partial(jax.jit, static_argnames=["n"])
 def apply_A_adjoint_slim(n: int, A_data: Array, A_indices: Array, z: Array, u: Array) -> Array:
-    outvec = jnp.empty((n,))
+    outvec = jnp.zeros((n,))
     outvec = outvec.at[A_indices[:,2]].add(
         A_data * z.at[A_indices[:,0]].get() * u.at[A_indices[:,1]].get())
     return outvec
@@ -50,11 +50,17 @@ def create_svec_matrix(k: int) -> BCOO:
     return U
 
 
-@jax.jit
-def create_Q_base(m: int, k: int, U: BCOO, V: Array) -> Array:
-    flat_outer_prod = (V.T.reshape(1, k, m) * V.T.reshape(k, 1, m)).reshape(k**2, m)
-    svec_proj = U @ flat_outer_prod
-    expanded_mx = svec_proj.reshape(-1, 1, m) * svec_proj.reshape(1, -1, m)
+@partial(jax.jit, static_argnames=["m", "k"])
+def create_Q_base(m: int, k: int, U: BCOO, A_data: Array, A_indices: Array, V: Array) -> Array:
+    base_tensor = jnp.zeros((m, k, k))
+    base_tensor = base_tensor.at[A_indices[:, 0]].add(
+        A_data.reshape(-1, 1, 1)
+        * jax.lax.batch_matmul(V.at[A_indices[:, 1]].get().reshape(-1, k, 1),
+                               V.at[A_indices[:, 2]].get().reshape(-1, 1, k)))
+    flat_base_tensor = base_tensor.reshape(m, k**2).T
+    svec_proj = U @ flat_base_tensor
+    svec_dim_size = int(k*(k+1)/2)
+    expanded_mx = svec_proj.reshape(svec_dim_size, 1, m) * svec_proj.reshape(1, svec_dim_size, m)
     final_mx = jnp.sum(expanded_mx, axis=-1)
     return final_mx
 
