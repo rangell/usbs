@@ -16,7 +16,10 @@ from typing import Any, Callable, Optional, Tuple, Union
 from scipy.sparse import csc_matrix  # type: ignore
 
 from solver.eigen import approx_grad_k_min_eigen
-from solver.utils import apply_A_operator_batched, apply_A_adjoint_batched
+from solver.utils import (apply_A_operator_batched,
+                          apply_A_adjoint_batched,
+                          create_svec_matrix,
+                          create_Q_base)
 
 from IPython import embed
 
