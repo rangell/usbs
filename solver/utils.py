@@ -27,14 +27,14 @@ def apply_A_adjoint_slim(n: int, A_data: Array, A_indices: Array, z: Array, u: A
 @partial(jax.jit, static_argnames=["m"])
 def apply_A_operator_batched(m: int, A_data: Array, A_indices: Array, vecs: Array) -> Array:
     return jnp.sum(
-        jax.vmap(apply_A_operator_slim, (None, None, 1), 1)(m, A_data, A_indices, vecs),
+        jax.vmap(apply_A_operator_slim, (None, None, None, 1), 1)(m, A_data, A_indices, vecs),
         axis=1)
 
 
 @partial(jax.jit, static_argnames=["n"])
 def apply_A_adjoint_batched(n: int, A_data: Array, A_indices: Array, z: Array, vecs: Array) -> Array:
     return jax.vmap(
-        apply_A_adjoint_slim, (None, None, None, 1), 1)(n, A_data, A_indices, z, vecs)
+        apply_A_adjoint_slim, (None, None, None, None, 1), 1)(n, A_data, A_indices, z, vecs)
 
 
 def create_svec_matrix(k: int) -> BCOO:

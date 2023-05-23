@@ -45,10 +45,10 @@ if __name__ == "__main__":
     WARM_START = False
     WARM_START_FRAC = 1.0
     SOLVER = "specbm"
-    K_CURR = 5                       
-    K_PAST = 2
+    K_CURR = 10                      
+    K_PAST = 10
     R = 100                     # size of the sketch
-    LANCZOS_NUM_ITERS = 300     
+    LANCZOS_NUM_ITERS = 400     
     EPS = 1e-7
     WARM_START_MAX_ITERS = 100
     MAX_ITERS = 100
