@@ -543,31 +543,46 @@ def specbm_slow(
         y_cand = state.y + (1.0 / rho) * (b - z_next)
         primal_obj_next = eta * state.bar_primal_obj + jnp.trace(VSV_T_factor.T @ (C @ VSV_T_factor))
 
-        #cand_eigvals_slow, cand_eigvecs_slow = jnp.linalg.eigh(
-        #    C_dense - jnp.sum(A_tensor * y_cand.reshape(m, 1, 1), axis=0))
-        #cand_eigvals_slow = cand_eigvals_slow[:k_curr]
-        #cand_eigvecs_slow = cand_eigvecs_slow[:, :k_curr]
+        cand_eigvals_slow, cand_eigvecs_slow = jnp.linalg.eigh(
+            C_dense - jnp.sum(A_tensor * y_cand.reshape(m, 1, 1), axis=0))
+        cand_eigvals_slow = cand_eigvals_slow[:k_curr]
+        cand_eigvecs_slow = cand_eigvecs_slow[:, :k_curr]
         #cand_eigvals_slow = -cand_eigvals_slow
         #cand_pen_dual_obj_slow = jnp.dot(-b, y_cand) + trace_ub*jnp.clip(cand_eigvals_slow[0], a_min=0)
 
-        #cand_eigvals, cand_eigvecs = approx_grad_k_min_eigen(
-        #    C=C,
-        #    A_data=A_data,
-        #    A_indices=A_indices,
-        #    adjoint_left_vec=-y_cand,
-        #    n=n,
-        #    k=k_curr,
-        #    num_iters=lanczos_num_iters,
-        #    rng=jax.random.PRNGKey(-1))
+        cand_eigvals, cand_eigvecs = approx_grad_k_min_eigen(
+            C=C,
+            A_data=A_data,
+            A_indices=A_indices,
+            adjoint_left_vec=-y_cand,
+            n=n,
+            k=k_curr,
+            num_iters=lanczos_num_iters,
+            rng=jax.random.PRNGKey(-1))
         #cand_eigvals = -cand_eigvals
         #cand_pen_dual_obj = jnp.dot(-b, y) + trace_ub*jnp.clip(cand_eigvals[0], a_min=0)
 
-        cand_eigvals, cand_eigvecs = jnp.linalg.eigh(
-            C_dense - jnp.sum(A_tensor * y_cand.reshape(m, 1, 1), axis=0))
-        cand_eigvals = cand_eigvals[:k_curr]
-        cand_eigvecs = cand_eigvecs[:, :k_curr]
-        cand_eigvals = -cand_eigvals
-        cand_pen_dual_obj = jnp.dot(-b, y_cand) + trace_ub*jnp.clip(cand_eigvals[0], a_min=0)
+        from solver.lanczos import eigsh_smallest
+        q0 = jax.random.normal(jax.random.PRNGKey(0), shape=(n,))
+        q0 /= jnp.linalg.norm(q0)
+        cand_eigvals_thick, cand_eigvecs_thick, return_info_thick = eigsh_smallest(
+            lambda vec: (C_dense - jnp.sum(A_tensor * y_cand.reshape(m, 1, 1), axis=0)) @ vec,
+            q0,
+            k_curr,
+            30,
+            100,
+            1e-12,
+            return_info=True)
+
+        embed()
+        exit()
+
+        #cand_eigvals, cand_eigvecs = jnp.linalg.eigh(
+        #    C_dense - jnp.sum(A_tensor * y_cand.reshape(m, 1, 1), axis=0))
+        #cand_eigvals = cand_eigvals[:k_curr]
+        #cand_eigvecs = cand_eigvecs[:, :k_curr]
+        #cand_eigvals = -cand_eigvals
+        #cand_pen_dual_obj = jnp.dot(-b, y_cand) + trace_ub*jnp.clip(cand_eigvals[0], a_min=0)
 
         #lb_spec_est_slow = hcb.call(lambda arg: compute_lb_spec_est(*arg),
         #                            arg=(state.X_bar, y_cand, state.V),
@@ -682,22 +697,22 @@ def specbm_slow(
         pen_dual_obj=init_pen_dual_obj,
         lb_spec_est=jnp.array(0.0))
 
-    state = init_state
-    for _ in range(500):
-        state = body_func(state)
-
-    import pickle
-    with open("state.pkl", "wb") as f:
-        pickle.dump(tuple(state), f)
-
-    embed()
-    exit()
-
     import pickle
     with open("state.pkl", "rb") as f:
         state = StateStruct(*pickle.load(f))
 
     state = body_func(state)
+
+    embed()
+    exit()
+
+    state = init_state
+    for _ in range(100):
+        state = body_func(state)
+
+    import pickle
+    with open("state.pkl", "wb") as f:
+        pickle.dump(tuple(state), f)
 
     embed()
     exit()
