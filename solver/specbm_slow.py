@@ -475,7 +475,9 @@ def specbm_slow(
     SCALE_X: float,
     eps: float,
     max_iters: int,
-    lanczos_num_iters: int,
+    lanczos_inner_iterations: int,
+    lanczos_max_restarts: int,
+    subprob_tol: float,
     callback_fn: Union[Callable[[Array, Array], Array], None]
 ) -> Tuple[Array, Array, Array, Array, Array]:
 
@@ -483,8 +485,8 @@ def specbm_slow(
     U = create_svec_matrix(k)
 
     # for testing...remove in final version
-    solve_quad_subprob = create_solve_quad_subprob(n, m, k, C_dense, A_tensor, b, trace_ub, rho)
-    compute_lb_spec_est = create_lb_spec_est(n, m, k, C_dense, A_tensor, b, trace_ub)
+    #solve_quad_subprob = create_solve_quad_subprob(n, m, k, C_dense, A_tensor, b, trace_ub, rho)
+    #compute_lb_spec_est = create_lb_spec_est(n, m, k, C_dense, A_tensor, b, trace_ub)
 
     StateStruct = namedtuple(
         "StateStruct",
@@ -507,7 +509,7 @@ def specbm_slow(
         return jnp.logical_or(
             state.t == 0, (state.pen_dual_obj - state.lb_spec_est) / (1.0 + state.pen_dual_obj) > eps)
 
-    #@jax.jit
+    @jax.jit
     def body_func(state: StateStruct) -> StateStruct:
 
         jax.debug.print("start_time: {time}",
@@ -532,7 +534,8 @@ def specbm_slow(
             V=state.V,
             n=n,
             m=m,
-            k=k)
+            k=k,
+            ipm_eps=subprob_tol)
 
         S_eigvals, S_eigvecs = jnp.linalg.eigh(S)
         S_eigvals = jnp.clip(S_eigvals, a_min=0)    # numerical instability handling
@@ -544,45 +547,25 @@ def specbm_slow(
         y_cand = state.y + (1.0 / rho) * (b - z_next)
         primal_obj_next = eta * state.bar_primal_obj + jnp.trace(VSV_T_factor.T @ (C @ VSV_T_factor))
 
-        cand_eigvals_slow, cand_eigvecs_slow = jnp.linalg.eigh(
-            C_dense - jnp.sum(A_tensor * y_cand.reshape(m, 1, 1), axis=0))
-        cand_eigvals_slow = cand_eigvals_slow[:k_curr]
-        cand_eigvecs_slow = cand_eigvecs_slow[:, :k_curr]
+        #cand_eigvals_slow, cand_eigvecs_slow = jnp.linalg.eigh(
+        #    C_dense - jnp.sum(A_tensor * y_cand.reshape(m, 1, 1), axis=0))
+        #cand_eigvals_slow = cand_eigvals_slow[:k_curr]
+        #cand_eigvecs_slow = cand_eigvecs_slow[:, :k_curr]
         #cand_eigvals_slow = -cand_eigvals_slow
         #cand_pen_dual_obj_slow = jnp.dot(-b, y_cand) + trace_ub*jnp.clip(cand_eigvals_slow[0], a_min=0)
 
-        cand_eigvals, cand_eigvecs = approx_grad_k_min_eigen(
-            C=C,
-            A_data=A_data,
-            A_indices=A_indices,
-            adjoint_left_vec=-y_cand,
-            n=n,
-            k=k_curr,
-            num_iters=lanczos_num_iters,
-            rng=jax.random.PRNGKey(-1))
-        #cand_eigvals = -cand_eigvals
-        #cand_pen_dual_obj = jnp.dot(-b, y) + trace_ub*jnp.clip(cand_eigvals[0], a_min=0)
-
-        cand_eigvals_thick, cand_eigvecs_thick = eigsh_smallest(
+        cand_eigvals, cand_eigvecs = eigsh_smallest(
             n=n,
             C=C,
             A_data=A_data,
             A_indices=A_indices,
             adjoint_left_vec=-y_cand,
             num_desired=k_curr,
-            inner_iterations=30,
-            max_restarts=100,
-            tolerance=1e-12)
-
-        embed()
-        exit()
-
-        #cand_eigvals, cand_eigvecs = jnp.linalg.eigh(
-        #    C_dense - jnp.sum(A_tensor * y_cand.reshape(m, 1, 1), axis=0))
-        #cand_eigvals = cand_eigvals[:k_curr]
-        #cand_eigvecs = cand_eigvecs[:, :k_curr]
-        #cand_eigvals = -cand_eigvals
-        #cand_pen_dual_obj = jnp.dot(-b, y_cand) + trace_ub*jnp.clip(cand_eigvals[0], a_min=0)
+            inner_iterations=lanczos_inner_iterations,
+            max_restarts=lanczos_max_restarts,
+            tolerance=subprob_tol)
+        cand_eigvals = -cand_eigvals
+        cand_pen_dual_obj = jnp.dot(-b, y_cand) + trace_ub*jnp.clip(cand_eigvals[0], a_min=0)
 
         #lb_spec_est_slow = hcb.call(lambda arg: compute_lb_spec_est(*arg),
         #                            arg=(state.X_bar, y_cand, state.V),
@@ -601,7 +584,8 @@ def specbm_slow(
             y=y_cand,
             V=state.V,
             n=n,
-            k=k)
+            k=k,
+            ipm_eps=subprob_tol)
 
         y_next, pen_dual_obj_next = lax.cond(
             beta * (state.pen_dual_obj - lb_spec_est) <= state.pen_dual_obj - cand_pen_dual_obj,
@@ -661,24 +645,22 @@ def specbm_slow(
             pen_dual_obj=pen_dual_obj_next,
             lb_spec_est=lb_spec_est)
 
-    # TODO: use this to test eigen* implementation
+    ## TODO: use this to test eigen* implementation
     #init_eigvals_slow, init_eigvecs_slow = jnp.linalg.eigh(
     #    C_dense - jnp.sum(A_tensor * y.reshape(m, 1, 1), axis=0))
-    #init_eigvals_slow = init_eigvals_slow[:k]
+    #init_eigvals_slow = -init_eigvals_slow[:k]
     #init_eigvecs_slow = init_eigvecs_slow[:, :k]
-    #init_eigvals_slow = -init_eigvals_slow
 
-    init_eigvals, init_eigvecs = approx_grad_k_min_eigen(
+    init_eigvals, init_eigvecs = eigsh_smallest(
+        n=n,
         C=C,
         A_data=A_data,
         A_indices=A_indices,
         adjoint_left_vec=-y,
-        n=n,
-        k=k,
-        num_iters=lanczos_num_iters,
-        rng=jax.random.PRNGKey(-1))
-    init_eigvals = init_eigvals[:k]
-    init_eigvecs = init_eigvecs[:, :k]
+        num_desired=k,
+        inner_iterations=lanczos_inner_iterations,
+        max_restarts=lanczos_max_restarts,
+        tolerance=subprob_tol)
     init_eigvals = -init_eigvals
     init_pen_dual_obj = jnp.dot(-b, y) + trace_ub*jnp.clip(init_eigvals[0], a_min=0)
 
@@ -697,17 +679,8 @@ def specbm_slow(
         pen_dual_obj=init_pen_dual_obj,
         lb_spec_est=jnp.array(0.0))
 
-    import pickle
-    with open("state.pkl", "rb") as f:
-        state = StateStruct(*pickle.load(f))
-
-    state = body_func(state)
-
-    embed()
-    exit()
-
     state = init_state
-    for _ in range(100):
+    for _ in range(10000):
         state = body_func(state)
 
     import pickle
@@ -717,7 +690,16 @@ def specbm_slow(
     embed()
     exit()
 
-    final_state = bounded_while_loop(cond_func, body_func, init_state, max_steps=1000)
+    import pickle
+    with open("state.pkl", "rb") as f:
+        state = StateStruct(*pickle.load(f))
+
+    state = body_func(state)
+
+    embed()
+    exit()
+
+    final_state = bounded_while_loop(cond_func, body_func, init_state, max_steps=max_iters)
 
     embed()
     exit()

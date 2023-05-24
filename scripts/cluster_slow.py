@@ -45,10 +45,12 @@ if __name__ == "__main__":
     WARM_START = False
     WARM_START_FRAC = 1.0
     SOLVER = "specbm"
-    K_CURR = 5                      
-    K_PAST = 2
+    K_CURR = 7                      
+    K_PAST = 5
     R = 100                     # size of the sketch
-    LANCZOS_NUM_ITERS = 100     
+    LANCZOS_INNER_ITERATIONS = 50     
+    LANCZOS_MAX_RESTARTS = 50     
+    SUBPROB_TOL = 1e-10
     EPS = 1e-7
     WARM_START_MAX_ITERS = 100
     MAX_ITERS = 100
@@ -61,7 +63,9 @@ if __name__ == "__main__":
     print("K_CURR: ", K_CURR)
     print("K_PAST: ", K_PAST)
     print("R: ", R)
-    print("LANCZOS_NUM_ITERS: ", LANCZOS_NUM_ITERS)
+    print("LANCZOS_INNER_ITERATIONS: ", LANCZOS_INNER_ITERATIONS)
+    print("LANCZOS_MAX_RESTARTS: ", LANCZOS_MAX_RESTARTS)
+    print("SUBPROB_TOL: ", SUBPROB_TOL)
     print("EPS: ", EPS)
     print("WARM_START_MAX_ITERS: ", WARM_START_MAX_ITERS)
     print("MAX_ITERS: ", MAX_ITERS)
@@ -168,5 +172,7 @@ if __name__ == "__main__":
         SCALE_X=1.0,
         eps=EPS,
         max_iters=MAX_ITERS,
-        lanczos_num_iters=LANCZOS_NUM_ITERS,
+        lanczos_inner_iterations=LANCZOS_INNER_ITERATIONS,
+        lanczos_max_restarts=LANCZOS_MAX_RESTARTS,
+        subprob_tol=SUBPROB_TOL,
         callback_fn=None)

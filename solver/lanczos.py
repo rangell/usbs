@@ -223,6 +223,7 @@ def _thick_restart_lanczos(
         max_steps=max_restarts)
 
 
+@partial(jax.jit, static_argnames=["n", "num_desired", "inner_iterations", "max_restarts", "tolerance"])
 def eigsh_smallest(
     n,
     C,
@@ -237,7 +238,11 @@ def eigsh_smallest(
     """Find the `num_desired` smallest eigenvalues of the linear map A.
 
     Args:
-        q0: initial guess for an eigenvector.
+        n: dimension of operator and eigenvectors.
+        C: matrix parameterizing the SDP objective.
+        A_data: values in constraint tensor located at `A_indices`.
+        A_indices: corresponding locations of `A_data` in constraint tensor.
+        adjoint_left_vec: vector to apply adjoint of constraint tensor.
         num_desired: number of desired smallest eigenvalues.
         inner_iterations: number of inner Lanczos iterations to use.
         max_restarts: maximum number of Lanczos restarts to allow. By default, there
