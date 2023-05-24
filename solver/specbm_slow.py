@@ -16,6 +16,7 @@ from typing import Any, Callable, Optional, Tuple, Union
 from scipy.sparse import csc_matrix  # type: ignore
 
 from solver.eigen import approx_grad_k_min_eigen
+from solver.lanczos import eigsh_smallest
 from solver.utils import (apply_A_operator_batched,
                           apply_A_adjoint_batched,
                           create_svec_matrix,
@@ -562,17 +563,16 @@ def specbm_slow(
         #cand_eigvals = -cand_eigvals
         #cand_pen_dual_obj = jnp.dot(-b, y) + trace_ub*jnp.clip(cand_eigvals[0], a_min=0)
 
-        from solver.lanczos import eigsh_smallest
-        q0 = jax.random.normal(jax.random.PRNGKey(0), shape=(n,))
-        q0 /= jnp.linalg.norm(q0)
-        cand_eigvals_thick, cand_eigvecs_thick, return_info_thick = eigsh_smallest(
-            lambda vec: (C_dense - jnp.sum(A_tensor * y_cand.reshape(m, 1, 1), axis=0)) @ vec,
-            q0,
-            k_curr,
-            30,
-            100,
-            1e-12,
-            return_info=True)
+        cand_eigvals_thick, cand_eigvecs_thick = eigsh_smallest(
+            n=n,
+            C=C,
+            A_data=A_data,
+            A_indices=A_indices,
+            adjoint_left_vec=-y_cand,
+            num_desired=k_curr,
+            inner_iterations=30,
+            max_restarts=100,
+            tolerance=1e-12)
 
         embed()
         exit()
