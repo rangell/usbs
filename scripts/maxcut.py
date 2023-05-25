@@ -16,76 +16,15 @@ from typing import Any, Callable, Tuple
 
 from solver.cgal import cgal
 from solver.specbm import specbm
+from solver.utils import reconstruct_from_sketch
 
 from IPython import embed
-
-
-def create_C_matvec(C: BCOO) -> Callable[[Array], Array]:
-    @jax.jit
-    def C_matvec(u: Array) -> Array:
-        return C @ u
-    return C_matvec
-
-
-def create_A_operator_slim() -> Callable[[Array, Array], Array]:
-    @jax.jit
-    def A_operator_slim(u: Array) -> Array:
-        return u ** 2
-    return A_operator_slim
-
-
-def create_A_adjoint_slim() -> Callable[[Array, Array], Array]:
-    @jax.jit
-    def A_adjoint(z: Array, u: Array) -> Array:
-        return z * u
-    return A_adjoint
-
-
-# TODO: put this in some utils file
-def create_svec_matrix(k: int) -> BCOO:
-    U = np.zeros((int(0.5*k*(k+1)), k**2))
-    for a, (b, c) in enumerate(list(zip(*np.tril_indices(k)))):
-        if b == c:
-            U[a, b*k + c] = 1.0
-        else:
-            U[a, b*k + c] = 1.0 / np.sqrt(2.0)
-            U[a, c*k + b] = U[a, b*k + c]
-    U = coo_matrix(U)
-    U = BCOO((U.data, jnp.stack((U.row, U.col)).T), shape=U.shape)
-    return U
-
-
-def create_Q_base(m: int, k: int, U: BCOO) -> Callable[[Array], Array]:
-    @jax.jit
-    def Q_base(V: Array) -> Array:
-        flat_outer_prod = (V.T.reshape(1, k, m) * V.T.reshape(k, 1, m)).reshape(k**2, m)
-        svec_proj = U @ flat_outer_prod
-        expanded_mx = svec_proj.reshape(-1, 1, m) * svec_proj.reshape(1, -1, m)
-        final_mx = jnp.sum(expanded_mx, axis=-1)
-        return final_mx
-    return Q_base
-
-
-@jax.jit
-def reconstruct(Omega: Array, P: Array, approx_eps: float = 1e-6) -> Tuple[np.ndarray, np.ndarray]:
-    n = Omega.shape[0]
-    rho = jnp.sqrt(n) * approx_eps * jnp.linalg.norm(P, ord=2)
-    P_rho = P + rho * Omega
-    B = Omega.T @ P_rho
-    B = 0.5 * (B + B.T)
-    L = jnp.linalg.cholesky(B)
-    W, Rho, _ = jnp.linalg.svd(
-        jnp.linalg.lstsq(L, P_rho.T, rcond=-1)[0].T,
-        full_matrices=False,  # this compresses the output to be rank `R`
-    )
-    Lambda = jnp.clip(Rho ** 2 - rho, 0, np.inf)
-    return W, Lambda
 
 
 def create_compute_max_cut(C: BCOO):
     @jax.jit
     def compute_max_cut(Omega: Array, P: Array) -> int:
-        W, _ = reconstruct(Omega, P)
+        W, _ = reconstruct_from_sketch(Omega, P)
         W_bin = 2 * (W > 0).astype(float) - 1
         return jnp.max(jnp.diag(-W_bin.T @ C @ W_bin))
     return compute_max_cut
@@ -110,7 +49,7 @@ def get_hparams():
     parser = argparse.ArgumentParser() 
     parser.add_argument('--data_path', type=str, required=True, help="path to mat file")
     parser.add_argument('--warm_start', action='store_true', help="warm-start or not")
-    parser.add_argument('--warm_start_frac', type=float, required=True,
+    parser.add_argument('--warm_start_frac', type=float,
                         help="fraction of data used to warmkstart")
     parser.add_argument('--solver', type=str, required=True, choices=["specbm", "cgal"],
                         help="name of solver to use")
@@ -188,7 +127,6 @@ if __name__ == "__main__":
         
     # construct the test matrix for the sketch
     Omega = jax.random.normal(jax.random.PRNGKey(0), shape=(n, R))
-    #Omega = None
 
     if Omega is None:
         X = jnp.zeros((n, n))
@@ -198,17 +136,12 @@ if __name__ == "__main__":
         P = jnp.zeros((n, R))
     y = jnp.zeros((n,))
     z = jnp.zeros((n,))
-    #tr_X = 0.0
-    X = jnp.eye(n)
-    tr_X = n
+    tr_X = 0.0
     primal_obj = 0.0
 
     k_curr = K
-    k_past = 0
+    k_past = 1
     k = k_curr + k_past
-
-    # for interior point methods
-    U = create_svec_matrix(k)
 
     #### Do the warm-start
     if WARM_START:
@@ -253,9 +186,6 @@ if __name__ == "__main__":
             warm_start_P = jnp.zeros((warm_start_n, R))
         warm_start_y = jnp.zeros((warm_start_m,))
         warm_start_z = jnp.zeros((warm_start_n,))
-
-        # for quadratic subproblem solved by interior point method
-        Q_base = create_Q_base(warm_start_m, k, U)
 
         if SOLVER == "specbm":
             (warm_start_X,
@@ -357,14 +287,11 @@ if __name__ == "__main__":
     trace_ub = 1.0 * float(n) * SCALE_X
     m = n
 
-    C_matvec = create_C_matvec(scaled_C)
-    A_operator_slim = create_A_operator_slim()
-    A_adjoint_slim = create_A_adjoint_slim()
+    A_data = jnp.ones((n))
+    A_indices = jnp.stack(
+        (jnp.arange(n), jnp.arange(n), jnp.arange(n))).T 
     compute_max_cut = create_compute_max_cut(C)
     b = jnp.ones((n,)) * SCALE_X
-
-    # for quadratic subproblem solved by interior point method
-    Q_base = create_Q_base(m, k, U)
 
     if SOLVER == "specbm":
         X, P, y, z, primal_obj, tr_X = specbm(
@@ -377,14 +304,11 @@ if __name__ == "__main__":
             n=n,
             m=n,
             trace_ub=trace_ub,
-            C=C,
-            C_matvec=C_matvec,
-            A_operator_slim=A_operator_slim,
-            A_adjoint_slim=A_adjoint_slim,
-            Q_base=Q_base,
-            U=U,
-            Omega=Omega,
+            C=scaled_C,
+            A_data=A_data,
+            A_indices=A_indices,
             b=b,
+            Omega=Omega,
             rho=0.5,
             beta=0.25,
             k_curr=k_curr,
@@ -393,7 +317,9 @@ if __name__ == "__main__":
             SCALE_X=1.0,
             eps=EPS,
             max_iters=MAX_ITERS,
-            lanczos_num_iters=LANCZOS_NUM_ITERS,
+            lanczos_inner_iterations=50,
+            lanczos_max_restarts=100,
+            subprob_tol=1e-7,
             callback_fn=compute_max_cut)
     elif SOLVER == "cgal":
         X, P, y, z, primal_obj, tr_X = cgal(
@@ -416,7 +342,9 @@ if __name__ == "__main__":
             SCALE_X=SCALE_X,
             eps=EPS,
             max_iters=MAX_ITERS,
-            lanczos_num_iters=LANCZOS_NUM_ITERS,
+            lanczos_inner_iterations=32,
+            lanczos_max_restarts=50,
+            subprob_tol=1e-10,
             callback_fn=compute_max_cut)
     else:
         raise ValueError("Invalid SOLVER")
