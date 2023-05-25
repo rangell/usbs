@@ -70,7 +70,7 @@ if __name__ == "__main__":
     WARM_START = hparams.warm_start
     WARM_START_FRAC = hparams.warm_start_frac
     SOLVER = hparams.solver
-    K = 5                       # number of eigenvectors to compute for specbm
+    K = 10                       # number of eigenvectors to compute for specbm
     R = 100                     # size of the sketch
     LANCZOS_NUM_ITERS = 100
     EPS = 1e-5
@@ -290,7 +290,8 @@ if __name__ == "__main__":
     A_data = jnp.ones((n))
     A_indices = jnp.stack(
         (jnp.arange(n), jnp.arange(n), jnp.arange(n))).T 
-    compute_max_cut = create_compute_max_cut(C)
+    #compute_max_cut = create_compute_max_cut(C)
+    compute_max_cut = None
     b = jnp.ones((n,)) * SCALE_X
 
     if SOLVER == "specbm":
@@ -343,7 +344,7 @@ if __name__ == "__main__":
             eps=EPS,
             max_iters=MAX_ITERS,
             lanczos_inner_iterations=32,
-            lanczos_max_restarts=50,
+            lanczos_max_restarts=10,
             subprob_tol=1e-10,
             callback_fn=compute_max_cut)
     else:

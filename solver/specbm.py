@@ -370,6 +370,12 @@ def specbm(
     StateStruct = namedtuple(
         "StateStruct",
         ["t", 
+         "C",
+         "A_data",
+         "A_indices",
+         "b",
+         "Omega",
+         "U",
          "X",
          "tr_X",
          "X_bar",
@@ -397,11 +403,11 @@ def specbm(
                         time=hcb.call(lambda _: time.time(), arg=0, result_shape=float))
 
         eta, S = solve_quad_subprob_ipm(
-            C=C,
-            A_data=A_data,
-            A_indices=A_indices,
-            U=U,
-            b=b,
+            C=state.C,
+            A_data=state.A_data,
+            A_indices=state.A_indices,
+            U=state.U,
+            b=state.b,
             trace_ub=trace_ub,
             rho=rho,
             bar_primal_obj=state.bar_primal_obj,
@@ -417,37 +423,38 @@ def specbm(
         S_eigvals, S_eigvecs = jnp.linalg.eigh(S)
         S_eigvals = jnp.clip(S_eigvals, a_min=0)    # numerical instability handling
         VSV_T_factor = (state.V @ S_eigvecs) * jnp.sqrt(S_eigvals).reshape(1, -1)
-        A_operator_VSV_T = apply_A_operator_batched(m, A_data, A_indices, VSV_T_factor)
-        if Omega is None:
+        A_operator_VSV_T = apply_A_operator_batched(m, state.A_data, state.A_indices, VSV_T_factor)
+        if state.Omega is None:
             X_next = eta * state.X_bar + state.V @ S @ state.V.T
             P_next = None
         else:
             X_next = None
-            P_next = eta * state.P_bar + VSV_T_factor @ (VSV_T_factor.T @ Omega)
+            P_next = eta * state.P_bar + VSV_T_factor @ (VSV_T_factor.T @ state.Omega)
         tr_X_next = eta * state.tr_X_bar + jnp.trace(S)
         z_next = eta * state.z_bar + A_operator_VSV_T
-        y_cand = state.y + (1.0 / rho) * (b - z_next)
-        primal_obj_next = eta * state.bar_primal_obj + jnp.trace(VSV_T_factor.T @ (C @ VSV_T_factor))
+        y_cand = state.y + (1.0 / rho) * (state.b - z_next)
+        primal_obj_next = eta * state.bar_primal_obj
+        primal_obj_next += jnp.trace(VSV_T_factor.T @ (state.C @ VSV_T_factor))
 
         cand_eigvals, cand_eigvecs = eigsh_smallest(
             n=n,
-            C=C,
-            A_data=A_data,
-            A_indices=A_indices,
+            C=state.C,
+            A_data=state.A_data,
+            A_indices=state.A_indices,
             adjoint_left_vec=-y_cand,
             num_desired=k_curr,
             inner_iterations=lanczos_inner_iterations,
             max_restarts=lanczos_max_restarts,
             tolerance=subprob_tol)
         cand_eigvals = -cand_eigvals
-        cand_pen_dual_obj = jnp.dot(-b, y_cand) + trace_ub*jnp.clip(cand_eigvals[0], a_min=0)
+        cand_pen_dual_obj = jnp.dot(-state.b, y_cand) + trace_ub*jnp.clip(cand_eigvals[0], a_min=0)
 
         lb_spec_est = compute_lb_spec_est_ipm(
-            C=C,
-            A_data=A_data,
-            A_indices=A_indices,
-            U=U,
-            b=b,
+            C=state.C,
+            A_data=state.A_data,
+            A_indices=state.A_indices,
+            U=state.U,
+            b=state.b,
             trace_ub=trace_ub,
             bar_primal_obj=state.bar_primal_obj,
             z_bar=state.z_bar,
@@ -465,28 +472,28 @@ def specbm(
             None)
 
         curr_VSV_T_factor = (state.V @ S_eigvecs[:, :k_curr]) * jnp.sqrt(S_eigvals[:k_curr]).reshape(1, -1)
-        if Omega is None:
+        if state.Omega is None:
             X_bar_next = eta * state.X_bar + curr_VSV_T_factor @ curr_VSV_T_factor.T
             P_bar_next = None
         else:
             X_bar_next = None
-            P_bar_next = eta * state.P_bar + curr_VSV_T_factor @ (curr_VSV_T_factor.T @ Omega)
+            P_bar_next = eta * state.P_bar + curr_VSV_T_factor @ (curr_VSV_T_factor.T @ state.Omega)
         tr_X_bar_next = (eta * state.tr_X_bar + jnp.sum(S_eigvals[:k_curr])).squeeze()
         z_bar_next = eta * state.z_bar
-        z_bar_next += apply_A_operator_batched(m, A_data, A_indices, curr_VSV_T_factor)
+        z_bar_next += apply_A_operator_batched(m, state.A_data, state.A_indices, curr_VSV_T_factor)
         V_next = jnp.concatenate([state.V @ S_eigvecs[:,k_curr:], cand_eigvecs], axis=1)
         V_next, _ = jnp.linalg.qr(
             jnp.concatenate([state.V @ S_eigvecs[:,k_curr:], cand_eigvecs], axis=1))
         bar_primal_obj_next = eta * state.bar_primal_obj
-        bar_primal_obj_next += jnp.trace(curr_VSV_T_factor.T @ (C @ curr_VSV_T_factor))
+        bar_primal_obj_next += jnp.trace(curr_VSV_T_factor.T @ (state.C @ curr_VSV_T_factor))
         
         obj_val = primal_obj_next / (SCALE_C * SCALE_X)
-        infeas_gap = jnp.linalg.norm((state.z - b) / SCALE_X) 
-        infeas_gap /= 1.0 + jnp.linalg.norm(b / SCALE_X)
-        max_infeas = jnp.max(jnp.abs(state.z - b)) / SCALE_X
+        infeas_gap = jnp.linalg.norm((state.z - state.b) / SCALE_X) 
+        infeas_gap /= 1.0 + jnp.linalg.norm(state.b / SCALE_X)
+        max_infeas = jnp.max(jnp.abs(state.z - state.b)) / SCALE_X
 
-        if Omega is not None and callback_fn is not None:
-            callback_val = callback_fn(Omega, state.P)
+        if state.Omega is not None and callback_fn is not None:
+            callback_val = callback_fn(state.Omega, state.P)
         else:
             callback_val = None
 
@@ -511,6 +518,12 @@ def specbm(
 
         return StateStruct(
             t=state.t+1,
+            C=state.C,
+            A_data=state.A_data,
+            A_indices=state.A_indices,
+            b=state.b,
+            Omega=state.Omega,
+            U=state.U,
             X=X_next,
             tr_X=tr_X_next,
             X_bar=X_bar_next,
@@ -542,6 +555,12 @@ def specbm(
 
     init_state = StateStruct(
         t=jnp.array(0),
+        C=C,
+        A_data=A_data,
+        A_indices=A_indices,
+        b=b,
+        Omega=Omega,
+        U=U,
         X=X,
         tr_X=tr_X,
         X_bar=X,
