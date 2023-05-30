@@ -230,6 +230,7 @@ def eigsh_smallest(
     A_data,
     A_indices,
     adjoint_left_vec,
+    q0,
     num_desired,
     inner_iterations,
     max_restarts,
@@ -254,8 +255,6 @@ def eigsh_smallest(
         eigenvalues: array of shape (num_desired,)
         eigenvectors: array of shape (q0.size, num_desired).
     """
-    q0 = jax.random.normal(jax.random.PRNGKey(0), shape=(n,))
-    q0 /= jnp.linalg.norm(q0)
     state = _thick_restart_lanczos(
         n,
         C,

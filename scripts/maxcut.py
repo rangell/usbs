@@ -70,7 +70,7 @@ if __name__ == "__main__":
     SOLVER = hparams.solver
     K = 10                       # number of eigenvectors to compute for specbm
     R = 100                     # size of the sketch
-    LANCZOS_NUM_ITERS = 100
+    LANCZOS_MAX_RESTARTS = 10
     EPS = 1e-5
     WARM_START_MAX_ITERS = hparams.warm_start_max_iters
     MAX_ITERS = hparams.max_iters
@@ -82,7 +82,7 @@ if __name__ == "__main__":
     print("SOLVER: ", SOLVER)
     print("K: ", K)
     print("R: ", R)
-    print("LANCZOS_NUM_ITERS: ", LANCZOS_NUM_ITERS)
+    print("LANCZOS_MAX_RESTARTS: ", LANCZOS_MAX_RESTARTS)
     print("EPS: ", EPS)
     print("WARM_START_MAX_ITERS: ", WARM_START_MAX_ITERS)
     print("MAX_ITERS: ", MAX_ITERS)
@@ -132,6 +132,7 @@ if __name__ == "__main__":
     else:
         X = None
         P = jnp.zeros((n, R))
+
     y = jnp.zeros((n,))
     z = jnp.zeros((n,))
     tr_X = 0.0
@@ -140,125 +141,6 @@ if __name__ == "__main__":
     k_curr = K
     k_past = 1
     k = k_curr + k_past
-
-    #### Do the warm-start
-    if WARM_START:
-        print("\n+++++++++++++++++++++++++++++ WARM-START ++++++++++++++++++++++++++++++++++\n")
-
-        warm_start_n = int(WARM_START_FRAC * n)
-        warm_start_C = C.tolil()[:warm_start_n, :warm_start_n].tocsr()
-
-        if SOLVER == "cgal":
-            WARM_START_SCALE_X = 1.0 / float(warm_start_n)
-            WARM_START_SCALE_C = 1.0 / scipy.sparse.linalg.norm(warm_start_C, ord="fro") 
-        elif SOLVER == "specbm":
-            WARM_START_SCALE_X = 1.0
-            WARM_START_SCALE_C = 1.0
-
-        warm_start_m = warm_start_n
-        warm_start_trace_ub = 1.0 * float(warm_start_n) * WARM_START_SCALE_X
-
-        scaled_warm_start_C = warm_start_C.tocoo().T * WARM_START_SCALE_C
-        scaled_warm_start_C = BCOO(
-            (scaled_warm_start_C.data,
-            jnp.stack((scaled_warm_start_C.row, scaled_warm_start_C.col)).T),
-            shape=scaled_warm_start_C.shape)
-        warm_start_C = warm_start_C.tocoo()
-        warm_start_C = BCOO(
-            (warm_start_C.data, jnp.stack((warm_start_C.row, warm_start_C.col)).T),
-            shape=warm_start_C.shape)
-
-        warm_start_C_matvec = create_C_matvec(scaled_warm_start_C)
-        warm_start_A_operator_slim = create_A_operator_slim()
-        warm_start_A_adjoint_slim = create_A_adjoint_slim()
-        warm_start_b = jnp.ones((warm_start_n,)) * WARM_START_SCALE_X
-        warm_start_compute_max_cut = create_compute_max_cut(warm_start_C)
-
-        if Omega is None:
-            warm_start_X = jnp.zeros((warm_start_n, warm_start_n))
-            warm_start_Omega = None
-            warm_start_P = None
-        else:
-            warm_start_X = None
-            warm_start_Omega = Omega[:warm_start_n, :]
-            warm_start_P = jnp.zeros((warm_start_n, R))
-        warm_start_y = jnp.zeros((warm_start_m,))
-        warm_start_z = jnp.zeros((warm_start_n,))
-
-        if SOLVER == "specbm":
-            (warm_start_X,
-             warm_start_P,
-             warm_start_y,
-             warm_start_z,
-             warm_start_primal_obj,
-             warm_start_tr_X) = specbm(
-                X=warm_start_X,
-                P=warm_start_P,
-                y=warm_start_y,
-                z=warm_start_z,
-                primal_obj=0.0,
-                tr_X=0.0,
-                n=warm_start_n,
-                m=warm_start_m,
-                trace_ub=warm_start_trace_ub,
-                C=warm_start_C,
-                C_matvec=warm_start_C_matvec,
-                A_operator_slim=warm_start_A_operator_slim,
-                A_adjoint_slim=warm_start_A_adjoint_slim,
-                Q_base=Q_base,
-                U=U,
-                Omega=warm_start_Omega,
-                b=warm_start_b,
-                rho=0.5,
-                beta=0.25,
-                k_curr=k_curr,
-                k_past=k_past,
-                SCALE_C=1.0,
-                SCALE_X=1.0,
-                eps=EPS,
-                max_iters=WARM_START_MAX_ITERS,
-                lanczos_num_iters=LANCZOS_NUM_ITERS,
-                callback_fn=warm_start_compute_max_cut)
-
-        elif SOLVER == "cgal":
-            (warm_start_X,
-             warm_start_P,
-             warm_start_y,
-             warm_start_z,
-             warm_start_primal_obj,
-             warm_start_tr_X) = cgal(
-                X=warm_start_X,
-                P=warm_start_P,
-                y=warm_start_y,
-                z=warm_start_z,
-                primal_obj=0.0,
-                tr_X=0.0,
-                n=warm_start_n,
-                m=warm_start_m,
-                trace_ub=warm_start_trace_ub,
-                C_matvec=warm_start_C_matvec,
-                A_operator_slim=warm_start_A_operator_slim,
-                A_adjoint_slim=warm_start_A_adjoint_slim,
-                Omega=warm_start_Omega,
-                b=warm_start_b,
-                beta0=1.0,
-                SCALE_C=WARM_START_SCALE_C,
-                SCALE_X=WARM_START_SCALE_X,
-                eps=EPS,
-                max_iters=WARM_START_MAX_ITERS,
-                lanczos_num_iters=LANCZOS_NUM_ITERS,
-                callback_fn=warm_start_compute_max_cut)
-        else:
-            raise ValueError("Invalid SOLVER")
-
-        if Omega is None:
-            X = X.at[:warm_start_n, :warm_start_n].set(warm_start_X)
-        else:
-            P = P.at[:warm_start_n, :].set(warm_start_P)
-        y = y.at[:warm_start_n].set(warm_start_y)
-        z = z.at[:warm_start_n].set(warm_start_z)
-        tr_X = warm_start_tr_X
-        primal_obj = warm_start_primal_obj / (WARM_START_SCALE_C * WARM_START_SCALE_X)
 
     print("\n+++++++++++++++++++++++++++++ BEGIN ++++++++++++++++++++++++++++++++++\n")
 
@@ -314,8 +196,8 @@ if __name__ == "__main__":
             SCALE_X=1.0,
             eps=EPS,
             max_iters=MAX_ITERS,
-            lanczos_inner_iterations=50,
-            lanczos_max_restarts=100,
+            lanczos_inner_iterations=min(n, max(2*k + 1, 32)),
+            lanczos_max_restarts=LANCZOS_MAX_RESTARTS,
             subprob_tol=1e-7,
             callback_fn=compute_max_cut)
     elif SOLVER == "cgal":
