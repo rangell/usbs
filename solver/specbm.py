@@ -493,7 +493,7 @@ def specbm(
         max_infeas = jnp.max(jnp.abs(state.z - state.b)) / SCALE_X
 
         if state.Omega is not None and callback_fn is not None:
-            callback_val = callback_fn(state.Omega, state.P)
+            callback_val = callback_fn(state.C, state.Omega, state.P)
         else:
             callback_val = None
 

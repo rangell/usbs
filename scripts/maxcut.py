@@ -21,13 +21,11 @@ from solver.utils import reconstruct_from_sketch
 from IPython import embed
 
 
-def create_compute_max_cut(C: BCOO):
-    @jax.jit
-    def compute_max_cut(Omega: Array, P: Array) -> int:
-        W, _ = reconstruct_from_sketch(Omega, P)
-        W_bin = 2 * (W > 0).astype(float) - 1
-        return jnp.max(jnp.diag(-W_bin.T @ C @ W_bin))
-    return compute_max_cut
+@jax.jit
+def compute_max_cut(C: BCOO, Omega: Array, P: Array) -> int:
+    W, _ = reconstruct_from_sketch(Omega, P)
+    W_bin = 2 * (W > 0).astype(float) - 1
+    return jnp.max(jnp.diag(-W_bin.T @ C @ W_bin))
 
 
 def solve_scs(C: csc_matrix) -> np.ndarray[Any, Any]:
@@ -290,8 +288,6 @@ if __name__ == "__main__":
     A_data = jnp.ones((n))
     A_indices = jnp.stack(
         (jnp.arange(n), jnp.arange(n), jnp.arange(n))).T 
-    #compute_max_cut = create_compute_max_cut(C)
-    compute_max_cut = None
     b = jnp.ones((n,)) * SCALE_X
 
     if SOLVER == "specbm":
