@@ -13,7 +13,6 @@ import numpy as np
 import time
 from typing import Callable, Tuple, Union
 
-from solver.eigen import approx_grad_k_min_eigen
 from solver.lanczos import eigsh_smallest
 from solver.utils import (apply_A_operator_batched,
                           apply_A_adjoint_batched,

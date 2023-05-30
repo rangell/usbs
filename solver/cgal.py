@@ -3,13 +3,15 @@ from equinox.internal._loop.bounded import bounded_while_loop # type: ignore
 from functools import partial
 import jax
 import jax.experimental.host_callback as hcb
+from jax.experimental.sparse import BCOO
 import jax.numpy as jnp
 from jax import lax
 from jax._src.typing import Array
 import time
 from typing import Any, Callable, Tuple, Union
 
-from solver.eigen import approx_grad_k_min_eigen
+from solver.lanczos import eigsh_smallest
+from solver.utils import apply_A_operator_slim, apply_A_adjoint_slim
 
 from IPython import embed
 
@@ -24,23 +26,37 @@ def cgal(
     n: int,
     m: int,
     trace_ub: float,
-    C_matvec: Callable[[Array], Array],
-    A_operator_slim: Callable[[Array], Array],
-    A_adjoint_slim: Callable[[Array, Array], Array],
-    Omega: Union[Array, None],
+    C: BCOO,
+    A_data: Array,
+    A_indices: Array,
     b: Array,
+    Omega: Union[Array, None],
     beta0: float,
     SCALE_C: float,
     SCALE_X: float,
     eps: float,
     max_iters: int,
-    lanczos_num_iters: int,
+    lanczos_inner_iterations: int,
+    lanczos_max_restarts: int,
+    subprob_tol: float,
     callback_fn: Union[Callable[[Array, Array], Array], None]
 ) -> Tuple[Array, Array]:
 
     StateStruct = namedtuple(
         "StateStruct",
-        ["t", "X", "P", "y", "z", "primal_obj", "obj_gap", "infeas_gap"])
+        ["t",
+         "C",
+         "A_data",
+         "A_indices",
+         "b",
+         "Omega",
+         "X",
+         "P",
+         "y",
+         "z",
+         "primal_obj",
+         "obj_gap",
+         "infeas_gap"])
 
     @jax.jit
     def cond_func(state: StateStruct) -> bool:
@@ -52,29 +68,35 @@ def cgal(
                         time=hcb.call(lambda _: time.time(), arg=0, result_shape=float))
         beta = beta0 * jnp.sqrt(state.t + 1)
 
-        adjoint_left_vec = state.y + beta*(state.z - b)
+        adjoint_left_vec = state.y + beta*(state.z - state.b)
 
-        eigvals, eigvecs = approx_grad_k_min_eigen(
-            C_matvec=C_matvec,
-            A_adjoint_slim=A_adjoint_slim,
-            adjoint_left_vec=adjoint_left_vec,
+        q0 = jax.random.normal(jax.random.PRNGKey(0), shape=(n,))
+        q0 /= jnp.linalg.norm(q0)
+        eigvals, eigvecs = eigsh_smallest(
             n=n,
-            k=1,
-            num_iters=lanczos_num_iters,
-            rng=jax.random.PRNGKey(state.t))
+            C=state.C,
+            A_data=state.A_data,
+            A_indices=state.A_indices,
+            adjoint_left_vec=adjoint_left_vec,
+            q0=q0,
+            num_desired=1,
+            inner_iterations=lanczos_inner_iterations,
+            max_restarts=lanczos_max_restarts,
+            tolerance=subprob_tol)
         # fix trace_ub here to allow for <= trace
         eigvecs = lax.cond(
             (eigvals >= 0).squeeze(), lambda _: 0.0 * eigvecs, lambda _: eigvecs, None)
-        jax.debug.print("eigval: {eigval}", eigval=eigvals.squeeze())
 
         min_eigvec = eigvecs[:, 0:1]  # gives the right shape for next line
         X_update_dir = trace_ub * min_eigvec @ min_eigvec.T
         min_eigvec = min_eigvec.reshape(-1,)
 
-        surrogate_dual_gap = state.primal_obj - trace_ub*jnp.dot(min_eigvec, C_matvec(min_eigvec))
+        surrogate_dual_gap = state.primal_obj - trace_ub*jnp.dot(min_eigvec, state.C @ min_eigvec)
         surrogate_dual_gap += jnp.dot(adjoint_left_vec, state.z)
-        surrogate_dual_gap -= trace_ub * jnp.dot(min_eigvec, A_adjoint_slim(adjoint_left_vec, min_eigvec))
-        obj_gap = surrogate_dual_gap - jnp.dot(state.y, state.z - b)
+        surrogate_dual_gap -= trace_ub * jnp.dot(
+            min_eigvec, apply_A_adjoint_slim(
+                n, state.A_data, state.A_indices, adjoint_left_vec, min_eigvec))
+        obj_gap = surrogate_dual_gap - jnp.dot(state.y, state.z - state.b)
         obj_gap -= 0.5*beta*jnp.linalg.norm(state.z - b)**2
         obj_gap = obj_gap / (SCALE_C * SCALE_X)
         obj_gap /= 1.0 + (jnp.abs(state.primal_obj) / (SCALE_C * SCALE_X))
@@ -83,28 +105,29 @@ def cgal(
         max_infeas = jnp.max(jnp.abs(state.z - b)) / SCALE_X
         eta = 2.0 / (state.t + 2.0)
 
-        if Omega is None:
+        if state.Omega is None:
             X_next = (1 - eta) * state.X + eta * trace_ub * X_update_dir
             P_next = None
         else:
             X_next = None
             min_eigvec = min_eigvec.reshape(-1, 1)
-            P_next = (1 - eta) * state.P + eta * trace_ub * min_eigvec @ (min_eigvec.T @ Omega)
+            P_next = (1 - eta) * state.P + eta * trace_ub * min_eigvec @ (min_eigvec.T @ state.Omega)
             min_eigvec = min_eigvec.reshape(-1,)
 
-        z_next = (1 - eta) * state.z + eta * trace_ub * A_operator_slim(min_eigvec)
+        z_next = (1 - eta) * state.z + eta * trace_ub * apply_A_operator_slim(
+            m, state.A_data, state.A_indices, min_eigvec)
 
         dual_step_size = jnp.clip(
-            4 * beta * eta**2 * trace_ub**2 / jnp.sum(jnp.square(z_next - b)),
+            4 * beta * eta**2 * trace_ub**2 / jnp.sum(jnp.square(z_next - state.b)),
             a_min=0.0,
             a_max=beta0)
-        y_next = state.y + dual_step_size * (z_next - b)
+        y_next = state.y + dual_step_size * (z_next - state.b)
 
         primal_obj_next = (1 - eta) * state.primal_obj
-        primal_obj_next += eta * trace_ub * jnp.dot(min_eigvec, C_matvec(min_eigvec))
+        primal_obj_next += eta * trace_ub * jnp.dot(min_eigvec, state.C @ min_eigvec)
 
-        if Omega is not None and callback_fn is not None:
-            callback_val = callback_fn(Omega, state.P)
+        if state.Omega is not None and callback_fn is not None:
+            callback_val = callback_fn(state.C / SCALE_C, state.Omega, state.P)
         else:
             callback_val = None
 
@@ -123,6 +146,11 @@ def cgal(
 
         return StateStruct(
             t=state.t+1,
+            C=state.C,
+            A_data=state.A_data,
+            A_indices=state.A_indices,
+            b=state.b,
+            Omega=state.Omega,
             X=X_next,
             P=P_next,
             y=y_next,
@@ -133,6 +161,11 @@ def cgal(
 
     init_state = StateStruct(
         t=0,
+        C=C,
+        A_data=A_data,
+        A_indices=A_indices,
+        b=b,
+        Omega=Omega,
         X=X,
         P=P,
         y=y,
@@ -141,7 +174,7 @@ def cgal(
         obj_gap=1.1*eps,
         infeas_gap=1.1*eps)
 
-    final_state = bounded_while_loop(cond_func, body_func, init_state, max_steps=10000)
+    final_state = bounded_while_loop(cond_func, body_func, init_state, max_steps=max_iters)
 
     #state = init_state
     #for _ in range(1000):
