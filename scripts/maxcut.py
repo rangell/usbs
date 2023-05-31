@@ -5,6 +5,7 @@ import jax.numpy as jnp
 from jax import lax
 from jax._src.typing import Array
 from jax.experimental.sparse import BCOO
+import json
 import numpy as np
 from pathlib import Path
 import pickle
@@ -45,63 +46,52 @@ def solve_scs(C: csc_matrix) -> np.ndarray[Any, Any]:
 
 def get_hparams():
     parser = argparse.ArgumentParser() 
-    parser.add_argument('--data_path', type=str, required=True, help="path to mat file")
-    parser.add_argument('--warm_start', action='store_true', help="warm-start or not")
-    parser.add_argument('--warm_start_frac', type=float,
-                        help="fraction of data used to warmkstart")
-    parser.add_argument('--solver', type=str, required=True, choices=["specbm", "cgal"],
+    parser.add_argument("--data_path", type=str, required=True, help="path to mat file")
+    parser.add_argument("--solver", type=str, required=True, choices=["specbm", "cgal"],
                         help="name of solver to use")
-    parser.add_argument('--warm_start_max_iters', type=int,
-                        help="number of iterations to run warm-start")
-    parser.add_argument('--max_iters', type=int, required=True,
+    parser.add_argument("--max_iters", type=int, required=True,
                         help="number of iterations to run solver")
+    parser.add_argument("--k_curr", type=int, required=True,
+                        help="number of new eigenvectors to compute")
+    parser.add_argument("--k_past", type=int, required=True,
+                        help="number of new eigenvectors to compute")
+    parser.add_argument("--r", type=int, required=True, help="sketch dimension")
+    parser.add_argument("--lanczos_max_restarts", type=int, required=True,
+                        help="max number of restarts for thick restart Lanczos")
+    parser.add_argument("--eps", type=float, required=True,
+                        help="error tolerance for solver convergence")
+    parser.add_argument("--subprob_tol", type=float, default=1e-7,
+                        help="error tolerance for Lanczos and IPMs")
+    parser.add_argument("--warm_start", action='store_true', help="warm-start or not")
+    parser.add_argument("--warm_start_frac", type=float,
+                        help="fraction of data used to warm-start")
+    parser.add_argument("--warm_start_max_iters", type=int,
+                        help="number of iterations to run warm-start")
     hparams = parser.parse_args()
     return hparams
 
 
 if __name__ == "__main__":
 
+    # get experiment hparams and print them out
     hparams = get_hparams()
-
-    # variables controlling experiment
-    MAT_PATH = hparams.data_path
-    WARM_START = hparams.warm_start
-    WARM_START_FRAC = hparams.warm_start_frac
-    SOLVER = hparams.solver
-    K = 10                       # number of eigenvectors to compute for specbm
-    R = 100                     # size of the sketch
-    LANCZOS_MAX_RESTARTS = 10
-    EPS = 1e-5
-    WARM_START_MAX_ITERS = hparams.warm_start_max_iters
-    MAX_ITERS = hparams.max_iters
-
-    # print out all of the variable for this experiment
-    print("MAT_PATH: ", MAT_PATH)
-    print("WARM_START_FRAC: ", WARM_START_FRAC)
-    print("WARM_START: ", WARM_START)
-    print("SOLVER: ", SOLVER)
-    print("K: ", K)
-    print("R: ", R)
-    print("LANCZOS_MAX_RESTARTS: ", LANCZOS_MAX_RESTARTS)
-    print("EPS: ", EPS)
-    print("WARM_START_MAX_ITERS: ", WARM_START_MAX_ITERS)
-    print("MAX_ITERS: ", MAX_ITERS)
+    print(json.dumps(vars(hparams), indent=4))
 
     jax.config.update("jax_enable_x64", True)
 
     # load the problem data
     try:
-        problem = loadmat(MAT_PATH)
+        problem = loadmat(hparams.data_path)
         dict_format = False
     except:
-        problem = mat73_loadmat(MAT_PATH)
+        problem = mat73_loadmat(hparams.data_path)
         dict_format = True
 
-    if "Gset" in MAT_PATH:
+    if "Gset" in hparams.data_path:
         C = problem["Problem"][0][0][1]
-    elif "DIMACS" in MAT_PATH and not dict_format:
+    elif "DIMACS" in hparams.data_path and not dict_format:
         C = problem["Problem"][0][0][2]
-    elif "DIMACS" in MAT_PATH and dict_format:
+    elif "DIMACS" in hparams.data_path and dict_format:
         C = problem["Problem"]["A"]
     else:
         raise ValueError("Unknown path type")
@@ -124,30 +114,142 @@ if __name__ == "__main__":
     #        pickle.dump(X_scs, f_out)
         
     # construct the test matrix for the sketch
-    Omega = jax.random.normal(jax.random.PRNGKey(0), shape=(n, R))
+    Omega = jax.random.normal(jax.random.PRNGKey(0), shape=(n, hparams.r))
 
     if Omega is None:
         X = jnp.zeros((n, n))
         P = None
     else:
         X = None
-        P = jnp.zeros((n, R))
+        P = jnp.zeros((n, hparams.r))
 
     y = jnp.zeros((n,))
     z = jnp.zeros((n,))
     tr_X = 0.0
     primal_obj = 0.0
 
-    k_curr = K
-    k_past = 1
-    k = k_curr + k_past
+    k = hparams.k_curr + hparams.k_past
+
+     #### Do the warm-start
+    if hparams.warm_start:
+        print("\n+++++++++++++++++++++++++++++ WARM-START ++++++++++++++++++++++++++++++++++\n")
+
+        warm_start_n = int(hparams.warm_start_frac * n)
+        warm_start_C = C.tolil()[:warm_start_n, :warm_start_n].tocsr()
+
+        if hparams.solver == "cgal":
+            WARM_START_SCALE_X = 1.0 / float(warm_start_n)
+            WARM_START_SCALE_C = 1.0 / scipy.sparse.linalg.norm(warm_start_C, ord="fro") 
+        elif hparams.solver == "specbm":
+            WARM_START_SCALE_X = 1.0
+            WARM_START_SCALE_C = 1.0
+
+        warm_start_m = warm_start_n
+        warm_start_trace_ub = 1.0 * float(warm_start_n) * WARM_START_SCALE_X
+
+        scaled_warm_start_C = warm_start_C.tocoo().T * WARM_START_SCALE_C
+        scaled_warm_start_C = BCOO(
+            (scaled_warm_start_C.data,
+            jnp.stack((scaled_warm_start_C.row, scaled_warm_start_C.col)).T),
+            shape=scaled_warm_start_C.shape)
+
+        warm_start_A_data = jnp.ones((warm_start_n))
+        warm_start_A_indices = jnp.stack(
+            (jnp.arange(warm_start_n), jnp.arange(warm_start_n), jnp.arange(warm_start_n))).T 
+        warm_start_b = jnp.ones((warm_start_n,)) * WARM_START_SCALE_X
+
+        if Omega is None:
+            warm_start_X = jnp.zeros((warm_start_n, warm_start_n))
+            warm_start_Omega = None
+            warm_start_P = None
+        else:
+            warm_start_X = None
+            warm_start_Omega = Omega[:warm_start_n, :]
+            warm_start_P = jnp.zeros((warm_start_n, hparams.r))
+        warm_start_y = jnp.zeros((warm_start_m,))
+        warm_start_z = jnp.zeros((warm_start_n,))
+
+        if hparams.solver == "specbm":
+            (warm_start_X,
+             warm_start_P,
+             warm_start_y,
+             warm_start_z,
+             warm_start_primal_obj,
+             warm_start_tr_X) = specbm(
+                X=warm_start_X,
+                P=warm_start_P,
+                y=warm_start_y,
+                z=warm_start_z,
+                primal_obj=0.0,
+                tr_X=0.0,
+                n=warm_start_n,
+                m=warm_start_m,
+                trace_ub=warm_start_trace_ub,
+                C=scaled_warm_start_C,
+                A_data=warm_start_A_data,
+                A_indices=warm_start_A_indices,
+                b=warm_start_b,
+                Omega=warm_start_Omega,
+                rho=0.5,
+                beta=0.25,
+                k_curr=hparams.k_curr,
+                k_past=hparams.k_past,
+                SCALE_C=1.0,
+                SCALE_X=1.0,
+                eps=hparams.eps,
+                max_iters=hparams.warm_start_max_iters,
+                lanczos_inner_iterations=min(n, max(2*k + 1, 32)),
+                lanczos_max_restarts=hparams.lanczos_max_restarts,
+                subprob_tol=1e-7,
+                callback_fn=compute_max_cut)
+        elif hparams.solver == "cgal":
+            (warm_start_X,
+             warm_start_P,
+             warm_start_y,
+             warm_start_z,
+             warm_start_primal_obj,
+             warm_start_tr_X) = cgal(
+                X=warm_start_X,
+                P=warm_start_P,
+                y=warm_start_y,
+                z=warm_start_z,
+                primal_obj=0.0,
+                tr_X=0.0,
+                n=warm_start_n,
+                m=warm_start_m,
+                trace_ub=warm_start_trace_ub,
+                C=scaled_warm_start_C,
+                A_data=warm_start_A_data,
+                A_indices=warm_start_A_indices,
+                b=warm_start_b,
+                Omega=Omega,
+                beta0=1.0,
+                SCALE_C=WARM_START_SCALE_C,
+                SCALE_X=WARM_START_SCALE_X,
+                eps=hparams.eps,
+                max_iters=hparams.warm_start_max_iters,
+                lanczos_inner_iterations=min(n, max(2*k + 1, 32)),
+                lanczos_max_restarts=hparams.lanczos_max_restarts,
+                subprob_tol=1e-7,
+                callback_fn=compute_max_cut)
+        else:
+            raise ValueError("Invalid SOLVER")
+
+        if Omega is None:
+            X = X.at[:warm_start_n, :warm_start_n].set(warm_start_X)
+        else:
+            P = P.at[:warm_start_n, :].set(warm_start_P)
+        y = y.at[:warm_start_n].set(warm_start_y)
+        z = z.at[:warm_start_n].set(warm_start_z)
+        tr_X = warm_start_tr_X
+        primal_obj = warm_start_primal_obj / (WARM_START_SCALE_C * WARM_START_SCALE_X)
 
     print("\n+++++++++++++++++++++++++++++ BEGIN ++++++++++++++++++++++++++++++++++\n")
 
-    if SOLVER == "cgal":
+    if hparams.solver == "cgal":
         SCALE_X = 1.0 / float(n)
         SCALE_C = 1.0 / scipy.sparse.linalg.norm(C, ord="fro") 
-    elif SOLVER == "specbm":
+    elif hparams.solver == "specbm":
         SCALE_X = 1.0
         SCALE_C = 1.0
     else:
@@ -160,9 +262,6 @@ if __name__ == "__main__":
     scaled_C = scaled_C.tocoo().T
     scaled_C = BCOO(
         (scaled_C.data, jnp.stack((scaled_C.row, scaled_C.col)).T), shape=scaled_C.shape)
-    C = C.tocoo()
-    C = BCOO(
-        (C.data, jnp.stack((C.row, C.col)).T), shape=C.shape)
 
     trace_ub = 1.0 * float(n) * SCALE_X
     m = n
@@ -172,7 +271,7 @@ if __name__ == "__main__":
         (jnp.arange(n), jnp.arange(n), jnp.arange(n))).T 
     b = jnp.ones((n,)) * SCALE_X
 
-    if SOLVER == "specbm":
+    if hparams.solver == "specbm":
         X, P, y, z, primal_obj, tr_X = specbm(
             X=X,
             P=P,
@@ -190,17 +289,17 @@ if __name__ == "__main__":
             Omega=Omega,
             rho=0.5,
             beta=0.25,
-            k_curr=k_curr,
-            k_past=k_past,
+            k_curr=hparams.k_curr,
+            k_past=hparams.k_past,
             SCALE_C=1.0,
             SCALE_X=1.0,
-            eps=EPS,
-            max_iters=MAX_ITERS,
+            eps=hparams.eps,
+            max_iters=hparams.max_iters,
             lanczos_inner_iterations=min(n, max(2*k + 1, 32)),
-            lanczos_max_restarts=LANCZOS_MAX_RESTARTS,
+            lanczos_max_restarts=hparams.lanczos_max_restarts,
             subprob_tol=1e-7,
             callback_fn=compute_max_cut)
-    elif SOLVER == "cgal":
+    elif hparams.solver == "cgal":
         X, P, y, z, primal_obj, tr_X = cgal(
             X=X,
             P=P,
@@ -219,10 +318,10 @@ if __name__ == "__main__":
             beta0=1.0,
             SCALE_C=SCALE_C,
             SCALE_X=SCALE_X,
-            eps=EPS,
-            max_iters=MAX_ITERS,
+            eps=hparams.eps,
+            max_iters=hparams.max_iters,
             lanczos_inner_iterations=min(n, max(2*k + 1, 32)),
-            lanczos_max_restarts=LANCZOS_MAX_RESTARTS,
+            lanczos_max_restarts=hparams.lanczos_max_restarts,
             subprob_tol=1e-7,
             callback_fn=compute_max_cut)
     else:
