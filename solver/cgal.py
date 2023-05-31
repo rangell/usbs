@@ -108,10 +108,15 @@ def cgal(
         if line_search:
             AH = trace_ub * apply_A_operator_slim(m, state.A_data, state.A_indices, min_eigvec)
             eta = state.primal_obj - trace_ub*jnp.dot(min_eigvec, state.C @ min_eigvec)
-            eta /= (SCALE_C * SCALE_X)
-            eta += jnp.dot(adjoint_left_vec, state.z - AH) / SCALE_X**2
-            eta /= beta * jnp.sum(jnp.square(AH - state.z)) / SCALE_X**2
+            eta += jnp.dot(adjoint_left_vec, state.z - AH)
+            eta /= beta * jnp.sum(jnp.square(AH - state.z))
             eta = jnp.clip(eta, a_min=0.0, a_max=1.0)
+            #AH = trace_ub * apply_A_operator_slim(m, state.A_data, state.A_indices, min_eigvec)
+            #eta = state.primal_obj - trace_ub*jnp.dot(min_eigvec, state.C @ min_eigvec)
+            #eta /= (SCALE_C * SCALE_X)
+            #eta += jnp.dot(adjoint_left_vec, state.z - AH) / SCALE_X**2
+            #eta /= beta * jnp.sum(jnp.square(AH - state.z)) / SCALE_X**2
+            #eta = jnp.clip(eta, a_min=0.0, a_max=1.0)
         else:
             eta = 2.0 / (state.t + 2.0)
 
