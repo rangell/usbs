@@ -51,9 +51,9 @@ def get_hparams():
                         help="name of solver to use")
     parser.add_argument("--max_iters", type=int, required=True,
                         help="number of iterations to run solver")
-    parser.add_argument("--k_curr", type=int, required=True,
+    parser.add_argument("--k_curr", type=int, default=1,
                         help="number of new eigenvectors to compute")
-    parser.add_argument("--k_past", type=int, required=True,
+    parser.add_argument("--k_past", type=int, default=0,
                         help="number of new eigenvectors to compute")
     parser.add_argument("--r", type=int, required=True, help="sketch dimension")
     parser.add_argument("--lanczos_max_restarts", type=int, required=True,
@@ -62,7 +62,9 @@ def get_hparams():
                         help="error tolerance for solver convergence")
     parser.add_argument("--subprob_tol", type=float, default=1e-7,
                         help="error tolerance for Lanczos and IPMs")
-    parser.add_argument("--warm_start", action='store_true', help="warm-start or not")
+    parser.add_argument("--cgal_line_search", action="store_true",
+                        help="use line search step-size for cgal")
+    parser.add_argument("--warm_start", action="store_true", help="warm-start or not")
     parser.add_argument("--warm_start_frac", type=float,
                         help="fraction of data used to warm-start")
     parser.add_argument("--warm_start_max_iters", type=int,
@@ -222,12 +224,13 @@ if __name__ == "__main__":
                 A_data=warm_start_A_data,
                 A_indices=warm_start_A_indices,
                 b=warm_start_b,
-                Omega=Omega,
+                Omega=warm_start_Omega,
                 beta0=1.0,
                 SCALE_C=WARM_START_SCALE_C,
                 SCALE_X=WARM_START_SCALE_X,
                 eps=hparams.eps,
                 max_iters=hparams.warm_start_max_iters,
+                line_search=hparams.cgal_line_search,
                 lanczos_inner_iterations=min(n, max(2*k + 1, 32)),
                 lanczos_max_restarts=hparams.lanczos_max_restarts,
                 subprob_tol=1e-7,
@@ -320,6 +323,7 @@ if __name__ == "__main__":
             SCALE_X=SCALE_X,
             eps=hparams.eps,
             max_iters=hparams.max_iters,
+            line_search=hparams.cgal_line_search,
             lanczos_inner_iterations=min(n, max(2*k + 1, 32)),
             lanczos_max_restarts=hparams.lanczos_max_restarts,
             subprob_tol=1e-7,

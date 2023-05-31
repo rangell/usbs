@@ -36,6 +36,7 @@ def cgal(
     SCALE_X: float,
     eps: float,
     max_iters: int,
+    line_search: bool,
     lanczos_inner_iterations: int,
     lanczos_max_restarts: int,
     subprob_tol: float,
@@ -103,7 +104,16 @@ def cgal(
         infeas_gap = jnp.linalg.norm((state.z - b) / SCALE_X) 
         infeas_gap /= 1.0 + jnp.linalg.norm(b / SCALE_X)
         max_infeas = jnp.max(jnp.abs(state.z - b)) / SCALE_X
-        eta = 2.0 / (state.t + 2.0)
+
+        if line_search:
+            AH = trace_ub * apply_A_operator_slim(m, state.A_data, state.A_indices, min_eigvec)
+            eta = state.primal_obj - trace_ub*jnp.dot(min_eigvec, state.C @ min_eigvec)
+            eta /= (SCALE_C * SCALE_X)
+            eta += jnp.dot(adjoint_left_vec, state.z - AH) / SCALE_X**2
+            eta /= beta * jnp.sum(jnp.square(AH - state.z)) / SCALE_X**2
+            eta = jnp.clip(eta, a_min=0.0, a_max=1.0)
+        else:
+            eta = 2.0 / (state.t + 2.0)
 
         if state.Omega is None:
             X_next = (1 - eta) * state.X + eta * trace_ub * X_update_dir
@@ -134,15 +144,15 @@ def cgal(
         end_time = hcb.call(lambda _: time.time(), arg=0, result_shape=float)
         jax.debug.print("t: {t} - end_time: {end_time} - primal_obj: {primal_obj} - obj_gap: {obj_gap}"
                         " - infeas_gap: {infeas_gap} - max_infeas: {max_infeas}"
-                        " - callback_val: {callback_val}",
+                        " - callback_val: {callback_val} - eta: {eta}",
                         t=state.t,
                         end_time=end_time,
                         primal_obj=state.primal_obj / (SCALE_C * SCALE_X),
                         obj_gap=obj_gap,
                         infeas_gap=infeas_gap,
                         max_infeas=max_infeas,
-                        callback_val=callback_val)
-
+                        callback_val=callback_val,
+                        eta=eta)
 
         return StateStruct(
             t=state.t+1,
