@@ -2,18 +2,15 @@ import argparse
 import cvxpy as cp
 import jax
 import jax.numpy as jnp
-from jax import lax
 from jax._src.typing import Array
 from jax.experimental.sparse import BCOO
 import json
 import numpy as np
-from pathlib import Path
-import pickle
 import scipy  # type: ignore
 from scipy.io import loadmat  # type: ignore
 from mat73 import loadmat as mat73_loadmat
-from scipy.sparse import coo_matrix, csc_matrix  # type: ignore
-from typing import Any, Callable, Tuple
+from scipy.sparse import csc_matrix  # type: ignore
+from typing import Any
 
 from solver.cgal import cgal
 from solver.specbm import specbm
