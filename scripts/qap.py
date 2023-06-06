@@ -7,18 +7,18 @@ from IPython import embed
 
 
 def load_qap(fname: str) -> Tuple[Array, Array]:
-    """ Return (A, B) problem data from QAP data format. """
+    """ Return (D, W) problem data from QAP data format. """
     with open(fname, "r") as f:
         datastr = f.read()
-        str_n, str_A, str_B, _ = tuple(datastr.split("\n\n"))
+        str_n, str_D, str_W, _ = tuple(datastr.split("\n\n"))
         n = int(str_n)
-        A = jnp.array([float(v) for v in str_A.split()]).reshape(n, n)
-        B = jnp.array([float(v) for v in str_B.split()]).reshape(n, n)
-        # by convention, B should be sparser than A
-        if jnp.count_nonzero(A) < jnp.count_nonzero(B):
-            A, B = B, A
+        D = jnp.array([float(v) for v in str_D.split()]).reshape(n, n)
+        W = jnp.array([float(v) for v in str_W.split()]).reshape(n, n)
+        # by convention, W should be sparser than D
+        if jnp.count_nonzero(D) < jnp.count_nonzero(W):
+            D, W = W, D
 
-    return A, B
+    return D, W
 
 
 if __name__ == "__main__":
@@ -26,7 +26,7 @@ if __name__ == "__main__":
 
     DATAFILE = "data/qap/qapdata/chr12a.dat"
 
-    A, B = load_qap(DATAFILE)
+    D, W = load_qap(DATAFILE)
 
     embed()
     exit()
