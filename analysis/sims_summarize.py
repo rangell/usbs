@@ -15,6 +15,7 @@ def create_df_from_log(log_fname):
     begin = False
     warm_start = ""
     solver = ""
+    cgal_line_search = ""
     start_time = None
     time = []
     iteration = []
@@ -28,14 +29,20 @@ def create_df_from_log(log_fname):
             line.strip()
 
             if warm_start == "":
-                re_warm_start = re.search("WARM_START:\s+([A-Za-z]+)", line)
+                re_warm_start = re.search("\"warm_start\":\s+([A-Za-z]+),", line)
                 if re_warm_start:
                     warm_start = re_warm_start.group(1)
 
             if solver == "":
-                re_solver = re.search("SOLVER:\s+([A-Za-z]+)", line)
+                re_solver = re.search("\"solver\":\s+\"([A-Za-z]+)\",", line)
                 if re_solver:
                     solver = re_solver.group(1)
+
+            if cgal_line_search == "":
+                re_cgal_line_search = re.search("\"cgal_line_search\":\s+([A-Za-z]+),", line)
+                if re_cgal_line_search:
+                    cgal_line_search = re_cgal_line_search.group(1)
+                    assert cgal_line_search == "false" or solver == "cgal"
 
             if not begin:
                 re_begin = re.search("\sBEGIN\s", line)
@@ -67,12 +74,15 @@ def create_df_from_log(log_fname):
             )
     )
 
+    solver = solver + "_ls" if cgal_line_search == "true" else solver
+    solver = solver + " (warm-start)" if warm_start == "true" else solver + " (no warm-start)"
+
     print("Filling dataframe for file: {} ...".format(log_fname))
-    for i in range(1, len(time)):
+    for i in range(0, len(time)):
         df.loc[i] = [
-            solver + " (warm-start)" if warm_start == "True" else solver + " (no warm-start)",
-            time[i],
-            iteration[i],
+            solver,
+            time[i] - time[0] + 0.1,
+            iteration[i] + 1,
             objective_gap[i],
             feasibility_gap[i],
             cut_value[i]
@@ -85,9 +95,9 @@ if __name__ == "__main__":
     
     expt_out_files = [
         "../results/cgal_no_warm_start_G67.out",
-        "../results/cgal_warm_start_0_99_G67.out",
+        "../results/cgal_warm_start_0_9_G67.out",
         "../results/specbm_no_warm_start_G67.out",
-        "../results/specbm_warm_start_0_99_G67.out"
+        "../results/specbm_warm_start_0_9_G67.out"
     ]
 
     dfs = []
@@ -97,9 +107,8 @@ if __name__ == "__main__":
     merged_df = pd.concat(dfs)
     
     # dump aggregated df to pickle file
-    with open('sims_summary_df.pkl', 'wb') as f:
+    with open('sims_summary_df_0_90_G67.pkl', 'wb') as f:
         pickle.dump(merged_df, f)
 
     embed()
     exit()
-    
