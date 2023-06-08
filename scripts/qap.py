@@ -23,6 +23,63 @@ def load_and_process_qap(fname: str) -> Tuple[Array, Array]:
     return C
 
 
+def load_and_process_tsp(fname: str) -> Tuple[Array, Array]:
+    # used documentation to implement: http://comopt.ifi.uni-heidelberg.de/software/TSPLIB95/tsp95.pdf
+    spec_vars = {}
+    with open(fname, "r") as f:
+        for line in f:
+            splitline = [ss.strip() for ss in line.split(":")]
+            if len(splitline) == 2: # specification part
+                spec_vars[splitline[0]] = splitline[1]
+            elif len(splitline) == 1: # info part
+                if splitline[0] == "NODE_COORD_SECTION":
+                    coords = []
+                    while True:
+                        line = next(f).strip()
+                        if line == "EOF":
+                            assert len(coords) == int(spec_vars['DIMENSION'])
+                            break
+                        _, _x, _y = tuple(line.split())
+                        coords.append([_x, _y])
+                    break # break out of initial for loop
+                elif splitline[0] == "EDGE_WEIGHT_SECTION":
+                    # TODO: handle EDGE_WEIGHT_SECTION case, end is either "DISPLAY_DATA_SECTION" or "EOF"
+                    edge_weight_str = ""
+                    while True:
+                        line = next(f).strip()
+                        if line == "EOF" or line == "DISPLAY_DATA_SECTION":
+                            break
+                        edge_weight_str += " " + line
+                    flat_edge_weights = jnp.array([int(v) for v in edge_weight_str.split()])
+                    if spec_vars["EDGE_WEIGHT_FORMAT"] == "FULL_MATRIX":
+                        pass
+                    elif spec_vars["EDGE_WEIGHT_FORMAT"] == "UPPER_ROW":
+                        pass
+                    elif spec_vars["EDGE_WEIGHT_FORMAT"] == "LOWER_ROW":
+                        pass
+                    elif spec_vars["EDGE_WEIGHT_FORMAT"] == "UPPER_DIAG_ROW":
+                        pass
+                    elif spec_vars["EDGE_WEIGHT_FORMAT"] == "UPPER_DIAG_ROW":
+                        pass
+                    embed()
+                    exit()
+                else:
+                    pass
+            else:
+                raise ValueError("Something went wrong when reading file.")
+        embed()
+        exit()
+            
+    # TODO: build data
+
+    # by convention, W should be sparser than D
+    if jnp.count_nonzero(D) < jnp.count_nonzero(W):
+        D, W = W, D
+
+    C = build_objective_matrix(D, W)
+    return C
+
+
 def build_objective_matrix(D: Array, W: Array) -> BCOO:
     n = D.shape[0]
     sparse_D = BCOO.fromdense(D)
@@ -42,7 +99,6 @@ def build_objective_matrix(D: Array, W: Array) -> BCOO:
 
 
 def get_all_problem_data(C: BCOO) -> Tuple[BCOO, Array, Array, Array]:
-
     n = C.shape[0]
     l = int(jnp.sqrt(n - 1))
     i = 0  # running constraint-matrix index
@@ -146,11 +202,18 @@ def get_all_problem_data(C: BCOO) -> Tuple[BCOO, Array, Array, Array]:
 if __name__ == "__main__":
     jax.config.update("jax_enable_x64", True)
 
-    DATAFILE = "data/qap/qapdata/chr12a.dat"
+    #DATAFILE = "data/qap/qapdata/chr12a.dat"
+    #DATAFILE = "data/qap/tspdata/ulysses16.tsp"
+    DATAFILE = "data/qap/tspdata/dantzig42.tsp"
 
     # TODO: write load TSP
+    if DATAFILE.split(".")[-1] == "dat":
+        C = load_and_process_qap(DATAFILE)
+    elif DATAFILE.split(".")[-1] == "tsp":
+        C = load_and_process_tsp(DATAFILE)
+    else:
+        raise ValueError("Invalid data file type.")
 
-    C = load_and_process_qap(DATAFILE)
     C, A_indices, A_data, b = get_all_problem_data(C)
 
     embed()
