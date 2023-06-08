@@ -2,6 +2,8 @@ import jax
 from jax._src.typing import Array
 from jax.experimental.sparse import BCOO
 import jax.numpy as jnp
+import numpy as np
+from scipy.spatial.distance import pdist, squareform  # type: ignore
 from typing import Any, Callable, Tuple
 
 from IPython import embed
@@ -15,12 +17,12 @@ def load_and_process_qap(fname: str) -> Tuple[Array, Array]:
         D = jnp.array([float(v) for v in str_D.split()]).reshape(n, n)
         W = jnp.array([float(v) for v in str_W.split()]).reshape(n, n)
 
-    # by convention, W should be sparser than D
+    # by convention, W should be sparser than D -- this doesn't really matter
     if jnp.count_nonzero(D) < jnp.count_nonzero(W):
         D, W = W, D
 
-    C = build_objective_matrix(D, W)
-    return C
+    # return expanded and padded kronecker product
+    return build_objective_matrix(D, W)
 
 
 def load_and_process_tsp(fname: str) -> Tuple[Array, Array]:
@@ -32,52 +34,101 @@ def load_and_process_tsp(fname: str) -> Tuple[Array, Array]:
             if len(splitline) == 2: # specification part
                 spec_vars[splitline[0]] = splitline[1]
             elif len(splitline) == 1: # info part
+                n = int(spec_vars["DIMENSION"])
+                D = jnp.zeros((n, n))
+                filled_D = False
+                coords = None
                 if splitline[0] == "NODE_COORD_SECTION":
                     coords = []
                     while True:
                         line = next(f).strip()
                         if line == "EOF":
-                            assert len(coords) == int(spec_vars['DIMENSION'])
+                            assert len(coords) == n
                             break
                         _, _x, _y = tuple(line.split())
-                        coords.append([_x, _y])
-                    break # break out of initial for loop
+                        coords.append([float(_x), float(_y)])
+                    break  # break out of initial for loop, we have what we need.
                 elif splitline[0] == "EDGE_WEIGHT_SECTION":
-                    # TODO: handle EDGE_WEIGHT_SECTION case, end is either "DISPLAY_DATA_SECTION" or "EOF"
-                    edge_weight_str = ""
+                    edge_dist_str = ""
                     while True:
                         line = next(f).strip()
                         if line == "EOF" or line == "DISPLAY_DATA_SECTION":
                             break
-                        edge_weight_str += " " + line
-                    flat_edge_weights = jnp.array([int(v) for v in edge_weight_str.split()])
+                        edge_dist_str += " " + line
+                    flat_edge_dists = jnp.array([int(v) for v in edge_dist_str.split()])
                     if spec_vars["EDGE_WEIGHT_FORMAT"] == "FULL_MATRIX":
-                        pass
-                    elif spec_vars["EDGE_WEIGHT_FORMAT"] == "UPPER_ROW":
-                        pass
-                    elif spec_vars["EDGE_WEIGHT_FORMAT"] == "LOWER_ROW":
-                        pass
-                    elif spec_vars["EDGE_WEIGHT_FORMAT"] == "UPPER_DIAG_ROW":
-                        pass
-                    elif spec_vars["EDGE_WEIGHT_FORMAT"] == "UPPER_DIAG_ROW":
-                        pass
-                    embed()
-                    exit()
+                        indices = np.where(D == 0)
+                        D = D.at[indices].set(flat_edge_dists)
+                    elif spec_vars["EDGE_WEIGHT_FORMAT"] in ["UPPER_ROW", "LOWER_COL"]:
+                        indices = jnp.triu_indices(n, k=1)
+                        D = D.at[indices].set(flat_edge_dists)
+                        D = D + D.T
+                    elif spec_vars["EDGE_WEIGHT_FORMAT"] in ["LOWER_ROW", "UPPER_COL"]:
+                        raise NotImplementedError("edge weight format type not implemented")  # no examples for this case?
+                    elif spec_vars["EDGE_WEIGHT_FORMAT"] in ["UPPER_DIAG_ROW", "LOWER_DIAG_COL"]:
+                        indices = jnp.triu_indices(n, k=0)
+                        D = D.at[indices].set(flat_edge_dists)
+                        D = D + D.T
+                    elif spec_vars["EDGE_WEIGHT_FORMAT"] in ["LOWER_DIAG_ROW", "UPPER_DIAG_COL"]:
+                        indices = jnp.tril_indices(n, k=0)
+                        D = D.at[indices].set(flat_edge_dists)
+                        D = D + D.T
+                    else:
+                        raise ValueError("Unsupported EDGE_WEIGHT_FORMAT.")
+                    filled_D = True
+                    break  # break out of initial for loop, we have what we need.
                 else:
                     pass
             else:
                 raise ValueError("Something went wrong when reading file.")
-        embed()
-        exit()
+
+        if not filled_D:
+            assert coords is not None
+            coords = np.array(coords)
+            if spec_vars["EDGE_WEIGHT_TYPE"] == "GEO":
+                def geo_dist(p1, p2):
+                    PI = 3.141592
+                    RRR = 6378.388
+
+                    # compute lat-long for each point in radians
+                    lat1 = PI * ((deg := np.round(p1[0])) + 5.0 * (p1[0] - deg) / 3.0 ) / 180.0
+                    long1 = PI * ((deg := np.round(p1[1])) + 5.0 * (p1[1] - deg) / 3.0 ) / 180.0
+                    lat2 = PI * ((deg := np.round(p2[0])) + 5.0 * (p2[0] - deg) / 3.0 ) / 180.0
+                    long2 = PI * ((deg := np.round(p2[1])) + 5.0 * (p2[1] - deg) / 3.0 ) / 180.0
+
+                    # compute distance in kilometers
+                    q1 = np.cos(long1 - long2)
+                    q2 = np.cos(lat1 - lat2)
+                    q3 = np.cos(lat1 + lat2)
+                    return int(RRR * np.arccos(0.5*(q2 * (1.0 + q1) - q3 * (1.0 - q1))) + 1.0)
+                D = squareform(pdist(coords, geo_dist))
+            elif spec_vars["EDGE_WEIGHT_TYPE"] == "ATT":
+                def att_dist(p1, p2):
+                    xd = p1[0] - p2[0]
+                    yd = p1[1] - p2[1]
+                    return np.ceil(np.sqrt((xd**2 + yd**2) / 10.0))
+                D = squareform(pdist(coords, att_dist))
+            elif spec_vars["EDGE_WEIGHT_TYPE"] == "EUC_2D":
+                D = np.round(squareform(pdist(coords, 'euclidean')))
+            elif spec_vars["EDGE_WEIGHT_TYPE"] == "CEIL_2D":
+                D = np.ceil(squareform(pdist(coords, 'euclidean')))
+            else:
+                raise ValueError("Unsupported EDGE_WEIGHT_TYPE.")
+            D = jnp.array(D)
             
-    # TODO: build data
+    # construct sparse symmetric canonical tour
+    W_indices = []
+    W_data = []
+    for i in range(n):
+        W_indices.append([i, (i + 1) % n])
+        W_indices.append([(i + 1) % n, i])
+        W_data += [0.5, 0.5]
+    W_indices = jnp.array(W_indices)
+    W_data = jnp.array(W_data)
+    W = BCOO((W_data, W_indices), shape=(n, n)).todense()
 
-    # by convention, W should be sparser than D
-    if jnp.count_nonzero(D) < jnp.count_nonzero(W):
-        D, W = W, D
-
-    C = build_objective_matrix(D, W)
-    return C
+    # return expanded and padded kronecker product
+    return build_objective_matrix(D, W)
 
 
 def build_objective_matrix(D: Array, W: Array) -> BCOO:
@@ -203,8 +254,11 @@ if __name__ == "__main__":
     jax.config.update("jax_enable_x64", True)
 
     #DATAFILE = "data/qap/qapdata/chr12a.dat"
-    #DATAFILE = "data/qap/tspdata/ulysses16.tsp"
-    DATAFILE = "data/qap/tspdata/dantzig42.tsp"
+    DATAFILE = "data/qap/tspdata/ulysses16.tsp"
+    #DATAFILE = "data/qap/tspdata/dantzig42.tsp"
+    #DATAFILE = "data/qap/tspdata/bayg29.tsp"
+    #DATAFILE = "data/qap/tspdata/bays29.tsp"
+    #DATAFILE = "data/qap/tspdata/att48.tsp"
 
     # TODO: write load TSP
     if DATAFILE.split(".")[-1] == "dat":
