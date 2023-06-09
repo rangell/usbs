@@ -165,6 +165,9 @@ def get_all_problem_data(C: BCOO) -> Tuple[BCOO, Array, Array, Array]:
     b = [[1.0, 1.0]]
     i += 1
 
+    # TODO: maybe we don't need to make A symmetric, this might be affecting scale
+    #       and we know how important scale is...
+
     # constraint: diag(Y) = vec(P)
     for j in range(1, n):
         A_indices.append([i, j, 0])
@@ -227,6 +230,8 @@ def get_all_problem_data(C: BCOO) -> Tuple[BCOO, Array, Array, Array]:
             i += 1
 
     # constraint: objective-relevant entries of Y >= 0
+    # TODO: we might need to assert more than just these indices >= 0
+    #           like Alp says: W kron 11'?
     for j in range(C.nse):
         coord_a, coord_b = C.indices[j][0], C.indices[j][1]
         if coord_a < coord_b:
