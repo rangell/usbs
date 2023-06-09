@@ -34,6 +34,7 @@ def cgal(
     beta0: float,
     SCALE_C: float,
     SCALE_X: float,
+    SCALE_A: float,
     eps: float,
     max_iters: int,
     line_search: bool,
@@ -63,7 +64,7 @@ def cgal(
     def cond_func(state: StateStruct) -> bool:
         return jnp.logical_or(state.obj_gap > eps, state.infeas_gap > eps)
 
-    @jax.jit
+    #@jax.jit
     def body_func(state: StateStruct) -> StateStruct:
         jax.debug.print("start_time: {time}",
                         time=hcb.call(lambda _: time.time(), arg=0, result_shape=float))
@@ -84,12 +85,13 @@ def cgal(
             inner_iterations=lanczos_inner_iterations,
             max_restarts=lanczos_max_restarts,
             tolerance=subprob_tol)
+
         # fix trace_ub here to allow for <= trace
         eigvecs = lax.cond(
             (eigvals >= 0).squeeze(), lambda _: 0.0 * eigvecs, lambda _: eigvecs, None)
 
         min_eigvec = eigvecs[:, 0:1]  # gives the right shape for next line
-        X_update_dir = trace_ub * min_eigvec @ min_eigvec.T
+        X_update_dir = min_eigvec @ min_eigvec.T
         min_eigvec = min_eigvec.reshape(-1,)
 
         surrogate_dual_gap = state.primal_obj - trace_ub*jnp.dot(min_eigvec, state.C @ min_eigvec)
@@ -183,14 +185,14 @@ def cgal(
         obj_gap=1.1*eps,
         infeas_gap=1.1*eps)
 
-    final_state = bounded_while_loop(cond_func, body_func, init_state, max_steps=max_iters)
+    #final_state = bounded_while_loop(cond_func, body_func, init_state, max_steps=max_iters)
 
-    #state = init_state
-    #for _ in range(1000):
-    #    state = body_func(state)
+    state = init_state
+    for _ in range(1000):
+        state = body_func(state)
 
-    #embed()
-    #exit()
+    embed()
+    exit()
 
     return (final_state.X,
             final_state.P,

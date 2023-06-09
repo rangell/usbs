@@ -3,8 +3,13 @@ from jax._src.typing import Array
 from jax.experimental.sparse import BCOO
 import jax.numpy as jnp
 import numpy as np
+import scipy  # type: ignore
 from scipy.spatial.distance import pdist, squareform  # type: ignore
 from typing import Any, Callable, Tuple
+
+from solver.cgal import cgal
+from solver.specbm import specbm
+from solver.utils import reconstruct_from_sketch
 
 from IPython import embed
 
@@ -22,7 +27,7 @@ def load_and_process_qap(fname: str) -> Tuple[Array, Array]:
         D, W = W, D
 
     # return expanded and padded kronecker product
-    return build_objective_matrix(D, W)
+    return n, build_objective_matrix(D, W)
 
 
 def load_and_process_tsp(fname: str) -> Tuple[Array, Array]:
@@ -128,7 +133,7 @@ def load_and_process_tsp(fname: str) -> Tuple[Array, Array]:
     W = BCOO((W_data, W_indices), shape=(n, n)).todense()
 
     # return expanded and padded kronecker product
-    return build_objective_matrix(D, W)
+    return n, build_objective_matrix(D, W)
 
 
 def build_objective_matrix(D: Array, W: Array) -> BCOO:
@@ -253,8 +258,8 @@ def get_all_problem_data(C: BCOO) -> Tuple[BCOO, Array, Array, Array]:
 if __name__ == "__main__":
     jax.config.update("jax_enable_x64", True)
 
-    #DATAFILE = "data/qap/qapdata/chr12a.dat"
-    DATAFILE = "data/qap/tspdata/ulysses16.tsp"
+    DATAFILE = "data/qap/qapdata/chr12a.dat"
+    #DATAFILE = "data/qap/tspdata/ulysses16.tsp"
     #DATAFILE = "data/qap/tspdata/dantzig42.tsp"
     #DATAFILE = "data/qap/tspdata/bayg29.tsp"
     #DATAFILE = "data/qap/tspdata/bays29.tsp"
@@ -262,13 +267,70 @@ if __name__ == "__main__":
 
     # TODO: write load TSP
     if DATAFILE.split(".")[-1] == "dat":
-        C = load_and_process_qap(DATAFILE)
+        l, C = load_and_process_qap(DATAFILE)
     elif DATAFILE.split(".")[-1] == "tsp":
-        C = load_and_process_tsp(DATAFILE)
+        l, C = load_and_process_tsp(DATAFILE)
     else:
         raise ValueError("Invalid data file type.")
 
     C, A_indices, A_data, b = get_all_problem_data(C)
+    n = C.shape[0]
+    m = b.shape[0]
+
+    SCALE_X = 1.0 / float(n)
+    SCALE_C = 1.0 / jnp.linalg.norm(C.data)  # equivalent to frobenius norm
+    SCALE_A = jnp.zeros((m,))
+    SCALE_A = SCALE_A.at[A_indices[:,0]].add(A_data**2)
+    SCALE_A = 1.0 / jnp.sqrt(SCALE_A)
+
+    scaled_C = BCOO((C.data * SCALE_C, C.indices), shape=C.shape)
+    b = b * SCALE_X * SCALE_A
+
+    # TODO: rescale A_data by SCALE_A
+    scaled_A_data = A_data * SCALE_A.at[A_indices[:,0]].get()
+
+    SCALE_SCALED_A = jnp.zeros((m,))
+    SCALE_SCALED_A = SCALE_SCALED_A.at[A_indices[:,0]].add(scaled_A_data**2)
+    SCALE_SCALED_A = 1.0 / jnp.sqrt(SCALE_SCALED_A)
+
+    embed()
+    exit()
+
+    X = jnp.zeros((n, n))
+    P = None
+    Omega = None
+    y = jnp.zeros((m,))
+    z = jnp.zeros((m,))
+    tr_X = 0.0
+    primal_obj = 0.0
+
+    trace_ub = 1.0 * float(n) * SCALE_X
+
+    X, P, y, z, primal_obj, tr_X = cgal(
+        X=X,
+        P=P,
+        y=y,
+        z=z,
+        primal_obj=primal_obj,
+        tr_X=tr_X,
+        n=n,
+        m=m,
+        trace_ub=trace_ub,
+        C=scaled_C,
+        A_data=A_data,
+        A_indices=A_indices,
+        b=b,
+        Omega=Omega,
+        beta0=1.0,
+        SCALE_C=SCALE_C,
+        SCALE_X=SCALE_X,
+        eps=1e-3,  # hparams.eps,
+        max_iters=50,  # hparams.max_iters,
+        line_search=False,  # hparams.cgal_line_search,
+        lanczos_inner_iterations=min(n, 32),
+        lanczos_max_restarts=10,  # hparams.lanczos_max_restarts,
+        subprob_tol=1e-7,
+        callback_fn=None)
 
     embed()
     exit()
