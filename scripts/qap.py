@@ -285,16 +285,7 @@ if __name__ == "__main__":
 
     scaled_C = BCOO((C.data * SCALE_C, C.indices), shape=C.shape)
     b = b * SCALE_X * SCALE_A
-
-    # TODO: rescale A_data by SCALE_A
     scaled_A_data = A_data * SCALE_A.at[A_indices[:,0]].get()
-
-    SCALE_SCALED_A = jnp.zeros((m,))
-    SCALE_SCALED_A = SCALE_SCALED_A.at[A_indices[:,0]].add(scaled_A_data**2)
-    SCALE_SCALED_A = 1.0 / jnp.sqrt(SCALE_SCALED_A)
-
-    embed()
-    exit()
 
     X = jnp.zeros((n, n))
     P = None
@@ -317,15 +308,16 @@ if __name__ == "__main__":
         m=m,
         trace_ub=trace_ub,
         C=scaled_C,
-        A_data=A_data,
+        A_data=scaled_A_data,
         A_indices=A_indices,
         b=b,
         Omega=Omega,
         beta0=1.0,
         SCALE_C=SCALE_C,
         SCALE_X=SCALE_X,
+        SCALE_A=SCALE_A,
         eps=1e-3,  # hparams.eps,
-        max_iters=50,  # hparams.max_iters,
+        max_iters=5000,  # hparams.max_iters,
         line_search=False,  # hparams.cgal_line_search,
         lanczos_inner_iterations=min(n, 32),
         lanczos_max_restarts=10,  # hparams.lanczos_max_restarts,

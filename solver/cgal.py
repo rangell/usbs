@@ -34,7 +34,7 @@ def cgal(
     beta0: float,
     SCALE_C: float,
     SCALE_X: float,
-    SCALE_A: float,
+    SCALE_A: Array,
     eps: float,
     max_iters: int,
     line_search: bool,
@@ -64,7 +64,7 @@ def cgal(
     def cond_func(state: StateStruct) -> bool:
         return jnp.logical_or(state.obj_gap > eps, state.infeas_gap > eps)
 
-    #@jax.jit
+    @jax.jit
     def body_func(state: StateStruct) -> StateStruct:
         jax.debug.print("start_time: {time}",
                         time=hcb.call(lambda _: time.time(), arg=0, result_shape=float))
@@ -103,9 +103,9 @@ def cgal(
         obj_gap -= 0.5*beta*jnp.linalg.norm(state.z - b)**2
         obj_gap = obj_gap / (SCALE_C * SCALE_X)
         obj_gap /= 1.0 + (jnp.abs(state.primal_obj) / (SCALE_C * SCALE_X))
-        infeas_gap = jnp.linalg.norm((state.z - b) / SCALE_X) 
-        infeas_gap /= 1.0 + jnp.linalg.norm(b / SCALE_X)
-        max_infeas = jnp.max(jnp.abs(state.z - b)) / SCALE_X
+        infeas_gap = jnp.linalg.norm(((state.z - b) / SCALE_A) / SCALE_X) 
+        infeas_gap /= 1.0 + jnp.linalg.norm((b / SCALE_A) / SCALE_X)
+        max_infeas = jnp.max(jnp.abs((state.z - b) / SCALE_A)) / SCALE_X
 
         if line_search:
             AH = trace_ub * apply_A_operator_slim(m, state.A_data, state.A_indices, min_eigvec)
@@ -185,11 +185,11 @@ def cgal(
         obj_gap=1.1*eps,
         infeas_gap=1.1*eps)
 
-    #final_state = bounded_while_loop(cond_func, body_func, init_state, max_steps=max_iters)
+    final_state = bounded_while_loop(cond_func, body_func, init_state, max_steps=max_iters)
 
-    state = init_state
-    for _ in range(1000):
-        state = body_func(state)
+    #state = init_state
+    #for _ in range(1000):
+    #    state = body_func(state)
 
     embed()
     exit()
