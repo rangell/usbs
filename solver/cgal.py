@@ -70,7 +70,10 @@ def cgal(
                         time=hcb.call(lambda _: time.time(), arg=0, result_shape=float))
         beta = beta0 * jnp.sqrt(state.t + 1)
 
-        adjoint_left_vec = state.y + beta*(state.z - state.b)
+        proj_b = jnp.minimum(
+            jnp.maximum(state.z + (1.0 / beta) * state.y, state.b[:, 0]), state.b[:, 1])
+
+        adjoint_left_vec = state.y + beta*(state.z - proj_b)
 
         q0 = jax.random.normal(jax.random.PRNGKey(0), shape=(n,))
         q0 /= jnp.linalg.norm(q0)
@@ -99,13 +102,15 @@ def cgal(
         surrogate_dual_gap -= trace_ub * jnp.dot(
             min_eigvec, apply_A_adjoint_slim(
                 n, state.A_data, state.A_indices, adjoint_left_vec, min_eigvec))
-        obj_gap = surrogate_dual_gap - jnp.dot(state.y, state.z - state.b)
-        obj_gap -= 0.5*beta*jnp.linalg.norm(state.z - b)**2
+        obj_gap = surrogate_dual_gap - jnp.dot(state.y, state.z - proj_b)
+        obj_gap -= 0.5*beta*jnp.linalg.norm(state.z - proj_b)**2
         obj_gap = obj_gap / (SCALE_C * SCALE_X)
         obj_gap /= 1.0 + (jnp.abs(state.primal_obj) / (SCALE_C * SCALE_X))
-        infeas_gap = jnp.linalg.norm(((state.z - b) / SCALE_A) / SCALE_X) 
-        infeas_gap /= 1.0 + jnp.linalg.norm((b / SCALE_A) / SCALE_X)
-        max_infeas = jnp.max(jnp.abs((state.z - b) / SCALE_A)) / SCALE_X
+
+        proj_b = jnp.minimum(jnp.maximum(state.z, state.b[:, 0]), state.b[:, 1])
+        infeas_gap = jnp.linalg.norm(((state.z - proj_b) / SCALE_A) / SCALE_X) 
+        infeas_gap /= 1.0 + jnp.linalg.norm((proj_b / SCALE_A) / SCALE_X)
+        max_infeas = jnp.max(jnp.abs((state.z - proj_b) / SCALE_A)) / SCALE_X
 
         if line_search:
             AH = trace_ub * apply_A_operator_slim(m, state.A_data, state.A_indices, min_eigvec)
@@ -128,11 +133,15 @@ def cgal(
         z_next = (1 - eta) * state.z + eta * trace_ub * apply_A_operator_slim(
             m, state.A_data, state.A_indices, min_eigvec)
 
+        # update beta before dual step
+        beta = beta0 * jnp.sqrt(state.t + 2)
+        proj_b = jnp.minimum(
+            jnp.maximum(z_next + (1.0 / beta) * state.y, state.b[:, 0]), state.b[:, 1])
         dual_step_size = jnp.clip(
-            4 * beta * eta**2 * trace_ub**2 / jnp.sum(jnp.square(z_next - state.b)),
+            4 * beta * eta**2 * trace_ub**2 / jnp.sum(jnp.square(z_next - proj_b)),
             a_min=0.0,
             a_max=beta0)
-        y_next = state.y + dual_step_size * (z_next - state.b)
+        y_next = state.y + dual_step_size * (z_next - proj_b)
 
         primal_obj_next = (1 - eta) * state.primal_obj
         primal_obj_next += eta * trace_ub * jnp.dot(min_eigvec, state.C @ min_eigvec)
@@ -190,9 +199,8 @@ def cgal(
     #state = init_state
     #for _ in range(1000):
     #    state = body_func(state)
-
-    embed()
-    exit()
+    #    embed()
+    #    exit()
 
     return (final_state.X,
             final_state.P,

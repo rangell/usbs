@@ -162,7 +162,7 @@ def get_all_problem_data(C: BCOO) -> Tuple[BCOO, Array, Array, Array]:
     # initialize with first constraint: X(0,0) = 1
     A_indices = [[0, 0, 0]]
     A_data = [1.0]
-    b = [1.0]
+    b = [[1.0, 1.0]]
     i += 1
 
     # constraint: diag(Y) = vec(P)
@@ -171,7 +171,7 @@ def get_all_problem_data(C: BCOO) -> Tuple[BCOO, Array, Array, Array]:
         A_indices.append([i, 0, j])
         A_indices.append([i, j, j])
         A_data += [-0.5, -0.5, 1.0]
-        b.append(0.0)
+        b.append([0.0, 0.0])
         i += 1
 
     # constraint: P1 = 1
@@ -180,7 +180,7 @@ def get_all_problem_data(C: BCOO) -> Tuple[BCOO, Array, Array, Array]:
             A_indices.append([i, j1*l + j2, 0])
             A_indices.append([i, 0, j1*l + j2])
             A_data += [0.5, 0.5]
-        b.append(1.0)
+        b.append([1.0, 1.0])
         i += 1
 
     # constraint: 1'P = 1'
@@ -189,7 +189,7 @@ def get_all_problem_data(C: BCOO) -> Tuple[BCOO, Array, Array, Array]:
             A_indices.append([i, j1 + j2*l, 0])
             A_indices.append([i, 0, j1 + j2*l])
             A_data += [0.5, 0.5]
-        b.append(1.0)
+        b.append([1.0, 1.0])
         i += 1
 
     # constraint: tr_1(Y) = I
@@ -204,9 +204,9 @@ def get_all_problem_data(C: BCOO) -> Tuple[BCOO, Array, Array, Array]:
                     A_indices.append([i, j2 + diag_idx*l + 1, j1 + diag_idx*l + 1])
                     A_data += [0.5, 0.5]
             if j1 == j2:
-                b.append(1.0)
+                b.append([1.0, 1.0])
             else:
-                b.append(0.0)
+                b.append([0.0, 0.0])
             i += 1
 
     # constraint: tr_2(Y) = I
@@ -221,38 +221,32 @@ def get_all_problem_data(C: BCOO) -> Tuple[BCOO, Array, Array, Array]:
                     A_indices.append([i, j2*l + diag_idx + 1, j1*l + diag_idx + 1])
                     A_data += [0.5, 0.5]
             if j1 == j2:
-                b.append(1.0)
+                b.append([1.0, 1.0])
             else:
-                b.append(0.0)
+                b.append([0.0, 0.0])
             i += 1
 
     # constraint: objective-relevant entries of Y >= 0
-    added_dims = 0
     for j in range(C.nse):
         coord_a, coord_b = C.indices[j][0], C.indices[j][1]
         if coord_a < coord_b:
             A_indices.append([i, coord_a, coord_b])
             A_indices.append([i, coord_b, coord_a])
-            A_indices.append([i, n + added_dims, n + added_dims])
-            A_data += [0.5, 0.5, -1.0]
-            b.append(0.0)
-            added_dims += 1
+            A_data += [0.5, 0.5]
+            b.append([0.0, 1.0])
             i += 1
         elif coord_a == coord_b:
             A_indices.append([i, coord_a, coord_a])
-            A_indices.append([i, n + added_dims, n + added_dims])
-            A_data += [1.0, -1.0]
-            b.append(0.0)
-            added_dims += 1
+            A_data += [1.0]
+            b.append([0.0, 1.0])
             i += 1
 
     # build final data structures
-    C = BCOO((C.data, C.indices), shape=(n + added_dims, n + added_dims))
     A_indices = jnp.array(A_indices)
     A_data = jnp.array(A_data)
     b = jnp.array(b)
 
-    return C, A_indices, A_data, b
+    return A_indices, A_data, b
 
 
 if __name__ == "__main__":
@@ -273,19 +267,22 @@ if __name__ == "__main__":
     else:
         raise ValueError("Invalid data file type.")
 
-    C, A_indices, A_data, b = get_all_problem_data(C)
+    A_indices, A_data, b = get_all_problem_data(C)
     n = C.shape[0]
     m = b.shape[0]
 
-    SCALE_X = 1.0 / float(n)
+    SCALE_X = 1.0 / float(l + 1)
     SCALE_C = 1.0 / jnp.linalg.norm(C.data)  # equivalent to frobenius norm
     SCALE_A = jnp.zeros((m,))
     SCALE_A = SCALE_A.at[A_indices[:,0]].add(A_data**2)
     SCALE_A = 1.0 / jnp.sqrt(SCALE_A)
 
     scaled_C = BCOO((C.data * SCALE_C, C.indices), shape=C.shape)
-    b = b * SCALE_X * SCALE_A
+    b = b * SCALE_X * SCALE_A.reshape(m, 1)
     scaled_A_data = A_data * SCALE_A.at[A_indices[:,0]].get()
+
+    embed()
+    exit()
 
     X = jnp.zeros((n, n))
     P = None
@@ -295,7 +292,7 @@ if __name__ == "__main__":
     tr_X = 0.0
     primal_obj = 0.0
 
-    trace_ub = 1.0 * float(n) * SCALE_X
+    trace_ub = 1.0 * float(l + 1) * SCALE_X
 
     X, P, y, z, primal_obj, tr_X = cgal(
         X=X,
@@ -317,10 +314,10 @@ if __name__ == "__main__":
         SCALE_X=SCALE_X,
         SCALE_A=SCALE_A,
         eps=1e-3,  # hparams.eps,
-        max_iters=5000,  # hparams.max_iters,
+        max_iters=100,  # hparams.max_iters,
         line_search=False,  # hparams.cgal_line_search,
         lanczos_inner_iterations=min(n, 32),
-        lanczos_max_restarts=10,  # hparams.lanczos_max_restarts,
+        lanczos_max_restarts=100,  # hparams.lanczos_max_restarts,
         subprob_tol=1e-7,
         callback_fn=None)
 
