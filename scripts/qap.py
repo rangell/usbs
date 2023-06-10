@@ -180,8 +180,8 @@ def get_all_problem_data(C: BCOO) -> Tuple[BCOO, Array, Array, Array]:
     # constraint: P1 = 1
     for j1 in range(l):
         for j2 in range(l):
-            A_indices.append([i, j1*l + j2, 0])
-            A_indices.append([i, 0, j1*l + j2])
+            A_indices.append([i, j1*l + j2 + 1, 0])
+            A_indices.append([i, 0, j1*l + j2 + 1])
             A_data += [0.5, 0.5]
         b.append([1.0, 1.0])
         i += 1
@@ -189,40 +189,30 @@ def get_all_problem_data(C: BCOO) -> Tuple[BCOO, Array, Array, Array]:
     # constraint: 1'P = 1'
     for j1 in range(l):
         for j2 in range(l):
-            A_indices.append([i, j1 + j2*l, 0])
-            A_indices.append([i, 0, j1 + j2*l])
+            A_indices.append([i, j1 + j2*l + 1, 0])
+            A_indices.append([i, 0, j1 + j2*l + 1])
             A_data += [0.5, 0.5]
         b.append([1.0, 1.0])
         i += 1
 
-    # constraint: tr_1(Y) = I
+    ## constraint: tr_1(Y) = I
     for j1 in range(l):
-        for j2 in range(j1, l):
+        for j2 in range(l):
             for diag_idx in range(l):
-                if j1 == j2:
-                    A_indices.append([i, j1 + diag_idx*l + 1, j1 + diag_idx*l + 1])
-                    A_data += [1.0]
-                else:
-                    A_indices.append([i, j1 + diag_idx*l + 1, j2 + diag_idx*l + 1])
-                    A_indices.append([i, j2 + diag_idx*l + 1, j1 + diag_idx*l + 1])
-                    A_data += [0.5, 0.5]
+                A_indices.append([i, j1 + diag_idx*l + 1, j2 + diag_idx*l + 1])
+                A_data += [1.0]
             if j1 == j2:
                 b.append([1.0, 1.0])
             else:
                 b.append([0.0, 0.0])
             i += 1
 
-    # constraint: tr_2(Y) = I
+    ## constraint: tr_2(Y) = I
     for j1 in range(l):
-        for j2 in range(j1, l):
+        for j2 in range(l):
             for diag_idx in range(l):
-                if j1 == j2:
-                    A_indices.append([i, j1*l + diag_idx + 1, j1*l + diag_idx + 1])
-                    A_data += [1.0]
-                else:
-                    A_indices.append([i, j1*l + diag_idx + 1, j2*l + diag_idx + 1])
-                    A_indices.append([i, j2*l + diag_idx + 1, j1*l + diag_idx + 1])
-                    A_data += [0.5, 0.5]
+                A_indices.append([i, j1*l + diag_idx + 1, j2*l + diag_idx + 1])
+                A_data += [1.0]
             if j1 == j2:
                 b.append([1.0, 1.0])
             else:
@@ -232,16 +222,23 @@ def get_all_problem_data(C: BCOO) -> Tuple[BCOO, Array, Array, Array]:
     # constraint: objective-relevant entries of Y >= 0
     # TODO: we might need to assert more than just these indices >= 0
     #           like Alp says: W kron 11'?
-    for j in range(C.nse):
-        coord_a, coord_b = C.indices[j][0], C.indices[j][1]
-        if coord_a < coord_b:
-            A_indices.append([i, coord_a, coord_b])
-            A_indices.append([i, coord_b, coord_a])
-            A_data += [0.5, 0.5]
-            b.append([0.0, 1.0])
-            i += 1
-        elif coord_a == coord_b:
-            A_indices.append([i, coord_a, coord_a])
+    #for j in range(C.nse):
+    #    coord_a, coord_b = C.indices[j][0], C.indices[j][1]
+    #    if coord_a < coord_b:
+    #        A_indices.append([i, coord_a, coord_b])
+    #        A_indices.append([i, coord_b, coord_a])
+    #        A_data += [0.5, 0.5]
+    #        b.append([0.0, 1.0])
+    #        i += 1
+    #    elif coord_a == coord_b:
+    #        A_indices.append([i, coord_a, coord_a])
+    #        A_data += [1.0]
+    #        b.append([0.0, 1.0])
+    #        i += 1
+
+    for j1 in range(n):
+        for j2 in range(n):
+            A_indices.append([i, j1, j2])
             A_data += [1.0]
             b.append([0.0, 1.0])
             i += 1
@@ -276,6 +273,10 @@ if __name__ == "__main__":
     n = C.shape[0]
     m = b.shape[0]
 
+    u = jax.random.normal(jax.random.PRNGKey(0), (n,))
+    z = jax.random.normal(jax.random.PRNGKey(1), (m,))
+    A_tensor = BCOO((A_data, A_indices), shape=(m, n, n)).todense()
+
     SCALE_X = 1.0 / float(l + 1)
     SCALE_C = 1.0 / jnp.linalg.norm(C.data)  # equivalent to frobenius norm
     SCALE_A = jnp.zeros((m,))
@@ -285,9 +286,6 @@ if __name__ == "__main__":
     scaled_C = BCOO((C.data * SCALE_C, C.indices), shape=C.shape)
     b = b * SCALE_X * SCALE_A.reshape(m, 1)
     scaled_A_data = A_data * SCALE_A.at[A_indices[:,0]].get()
-
-    embed()
-    exit()
 
     X = jnp.zeros((n, n))
     P = None
@@ -319,10 +317,10 @@ if __name__ == "__main__":
         SCALE_X=SCALE_X,
         SCALE_A=SCALE_A,
         eps=1e-3,  # hparams.eps,
-        max_iters=100,  # hparams.max_iters,
+        max_iters=10000,  # hparams.max_iters,
         line_search=False,  # hparams.cgal_line_search,
         lanczos_inner_iterations=min(n, 32),
-        lanczos_max_restarts=100,  # hparams.lanczos_max_restarts,
+        lanczos_max_restarts=10,  # hparams.lanczos_max_restarts,
         subprob_tol=1e-7,
         callback_fn=None)
 

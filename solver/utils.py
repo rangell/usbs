@@ -19,8 +19,8 @@ def apply_A_operator_slim(m: int, A_data: Array, A_indices: Array, u: Array) -> 
 @partial(jax.jit, static_argnames=["n"])
 def apply_A_adjoint_slim(n: int, A_data: Array, A_indices: Array, z: Array, u: Array) -> Array:
     outvec = jnp.zeros((n,))
-    outvec = outvec.at[A_indices[:,2]].add(
-        A_data * z.at[A_indices[:,0]].get() * u.at[A_indices[:,1]].get())
+    outvec = outvec.at[A_indices[:,1]].add(
+        A_data * z.at[A_indices[:,0]].get() * u.at[A_indices[:,2]].get())
     return outvec
 
 
