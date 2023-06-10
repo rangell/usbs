@@ -220,25 +220,16 @@ def get_all_problem_data(C: BCOO) -> Tuple[BCOO, Array, Array, Array]:
             i += 1
 
     # constraint: objective-relevant entries of Y >= 0
-    # TODO: we might need to assert more than just these indices >= 0
-    #           like Alp says: W kron 11'?
-    #for j in range(C.nse):
-    #    coord_a, coord_b = C.indices[j][0], C.indices[j][1]
-    #    if coord_a < coord_b:
-    #        A_indices.append([i, coord_a, coord_b])
-    #        A_indices.append([i, coord_b, coord_a])
-    #        A_data += [0.5, 0.5]
-    #        b.append([0.0, 1.0])
-    #        i += 1
-    #    elif coord_a == coord_b:
-    #        A_indices.append([i, coord_a, coord_a])
-    #        A_data += [1.0]
-    #        b.append([0.0, 1.0])
-    #        i += 1
-
-    for j1 in range(n):
-        for j2 in range(n):
-            A_indices.append([i, j1, j2])
+    for j in range(C.nse):
+        coord_a, coord_b = C.indices[j][0], C.indices[j][1]
+        if coord_a < coord_b:
+            A_indices.append([i, coord_a, coord_b])
+            A_indices.append([i, coord_b, coord_a])
+            A_data += [0.5, 0.5]
+            b.append([0.0, 1.0])
+            i += 1
+        elif coord_a == coord_b:
+            A_indices.append([i, coord_a, coord_a])
             A_data += [1.0]
             b.append([0.0, 1.0])
             i += 1
