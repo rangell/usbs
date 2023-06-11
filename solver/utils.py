@@ -77,9 +77,9 @@ def reconstruct_from_sketch(
     B = Omega.T @ P_rho
     B = 0.5 * (B + B.T)
     L = jnp.linalg.cholesky(B)
-    W, Rho, _ = jnp.linalg.svd(
+    E, Rho, _ = jnp.linalg.svd(
         jnp.linalg.lstsq(L, P_rho.T, rcond=-1)[0].T,
         full_matrices=False,  # this compresses the output to be rank `R`
     )
     Lambda = jnp.clip(Rho ** 2 - rho, 0, np.inf)
-    return W, Lambda
+    return E, Lambda

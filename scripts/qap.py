@@ -27,7 +27,7 @@ def load_and_process_qap(fname: str) -> Tuple[Array, Array]:
         D, W = W, D
 
     # return expanded and padded kronecker product
-    return n, build_objective_matrix(D, W)
+    return n, D, W, build_objective_matrix(D, W)
 
 
 def load_and_process_tsp(fname: str) -> Tuple[Array, Array]:
@@ -165,9 +165,6 @@ def get_all_problem_data(C: BCOO) -> Tuple[BCOO, Array, Array, Array]:
     b = [[1.0, 1.0]]
     i += 1
 
-    # TODO: maybe we don't need to make A symmetric, this might be affecting scale
-    #       and we know how important scale is...
-
     # constraint: diag(Y) = vec(P)
     for j in range(1, n):
         A_indices.append([i, j, 0])
@@ -254,9 +251,9 @@ if __name__ == "__main__":
 
     # TODO: write load TSP
     if DATAFILE.split(".")[-1] == "dat":
-        l, C = load_and_process_qap(DATAFILE)
+        l, D, W, C = load_and_process_qap(DATAFILE)
     elif DATAFILE.split(".")[-1] == "tsp":
-        l, C = load_and_process_tsp(DATAFILE)
+        l, D, W, C = load_and_process_tsp(DATAFILE)
     else:
         raise ValueError("Invalid data file type.")
 
@@ -278,15 +275,27 @@ if __name__ == "__main__":
     b = b * SCALE_X * SCALE_A.reshape(m, 1)
     scaled_A_data = A_data * SCALE_A.at[A_indices[:,0]].get()
 
-    X = jnp.zeros((n, n))
-    P = None
-    Omega = None
+    Omega = jax.random.normal(jax.random.PRNGKey(0), shape=(n, l))
+
+    #X = jnp.zeros((n, n))
+    #P = None
+    X = None
+    P = jnp.zeros_like(Omega)
     y = jnp.zeros((m,))
     z = jnp.zeros((m,))
     tr_X = 0.0
     primal_obj = 0.0
 
     trace_ub = 1.0 * float(l + 1) * SCALE_X
+
+    import pickle
+    with open("final_qap_state.pkl", "rb") as f:
+        X, P, y, z, primal_obj, tr_X = pickle.load(f)
+
+    E, Lambda = reconstruct_from_sketch(Omega, P)
+
+    embed()
+    exit()
 
     X, P, y, z, primal_obj, tr_X = cgal(
         X=X,
@@ -314,6 +323,10 @@ if __name__ == "__main__":
         lanczos_max_restarts=10,  # hparams.lanczos_max_restarts,
         subprob_tol=1e-7,
         callback_fn=None)
+
+    import pickle
+    with open("final_qap_state.pkl", "wb") as f:
+        pickle.dump((X, P, y, z, primal_obj, tr_X), f)
 
     embed()
     exit()
