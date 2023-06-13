@@ -3,7 +3,6 @@ from jax._src.typing import Array
 from jax.experimental.sparse import BCOO
 import jax.numpy as jnp
 import numpy as np
-import scipy  # type: ignore
 from scipy.spatial.distance import pdist, squareform  # type: ignore
 from typing import Any, Callable, Tuple
 
