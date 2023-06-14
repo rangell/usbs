@@ -9,9 +9,12 @@ from jax._src.typing import Array
 from IPython import embed
 
 
-#@partial(jax.jit, static_argnames=["n"])
+@partial(jax.jit, static_argnames=["n"])
 def munkres(n: int, cost_mx: Array) -> Array:
-    # Implementation adapted from: http://csclab.murraystate.edu/bob.pilgrim/445/munkres.html
+    """
+    Implementation adapted from: http://csclab.murraystate.edu/bob.pilgrim/445/munkres.html
+    """
+
     # create the working matrix
     M = jnp.copy(cost_mx)
 
@@ -34,20 +37,14 @@ def munkres(n: int, cost_mx: Array) -> Array:
         next_col_cover = next_col_cover.at[col].set(
             jnp.clip(star_entry, a_min=state.col_cover.at[col].get()))
         return StateStruct(state.M, next_mask_mx, next_row_cover, next_col_cover)
-    init_state = StateStruct(M, jnp.zeros_like(M), jnp.zeros((n,), dtype=bool), jnp.zeros((n,), dtype=bool))
     # Step 2
+    init_state = StateStruct(M, jnp.zeros_like(M), jnp.zeros((n,), dtype=bool), jnp.zeros((n,), dtype=bool))
     final_state = lax.fori_loop(0, n**2, initial_star_body, init_state)
 
     # hard assignment body_func helper functions
     def shift_zeros(state: StateStruct) -> StateStruct:
-        #print("shift_zeros")
         # Step 6
-        # TODO: This is wrong. See reference.
         cover_mask = state.row_cover.reshape(-1, 1) | state.col_cover.reshape(1, -1)
-        #if jnp.sum(~cover_mask) == 0:
-        #    print("zeros!!!")
-        #    embed()
-        #    exit()
         min_uncovered_val = jnp.min(jnp.where(~cover_mask, state.M, jnp.max(state.M)))
         sub_min_mask = jnp.ones_like(state.row_cover).reshape(-1, 1) & (~state.col_cover).reshape(1, -1)
         add_min_mask = state.row_cover.reshape(-1, 1) & jnp.ones_like(state.col_cover).reshape(1, -1)
@@ -56,7 +53,6 @@ def munkres(n: int, cost_mx: Array) -> Array:
         return StateStruct(M_next, state.mask_mx, state.row_cover, state.col_cover)
 
     def adjust_cover(state: StateStruct, row: int, col: int) -> StateStruct:
-        #print("adjust_cover")
         # part of Step 4
         col = jnp.argmax(state.mask_mx[row] == 1)
         row_cover_next = state.row_cover.at[row].set(True)
@@ -64,7 +60,6 @@ def munkres(n: int, cost_mx: Array) -> Array:
         return StateStruct(state.M, state.mask_mx, row_cover_next, col_cover_next)
 
     def aug_path(state: StateStruct, row: int, col: int) -> StateStruct:
-        #print("aug_path")
         # Step 5 (and col_cover of Step 3)
         AugPathStateStruct = namedtuple("AugPathStateStruct", ["aug_path", "mask_mx", "row", "col"])
         aug_path = jnp.zeros_like(state.mask_mx).at[row, col].set(1)
@@ -103,10 +98,6 @@ def munkres(n: int, cost_mx: Array) -> Array:
                 next_state = StateStruct(state.M, mask_mx_updated, state.row_cover, state.col_cover)
                 next_state = lax.cond(
                     jnp.sum(mask_mx_updated[row] == 1) >= 1, adjust_cover, aug_path, next_state, row, col)
-                #if jnp.sum(mask_mx_updated[row] == 1) >= 1:
-                #    next_state = adjust_cover(next_state, row, col)
-                #else:
-                #    next_state = aug_path(next_state, row, col)
                 return next_state
 
             next_state = lax.cond(
@@ -115,10 +106,6 @@ def munkres(n: int, cost_mx: Array) -> Array:
                 lambda state, uncovered_zero_mask: prime_or_aug_path(state, uncovered_zero_mask),
                 state,
                 uncovered_zero_mask)
-            #if jnp.sum(uncovered_zero_mask) == 0:
-            #    next_state = shift_zeros(state)
-            #else:
-            #    next_state = prime_or_aug_path(state, uncovered_zero_mask)
             return next_state
 
         return bounded_while_loop(cond_func, body_func, state, max_steps=(n**4)).mask_mx
@@ -140,16 +127,16 @@ if __name__ == "__main__":
     #               [5, 6, 8, 9, 5],
     #               [6, 8, 5, 8, 6],
     #               [9, 5, 6, 4, 7]])
-    #C = jnp.array([[62,75,80,93,95,97],
-    #               [75,80,82,85,71,97],
-    #               [80,75,81,98,90,97],
-    #               [78,82,84,80,50,98],
-    #               [90,85,85,80,85,99],
-    #               [65,75,80,75,68,96]])
+    C = jnp.array([[62,75,80,93,95,97],
+                   [75,80,82,85,71,97],
+                   [80,75,81,98,90,97],
+                   [78,82,84,80,50,98],
+                   [90,85,85,80,85,99],
+                   [65,75,80,75,68,96]])
     #C = jnp.array([[1,2,3,4],[2,4,6,8],[3,6,9,12],[4,8,12,16]])
     #C = jnp.array([[1,2,3],[3,3,3],[3,3,2]])
     #C = jnp.array([[7,4,3],[3,1,2],[3,0,0]])
-    C = jnp.array([[-1,-2,-3],[-3,-3,-3],[-3,-3,-2]])
+    #C = jnp.array([[-1,-2,-3],[-3,-3,-3],[-3,-3,-2]])
     n = C.shape[0]
     assignment = munkres(n, C)
 
