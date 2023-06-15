@@ -1,4 +1,5 @@
 import jax
+from jax import lax
 from jax._src.typing import Array
 from jax.experimental.sparse import BCOO
 import jax.numpy as jnp
@@ -6,6 +7,7 @@ import numpy as np
 from scipy.spatial.distance import pdist, squareform  # type: ignore
 from typing import Any, Callable, Tuple
 
+from scripts.munkres import munkres
 from solver.cgal import cgal
 from solver.specbm import specbm
 from solver.utils import reconstruct_from_sketch
@@ -238,6 +240,26 @@ def get_all_problem_data(C: BCOO) -> Tuple[BCOO, Array, Array, Array]:
     return A_indices, A_data, b
 
 
+def create_qap_round(l: int, D: Array, W: BCOO) -> Callable[[BCOO, Array, Array], float]:
+    @jax.jit
+    def qap_round(C: BCOO, Omega: Array, P: Array) -> float:
+        E, _ = reconstruct_from_sketch(Omega, P)
+        def body_func(i: int, best_assign_obj: float) -> float:
+            cost_mx = E[1:, i].reshape(l, l)
+            cost_mx = jnp.max(cost_mx) - cost_mx
+            perm_mx = munkres(l, cost_mx)
+            best_assign_obj = jnp.clip(jnp.trace(W @ perm_mx @ D @ perm_mx.T), a_max=best_assign_obj)
+            # try negative too
+            cost_mx = -E[1:, i].reshape(l, l)
+            cost_mx = jnp.max(cost_mx) - cost_mx
+            perm_mx = munkres(l, cost_mx)
+            best_assign_obj = jnp.clip(jnp.trace(W @ perm_mx @ D @ perm_mx.T), a_max=best_assign_obj)
+            return best_assign_obj
+        best_assign_obj = lax.fori_loop(0, l, body_func, jnp.inf)
+        return best_assign_obj
+    return qap_round
+
+
 if __name__ == "__main__":
     jax.config.update("jax_enable_x64", True)
 
@@ -291,7 +313,32 @@ if __name__ == "__main__":
     with open("final_qap_state.pkl", "rb") as f:
         X, P, y, z, primal_obj, tr_X = pickle.load(f)
 
+    qap_round = create_qap_round(l, D, W)
+    print("qap round: ", qap_round(C, Omega, P))
+
+    embed()
+    exit()
+
+
     E, Lambda = reconstruct_from_sketch(Omega, P)
+
+    best_assign_obj = jnp.inf
+
+    for i in range(l):
+        cost_mx = E[1:, i].reshape(l, l)
+        cost_mx = jnp.max(cost_mx) - cost_mx
+        perm_mx = BCOO.fromdense(munkres(l, cost_mx))
+
+        best_assign_obj = jnp.clip(jnp.trace(W @ perm_mx @ D @ perm_mx.T), a_max=best_assign_obj)
+        print("best_assign_obj: ", best_assign_obj)
+
+        # try negative too
+        cost_mx = -E[1:, i].reshape(l, l)
+        cost_mx = jnp.max(cost_mx) - cost_mx
+        perm_mx = BCOO.fromdense(munkres(l, cost_mx))
+
+        best_assign_obj = jnp.clip(jnp.trace(W @ perm_mx @ D @ perm_mx.T), a_max=best_assign_obj)
+        print("best_assign_obj: ", best_assign_obj)
 
     embed()
     exit()
