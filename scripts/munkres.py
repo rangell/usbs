@@ -23,7 +23,7 @@ def munkres(n: int, cost_mx: Array) -> Array:
 
     StateStruct = namedtuple("StateStruct", ["M", "mask_mx", "row_cover", "col_cover"])
 
-    # initial starring of zeros
+    # Step 2: initial starring of zeros
     def initial_star_body(i: int, state: StateStruct) -> StateStruct:
         row, col = i // n, i % n
         star_entry = jnp.logical_and(
@@ -37,7 +37,6 @@ def munkres(n: int, cost_mx: Array) -> Array:
         next_col_cover = next_col_cover.at[col].set(
             jnp.clip(star_entry, a_min=state.col_cover.at[col].get()))
         return StateStruct(state.M, next_mask_mx, next_row_cover, next_col_cover)
-    # Step 2
     init_state = StateStruct(M, jnp.zeros_like(M), jnp.zeros((n,), dtype=bool), jnp.zeros((n,), dtype=bool))
     final_state = lax.fori_loop(0, n**2, initial_star_body, init_state)
 
@@ -115,33 +114,58 @@ def munkres(n: int, cost_mx: Array) -> Array:
         final_state.mask_mx,
         jnp.zeros((n,), dtype=bool),
         jnp.sum(final_state.mask_mx == 1, axis=0).astype(bool))
+
     return find_hard_assignment(state)
 
 
 if __name__ == "__main__":
 
-    # TODO: test other cases
-    #C = jnp.array([[1, 2, 3], [2, 4, 6], [3, 6, 9]])
-    #C = jnp.array([[7, 6, 2, 9, 2],
-    #               [6, 2, 1, 3, 9],
-    #               [5, 6, 8, 9, 5],
-    #               [6, 8, 5, 8, 6],
-    #               [9, 5, 6, 4, 7]])
+    C = jnp.array([[1, 2, 3], [2, 4, 6], [3, 6, 9]])
+    assignment = munkres(C.shape[0], C)
+    print("C: \n", C)
+    print("assignment: \n", assignment)
+
+    print("\n")
+    C = jnp.array([[7, 6, 2, 9, 2],
+                   [6, 2, 1, 3, 9],
+                   [5, 6, 8, 9, 5],
+                   [6, 8, 5, 8, 6],
+                   [9, 5, 6, 4, 7]])
+    assignment = munkres(C.shape[0], C)
+    print("C: \n", C)
+    print("assignment: \n", assignment)
+
+    print("\n")
     C = jnp.array([[62,75,80,93,95,97],
                    [75,80,82,85,71,97],
                    [80,75,81,98,90,97],
                    [78,82,84,80,50,98],
                    [90,85,85,80,85,99],
                    [65,75,80,75,68,96]])
-    #C = jnp.array([[1,2,3,4],[2,4,6,8],[3,6,9,12],[4,8,12,16]])
-    #C = jnp.array([[1,2,3],[3,3,3],[3,3,2]])
-    #C = jnp.array([[7,4,3],[3,1,2],[3,0,0]])
-    #C = jnp.array([[-1,-2,-3],[-3,-3,-3],[-3,-3,-2]])
-    n = C.shape[0]
-    assignment = munkres(n, C)
-
+    assignment = munkres(C.shape[0], C)
     print("C: \n", C)
     print("assignment: \n", assignment)
 
+    print("\n")
+    C = jnp.array([[1,2,3,4],[2,4,6,8],[3,6,9,12],[4,8,12,16]])
+    assignment = munkres(C.shape[0], C)
+    print("C: \n", C)
+    print("assignment: \n", assignment)
 
+    print("\n")
+    C = jnp.array([[1,2,3],[3,3,3],[3,3,2]])
+    assignment = munkres(C.shape[0], C)
+    print("C: \n", C)
+    print("assignment: \n", assignment)
 
+    print("\n")
+    C = jnp.array([[7,4,3],[3,1,2],[3,0,0]])
+    assignment = munkres(C.shape[0], C)
+    print("C: \n", C)
+    print("assignment: \n", assignment)
+
+    print("\n")
+    C = jnp.array([[-1,-2,-3],[-3,-3,-3],[-3,-3,-2]])
+    assignment = munkres(C.shape[0], C)
+    print("C: \n", C)
+    print("assignment: \n", assignment)
