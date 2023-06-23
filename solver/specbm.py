@@ -178,6 +178,76 @@ def solve_quad_subprob_ipm(
             trace_ub * final_ipm_state.S)
 
 
+@partial(jax.jit, static_argnames=["n", "m", "k"])
+def solve_step_subprob(
+    C: BCOO,
+    A_data: Array,
+    A_indices: Array,
+    U: BCOO,
+    b: Array,
+    b_ineq_mask: Array,
+    upsilon: Array,
+    trace_ub: float,
+    rho: float,
+    bar_primal_obj: Array,
+    z_bar: Array,
+    tr_X_bar: Array,
+    y: Array,
+    V: Array,
+    n: int,
+    m: int,
+    k: int,
+    subprob_tol: float = 1e-10,
+    max_iters: int = 50
+) -> Tuple[Array, Array, Array]:
+
+    SubprobStateStruct = namedtuple("SubprobStateStruct", ["i", "eta", "S", "upsilon", "upsilon_gap"])
+
+    def cond_func(state: SubprobStateStruct) -> bool:
+        return state.upsilon_gap > subprob_tol
+
+    def body_func(state: SubprobStateStruct) -> SubprobStateStruct:
+        eta_next, S_next = solve_quad_subprob_ipm(
+            C=C,
+            A_data=A_data,
+            A_indices=A_indices,
+            U=U,
+            b=b+state.upsilon,
+            trace_ub=trace_ub,
+            rho=rho,
+            bar_primal_obj=bar_primal_obj,
+            z_bar=z_bar,
+            tr_X_bar=tr_X_bar,
+            y=y,
+            V=V,
+            n=n,
+            m=m,
+            k=k)
+
+        S_eigvals, S_eigvecs = jnp.linalg.eigh(S_next)
+        S_eigvals = jnp.clip(S_eigvals, a_min=0)    # numerical instability handling
+        VSV_T_factor = (V @ S_eigvecs) * jnp.sqrt(S_eigvals).reshape(1, -1)
+        A_operator_VSV_T = apply_A_operator_batched(m, A_data, A_indices, VSV_T_factor)
+        z_next = eta_next * z_bar + A_operator_VSV_T
+
+        upsilon_next = b_ineq_mask * jnp.clip(z_next - b - (rho * y), a_min=0.0)
+        upsilon_gap = jnp.max(jnp.abs(state.upsilon - upsilon_next))
+        eta_gap = jnp.max(jnp.abs(state.eta - eta_next))
+        S_gap = jnp.max(jnp.abs(state.S - S_next))
+        jax.debug.print("i: {i}, upsilon_gap: {upsilon_gap}, eta_gap: {eta_gap}, S_gap: {S_gap}",
+                        i=state.i,
+                        upsilon_gap=upsilon_gap,
+                        eta_gap=eta_gap,
+                        S_gap=S_gap)
+        return SubprobStateStruct(
+            i=state.i + 1, eta=eta_next, S=S_next, upsilon=upsilon_next, upsilon_gap=upsilon_gap)
+    
+    init_state = SubprobStateStruct(
+        i=0, eta=jnp.array(0.0), S=jnp.zeros((k, k)), upsilon=upsilon, upsilon_gap=jnp.array(1.0))
+    final_state = bounded_while_loop(cond_func, body_func, init_state, max_steps=max_iters)
+    return final_state.eta, final_state.S, final_state.upsilon
+
+
 @partial(jax.jit, static_argnames=["n", "k", "ipm_eps", "ipm_max_iters"])
 def compute_lb_spec_est_ipm(
     C: BCOO,
@@ -348,6 +418,7 @@ def specbm(
     A_data: Array,
     A_indices: Array,
     b: Array,
+    b_ineq_mask: Array,
     Omega: Union[Array, None],
     rho: float,
     beta: float,
@@ -373,6 +444,8 @@ def specbm(
          "A_data",
          "A_indices",
          "b",
+         "b_ineq_mask",
+         "upsilon",
          "Omega",
          "U",
          "X",
@@ -395,18 +468,20 @@ def specbm(
         return jnp.logical_or(
             state.t == 0, (state.pen_dual_obj - state.lb_spec_est) / (1.0 + state.pen_dual_obj) > eps)
 
-    @jax.jit
+    #@jax.jit
     def body_func(state: StateStruct) -> StateStruct:
 
         jax.debug.print("start_time: {time}",
                         time=hcb.call(lambda _: time.time(), arg=0, result_shape=float))
 
-        eta, S = solve_quad_subprob_ipm(
+        eta, S, upsilon_next = solve_step_subprob(
             C=state.C,
             A_data=state.A_data,
             A_indices=state.A_indices,
             U=state.U,
             b=state.b,
+            b_ineq_mask=state.b_ineq_mask,
+            upsilon=state.upsilon,
             trace_ub=trace_ub,
             rho=rho,
             bar_primal_obj=state.bar_primal_obj,
@@ -417,7 +492,7 @@ def specbm(
             n=n,
             m=m,
             k=k,
-            ipm_eps=subprob_tol)
+            subprob_tol=subprob_tol)
 
         S_eigvals, S_eigvecs = jnp.linalg.eigh(S)
         S_eigvals = jnp.clip(S_eigvals, a_min=0)    # numerical instability handling
@@ -431,9 +506,14 @@ def specbm(
             P_next = eta * state.P_bar + VSV_T_factor @ (VSV_T_factor.T @ state.Omega)
         tr_X_next = eta * state.tr_X_bar + jnp.trace(S)
         z_next = eta * state.z_bar + A_operator_VSV_T
-        y_cand = state.y + (1.0 / rho) * (state.b - z_next)
+        y_cand = state.y + (1.0 / rho) * (upsilon_next + state.b - z_next)
         primal_obj_next = eta * state.bar_primal_obj
         primal_obj_next += jnp.trace(VSV_T_factor.T @ (state.C @ VSV_T_factor))
+
+        print("Got here!")
+        embed()
+        exit()
+
 
         cand_eigvals, cand_eigvecs = eigsh_smallest(
             n=n,
@@ -522,6 +602,8 @@ def specbm(
             A_data=state.A_data,
             A_indices=state.A_indices,
             b=state.b,
+            b_ineq_mask=state.b_ineq_mask,
+            upsilon=upsilon_next,
             Omega=state.Omega,
             U=state.U,
             X=X_next,
@@ -562,6 +644,8 @@ def specbm(
         A_data=A_data,
         A_indices=A_indices,
         b=b,
+        b_ineq_mask=b_ineq_mask,
+        upsilon=jnp.zeros((m,)),
         Omega=Omega,
         U=U,
         X=X,
@@ -578,6 +662,12 @@ def specbm(
         bar_primal_obj=primal_obj,
         pen_dual_obj=init_pen_dual_obj,
         lb_spec_est=jnp.array(0.0))
+
+    state = init_state
+    state = body_func(state)
+
+    embed()
+    exit()
 
     final_state = bounded_while_loop(cond_func, body_func, init_state, max_steps=max_iters)
 
