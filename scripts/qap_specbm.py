@@ -290,22 +290,28 @@ if __name__ == "__main__":
     n = C.shape[0]
     m = b.shape[0]
 
-    u = jax.random.normal(jax.random.PRNGKey(0), (n,))
-    z = jax.random.normal(jax.random.PRNGKey(1), (m,))
-    A_tensor = BCOO((A_data, A_indices), shape=(m, n, n)).todense()
+    SCALE_X = 1.0 / float(l + 1)
+    SCALE_C = 1.0 / jnp.linalg.norm(C.data)  # equivalent to frobenius norm
+    SCALE_A = jnp.zeros((m,))
+    SCALE_A = SCALE_A.at[A_indices[:,0]].add(A_data**2)
+    SCALE_A = 1.0 / jnp.sqrt(SCALE_A)
 
-    Omega = jax.random.normal(jax.random.PRNGKey(0), shape=(n, l))
+    scaled_C = BCOO((C.data * SCALE_C, C.indices), shape=C.shape)
+    scaled_b = b * SCALE_X * SCALE_A
+    scaled_A_data = A_data * SCALE_A.at[A_indices[:,0]].get()
 
     #X = jnp.zeros((n, n))
+    #Omega = None
     #P = None
     X = None
+    Omega = jax.random.normal(jax.random.PRNGKey(0), shape=(n, l))
     P = jnp.zeros_like(Omega)
     y = jnp.zeros((m,))
     z = jnp.zeros((m,))
     tr_X = 0.0
     primal_obj = 0.0
 
-    trace_ub = 1.0 * float(l + 1)
+    trace_ub = 1.0 * float(l + 1) * SCALE_X
 
     k_curr = 5
     k_past = 2
@@ -322,24 +328,25 @@ if __name__ == "__main__":
         n=n,
         m=m,
         trace_ub=trace_ub,
-        C=C,
-        A_data=A_data,
+        C=scaled_C,
+        A_data=scaled_A_data,
         A_indices=A_indices,
-        b=b,
+        b=scaled_b,
         b_ineq_mask=b_ineq_mask,
         Omega=Omega,
         rho=0.5,
         beta=0.25,
         k_curr=k_curr,
         k_past=k_past,
-        SCALE_C=1.0,
-        SCALE_X=1.0,
+        SCALE_C=SCALE_C,
+        SCALE_X=SCALE_X,
+        SCALE_A=SCALE_A,
         eps=1e-3,  # hparams.eps,
         max_iters=10000,  # hparams.max_iters,
         lanczos_inner_iterations=min(n, 32),
         lanczos_max_restarts=10,  # hparams.lanczos_max_restarts,
         subprob_tol=1e-7,
-        callback_fn=None)
+        callback_fn=qap_round)
 
     embed()
     exit()

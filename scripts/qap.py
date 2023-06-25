@@ -282,10 +282,6 @@ if __name__ == "__main__":
     n = C.shape[0]
     m = b.shape[0]
 
-    u = jax.random.normal(jax.random.PRNGKey(0), (n,))
-    z = jax.random.normal(jax.random.PRNGKey(1), (m,))
-    A_tensor = BCOO((A_data, A_indices), shape=(m, n, n)).todense()
-
     SCALE_X = 1.0 / float(l + 1)
     SCALE_C = 1.0 / jnp.linalg.norm(C.data)  # equivalent to frobenius norm
     SCALE_A = jnp.zeros((m,))
@@ -309,39 +305,7 @@ if __name__ == "__main__":
 
     trace_ub = 1.0 * float(l + 1) * SCALE_X
 
-    import pickle
-    with open("final_qap_state.pkl", "rb") as f:
-        X, P, y, z, primal_obj, tr_X = pickle.load(f)
-
     qap_round = create_qap_round(l, D, W)
-    print("qap round: ", qap_round(C, Omega, P))
-
-    embed()
-    exit()
-
-
-    E, Lambda = reconstruct_from_sketch(Omega, P)
-
-    best_assign_obj = jnp.inf
-
-    for i in range(l):
-        cost_mx = E[1:, i].reshape(l, l)
-        cost_mx = jnp.max(cost_mx) - cost_mx
-        perm_mx = BCOO.fromdense(munkres(l, cost_mx))
-
-        best_assign_obj = jnp.clip(jnp.trace(W @ perm_mx @ D @ perm_mx.T), a_max=best_assign_obj)
-        print("best_assign_obj: ", best_assign_obj)
-
-        # try negative too
-        cost_mx = -E[1:, i].reshape(l, l)
-        cost_mx = jnp.max(cost_mx) - cost_mx
-        perm_mx = BCOO.fromdense(munkres(l, cost_mx))
-
-        best_assign_obj = jnp.clip(jnp.trace(W @ perm_mx @ D @ perm_mx.T), a_max=best_assign_obj)
-        print("best_assign_obj: ", best_assign_obj)
-
-    embed()
-    exit()
 
     X, P, y, z, primal_obj, tr_X = cgal(
         X=X,
@@ -368,7 +332,7 @@ if __name__ == "__main__":
         lanczos_inner_iterations=min(n, 32),
         lanczos_max_restarts=10,  # hparams.lanczos_max_restarts,
         subprob_tol=1e-7,
-        callback_fn=None)
+        callback_fn=qap_round)
 
     import pickle
     with open("final_qap_state.pkl", "wb") as f:
