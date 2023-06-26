@@ -565,9 +565,12 @@ def specbm(
         
         obj_gap = jnp.abs(primal_obj_next + pen_dual_obj_next)
         obj_gap /= (0.5 * (jnp.abs(pen_dual_obj_next) + jnp.abs(primal_obj_next)))
-        obj_gap /= (SCALE_X * SCALE_C)
-        infeas_gap = jnp.linalg.norm(((z_next - state.b - upsilon_next) / SCALE_A)/ SCALE_X) 
-        infeas_gap /= 1.0 + jnp.linalg.norm((state.b / SCALE_A) / SCALE_X)
+
+        #infeas_gap = jnp.linalg.norm(((z_next - state.b - upsilon_next) / SCALE_A)/ SCALE_X) 
+        #infeas_gap /= 1.0 + jnp.linalg.norm((state.b / SCALE_A) / SCALE_X)
+        #max_infeas = jnp.max(jnp.abs(z_next - state.b - upsilon_next) / SCALE_A) / SCALE_X
+        infeas_gap = jnp.linalg.norm(z_next - state.b - upsilon_next)
+        infeas_gap /= 1.0 + jnp.linalg.norm(state.b)
         max_infeas = jnp.max(jnp.abs(z_next - state.b - upsilon_next) / SCALE_A) / SCALE_X
 
         if state.Omega is not None and callback_fn is not None:
@@ -633,7 +636,8 @@ def specbm(
         max_restarts=lanczos_max_restarts,
         tolerance=subprob_tol)
     init_eigvals = -init_eigvals
-    init_pen_dual_obj = jnp.dot(-b, y) + trace_ub*jnp.clip(init_eigvals[0], a_min=0)
+    init_pen_dual_obj = jnp.dot(-b, y)
+    init_pen_dual_obj += trace_ub*jnp.clip(init_eigvals[0], a_min=0)
 
     init_state = StateStruct(
         t=jnp.array(0),
@@ -661,7 +665,7 @@ def specbm(
         lb_spec_est=jnp.array(0.0))
 
     state = init_state
-    for _ in range(1000):
+    for _ in range(300):
         state = body_func(state)
 
     embed()
