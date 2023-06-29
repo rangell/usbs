@@ -317,10 +317,9 @@ if __name__ == "__main__":
     trace_ub = 1.0 * float(l + 1) * SCALE_X
 
     k_curr = 5
-    k_past = 2
+    k_past = 1
 
     qap_round = create_qap_round(l, D, W)
-
 
     X, P, y, z, primal_obj, tr_X = specbm(
         X=X,
@@ -339,15 +338,16 @@ if __name__ == "__main__":
         b_ineq_mask=b_ineq_mask,
         Omega=Omega,
         rho=0.1,
-        beta=0.5,
+        beta=0.25,
         k_curr=k_curr,
         k_past=k_past,
         SCALE_C=SCALE_C,
         SCALE_X=SCALE_X,
         SCALE_A=SCALE_A,
         eps=1e-5,  # hparams.eps,
-        max_iters=200,  # hparams.max_iters,
+        max_iters=1000,  # hparams.max_iters,
         lanczos_inner_iterations=min(n, 32),
         lanczos_max_restarts=100,  # hparams.lanczos_max_restarts,
-        subprob_tol=1e-7,
+        subprob_eps=1e-7,
+        subprob_max_iters=15,
         callback_fn=qap_round)

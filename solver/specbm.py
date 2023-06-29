@@ -39,8 +39,8 @@ def solve_quad_subprob_ipm(
     n: int,
     m: int,
     k: int,
-    ipm_eps: float = 1e-10,
-    ipm_max_iters: int = 50
+    ipm_eps: float,
+    ipm_max_iters: int
 ) -> Tuple[Array, Array]:
 
     svec = lambda mx: U @ mx.reshape(-1)
@@ -193,8 +193,8 @@ def compute_lb_spec_est_ipm(
     V: Array,
     n: int,
     k: int,
-    ipm_eps: float = 1e-10,
-    ipm_max_iters: int = 50
+    ipm_eps: float,
+    ipm_max_iters: int
 ) -> Tuple[Array, Array]:
 
     svec = lambda mx: U @ mx.reshape(-1)
@@ -334,7 +334,7 @@ def compute_lb_spec_est_ipm(
     return -lb_spec_est.squeeze()
 
 
-@partial(jax.jit, static_argnames=["n", "m", "k"])
+@partial(jax.jit, static_argnames=["n", "m", "k", "subprob_eps", "subprob_max_iters"])
 def solve_step_subprob(
     C: BCOO,
     A_data: Array,
@@ -353,14 +353,14 @@ def solve_step_subprob(
     n: int,
     m: int,
     k: int,
-    subprob_tol: float = 1e-10,
-    max_iters: int = 50
+    subprob_eps: float,
+    subprob_max_iters: int
 ) -> Tuple[Array, Array, Array]:
 
     SubprobStateStruct = namedtuple("SubprobStateStruct", ["i", "eta", "S", "upsilon", "upsilon_gap"])
 
     def cond_func(state: SubprobStateStruct) -> bool:
-        return state.upsilon_gap > subprob_tol
+        return state.upsilon_gap > subprob_eps
 
     def body_func(state: SubprobStateStruct) -> SubprobStateStruct:
         eta_next, S_next = solve_quad_subprob_ipm(
@@ -378,29 +378,22 @@ def solve_step_subprob(
             V=V,
             n=n,
             m=m,
-            k=k)
-
+            k=k,
+            ipm_eps=subprob_eps,
+            ipm_max_iters=subprob_max_iters)
         S_eigvals, S_eigvecs = jnp.linalg.eigh(S_next)
         S_eigvals = jnp.clip(S_eigvals, a_min=0)    # numerical instability handling
         VSV_T_factor = (V @ S_eigvecs) * jnp.sqrt(S_eigvals).reshape(1, -1)
         A_operator_VSV_T = apply_A_operator_batched(m, A_data, A_indices, VSV_T_factor)
         z_next = eta_next * z_bar + A_operator_VSV_T
-
         upsilon_next = b_ineq_mask * jnp.clip(b - z_next + (rho * y), a_min=0.0)
         upsilon_gap = jnp.max(jnp.abs(state.upsilon - upsilon_next))
-        #eta_gap = jnp.max(jnp.abs(state.eta - eta_next))
-        #S_gap = jnp.max(jnp.abs(state.S - S_next))
-        #jax.debug.print("i: {i}, upsilon_gap: {upsilon_gap}, eta_gap: {eta_gap}, S_gap: {S_gap}",
-        #                i=state.i,
-        #                upsilon_gap=upsilon_gap,
-        #                eta_gap=eta_gap,
-        #                S_gap=S_gap)
         return SubprobStateStruct(
             i=state.i + 1, eta=eta_next, S=S_next, upsilon=upsilon_next, upsilon_gap=upsilon_gap)
     
     init_state = SubprobStateStruct(
         i=0, eta=jnp.array(0.0), S=jnp.zeros((k, k)), upsilon=upsilon, upsilon_gap=jnp.array(1.0))
-    final_state = bounded_while_loop(cond_func, body_func, init_state, max_steps=max_iters)
+    final_state = bounded_while_loop(cond_func, body_func, init_state, max_steps=subprob_max_iters)
     return final_state.eta, final_state.S, final_state.upsilon
 
 
@@ -431,7 +424,8 @@ def specbm(
     max_iters: int,
     lanczos_inner_iterations: int,
     lanczos_max_restarts: int,
-    subprob_tol: float,
+    subprob_eps: float,
+    subprob_max_iters: int,
     callback_fn: Union[Callable[[Array, Array], Array], None]
 ) -> Tuple[Array, Array, Array, Array, Array]:
 
@@ -471,7 +465,7 @@ def specbm(
         #    state.t == 0, (state.pen_dual_obj - state.lb_spec_est) / (1.0 + state.pen_dual_obj) > eps)
         return state.t != -1
 
-    #@jax.jit
+    @jax.jit
     def body_func(state: StateStruct) -> StateStruct:
 
         jax.debug.print("start_time: {time}",
@@ -495,7 +489,8 @@ def specbm(
                     n=n,
                     m=m,
                     k=k,
-                    subprob_tol=subprob_tol)
+                    subprob_eps=subprob_eps,
+                    subprob_max_iters=subprob_max_iters)
 
         S_eigvals, S_eigvecs = jnp.linalg.eigh(S)
         S_eigvals = jnp.clip(S_eigvals, a_min=0)    # numerical instability handling
@@ -523,7 +518,7 @@ def specbm(
             num_desired=k_curr,
             inner_iterations=lanczos_inner_iterations,
             max_restarts=lanczos_max_restarts,
-            tolerance=subprob_tol)
+            tolerance=subprob_eps)
         cand_eigvals = -cand_eigvals
         cand_pen_dual_obj = jnp.dot(-state.b, y_cand) + trace_ub*jnp.clip(cand_eigvals[0], a_min=0)
 
@@ -541,7 +536,8 @@ def specbm(
             V=state.V,
             n=n,
             k=k,
-            ipm_eps=subprob_tol)
+            ipm_eps=subprob_eps,
+            ipm_max_iters=subprob_max_iters)
 
         y_next, pen_dual_obj_next = lax.cond(
             beta * (state.pen_dual_obj - lb_spec_est) <= state.pen_dual_obj - cand_pen_dual_obj,
@@ -633,7 +629,7 @@ def specbm(
         num_desired=k,
         inner_iterations=lanczos_inner_iterations,
         max_restarts=lanczos_max_restarts,
-        tolerance=subprob_tol)
+        tolerance=subprob_eps)
     init_eigvals = -init_eigvals
     init_pen_dual_obj = jnp.dot(-b, y)
     init_pen_dual_obj += trace_ub*jnp.clip(init_eigvals[0], a_min=0)
