@@ -238,21 +238,6 @@ def get_all_problem_data(C: BCOO) -> Tuple[BCOO, Array, Array, Array]:
             b.append(0.0)
             b_ineq_mask.append(1.0)
             i += 1
-    #for coord_a in range(1, n):
-    #    for coord_b in range(1, n):
-    #        if coord_a != coord_b:
-    #            A_indices.append([i, coord_a, coord_b])
-    #            A_indices.append([i, coord_b, coord_a])
-    #            A_data += [-0.5, -0.5]
-    #            b.append(0.0)
-    #            b_ineq_mask.append(1.0)
-    #            i += 1
-    #        elif coord_a == coord_b:
-    #            A_indices.append([i, coord_a, coord_a])
-    #            A_data += [-1.0]
-    #            b.append(0.0)
-    #            b_ineq_mask.append(1.0)
-    #            i += 1
 
     # build final data structures
     A_indices = jnp.array(A_indices)
@@ -310,6 +295,9 @@ if __name__ == "__main__":
     SCALE_A = jnp.zeros((m,))
     SCALE_A = SCALE_A.at[A_indices[:,0]].add(A_data**2)
     SCALE_A = 1.0 / jnp.sqrt(SCALE_A)
+    #SCALE_X = 1.0
+    #SCALE_C = 1.0
+    #SCALE_A = jnp.ones((m,))
 
     scaled_C = BCOO((C.data * SCALE_C, C.indices), shape=C.shape)
     scaled_b = b * SCALE_X * SCALE_A
@@ -333,6 +321,7 @@ if __name__ == "__main__":
 
     qap_round = create_qap_round(l, D, W)
 
+
     X, P, y, z, primal_obj, tr_X = specbm(
         X=X,
         P=P,
@@ -349,19 +338,16 @@ if __name__ == "__main__":
         b=scaled_b,
         b_ineq_mask=b_ineq_mask,
         Omega=Omega,
-        rho=0.5,
-        beta=0.25,
+        rho=0.1,
+        beta=0.5,
         k_curr=k_curr,
         k_past=k_past,
         SCALE_C=SCALE_C,
         SCALE_X=SCALE_X,
         SCALE_A=SCALE_A,
-        eps=1e-3,  # hparams.eps,
-        max_iters=10000,  # hparams.max_iters,
+        eps=1e-5,  # hparams.eps,
+        max_iters=200,  # hparams.max_iters,
         lanczos_inner_iterations=min(n, 32),
         lanczos_max_restarts=100,  # hparams.lanczos_max_restarts,
         subprob_tol=1e-7,
         callback_fn=qap_round)
-
-    embed()
-    exit()

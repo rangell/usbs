@@ -388,8 +388,8 @@ def solve_step_subprob(
 
         upsilon_next = b_ineq_mask * jnp.clip(b - z_next + (rho * y), a_min=0.0)
         upsilon_gap = jnp.max(jnp.abs(state.upsilon - upsilon_next))
-        eta_gap = jnp.max(jnp.abs(state.eta - eta_next))
-        S_gap = jnp.max(jnp.abs(state.S - S_next))
+        #eta_gap = jnp.max(jnp.abs(state.eta - eta_next))
+        #S_gap = jnp.max(jnp.abs(state.S - S_next))
         #jax.debug.print("i: {i}, upsilon_gap: {upsilon_gap}, eta_gap: {eta_gap}, S_gap: {S_gap}",
         #                i=state.i,
         #                upsilon_gap=upsilon_gap,
@@ -400,7 +400,7 @@ def solve_step_subprob(
     
     init_state = SubprobStateStruct(
         i=0, eta=jnp.array(0.0), S=jnp.zeros((k, k)), upsilon=upsilon, upsilon_gap=jnp.array(1.0))
-    final_state = bounded_while_loop(cond_func, body_func, init_state, max_steps=1000)
+    final_state = bounded_while_loop(cond_func, body_func, init_state, max_steps=max_iters)
     return final_state.eta, final_state.S, final_state.upsilon
 
 
@@ -459,6 +459,7 @@ def specbm(
          "z_bar",
          "y",
          "V",
+         "q0",
          "primal_obj",
          "bar_primal_obj",
          "pen_dual_obj",
@@ -466,8 +467,9 @@ def specbm(
 
     @jax.jit
     def cond_func(state: StateStruct) -> Array:
-        return jnp.logical_or(
-            state.t == 0, (state.pen_dual_obj - state.lb_spec_est) / (1.0 + state.pen_dual_obj) > eps)
+        #return jnp.logical_or(
+        #    state.t == 0, (state.pen_dual_obj - state.lb_spec_est) / (1.0 + state.pen_dual_obj) > eps)
+        return state.t != -1
 
     #@jax.jit
     def body_func(state: StateStruct) -> StateStruct:
@@ -517,7 +519,7 @@ def specbm(
             A_data=state.A_data,
             A_indices=state.A_indices,
             adjoint_left_vec=-y_cand,
-            q0=state.V[:, 0],
+            q0=state.q0,
             num_desired=k_curr,
             inner_iterations=lanczos_inner_iterations,
             max_restarts=lanczos_max_restarts,
@@ -563,14 +565,10 @@ def specbm(
         bar_primal_obj_next = eta * state.bar_primal_obj
         bar_primal_obj_next += jnp.trace(curr_VSV_T_factor.T @ (state.C @ curr_VSV_T_factor))
         
-        obj_gap = jnp.abs(primal_obj_next + pen_dual_obj_next)
-        obj_gap /= (0.5 * (jnp.abs(pen_dual_obj_next) + jnp.abs(primal_obj_next)))
-
-        #infeas_gap = jnp.linalg.norm(((z_next - state.b - upsilon_next) / SCALE_A)/ SCALE_X) 
-        #infeas_gap /= 1.0 + jnp.linalg.norm((state.b / SCALE_A) / SCALE_X)
-        #max_infeas = jnp.max(jnp.abs(z_next - state.b - upsilon_next) / SCALE_A) / SCALE_X
-        infeas_gap = jnp.linalg.norm(z_next - state.b + upsilon_next)
-        infeas_gap /= 1.0 + jnp.linalg.norm(state.b)
+        obj_gap = jnp.abs(primal_obj_next + pen_dual_obj_next) / (SCALE_C * SCALE_X)
+        obj_gap /= 1.0 + (jnp.abs(primal_obj_next) / (SCALE_C * SCALE_X))
+        infeas_gap = jnp.linalg.norm((z_next - state.b + upsilon_next) / SCALE_A) / SCALE_X
+        infeas_gap /= 1.0 + jnp.linalg.norm((state.b / SCALE_A) / SCALE_X)
         max_infeas = jnp.max(jnp.abs(z_next - state.b + upsilon_next) / SCALE_A) / SCALE_X
 
         if state.Omega is not None and callback_fn is not None:
@@ -616,6 +614,7 @@ def specbm(
             z_bar=z_bar_next,
             y=y_next,
             V=V_next,
+            q0=state.q0,
             primal_obj=primal_obj_next,
             bar_primal_obj=bar_primal_obj_next,
             pen_dual_obj=pen_dual_obj_next,
@@ -659,17 +658,11 @@ def specbm(
         z_bar=z,
         y=y,
         V=init_eigvecs,
+        q0=q0,
         primal_obj=primal_obj,
         bar_primal_obj=primal_obj,
         pen_dual_obj=init_pen_dual_obj,
         lb_spec_est=jnp.array(0.0))
-
-    state = init_state
-    for _ in range(1000):
-        state = body_func(state)
-
-    embed()
-    exit()
 
     final_state = bounded_while_loop(cond_func, body_func, init_state, max_steps=max_iters)
 
