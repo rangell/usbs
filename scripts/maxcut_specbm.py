@@ -120,7 +120,8 @@ if __name__ == "__main__":
         max_iters=10000,  # hparams.max_iters,
         lanczos_inner_iterations=min(n, 32),
         lanczos_max_restarts=100,  # hparams.lanczos_max_restarts,
-        subprob_tol=1e-7,
+        subprob_eps=1e-7,
+        subprob_max_iters=15,
         callback_fn=compute_max_cut)
 
     embed()
