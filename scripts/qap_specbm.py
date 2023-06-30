@@ -135,7 +135,7 @@ def load_and_process_tsp(fname: str) -> Tuple[Array, Array]:
     W = BCOO((W_data, W_indices), shape=(n, n)).todense()
 
     # return expanded and padded kronecker product
-    return n, build_objective_matrix(D, W)
+    return n, D, W, build_objective_matrix(D, W)
 
 
 def build_objective_matrix(D: Array, W: Array) -> BCOO:
