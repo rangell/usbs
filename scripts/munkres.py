@@ -107,7 +107,7 @@ def munkres(n: int, cost_mx: Array) -> Array:
                 uncovered_zero_mask)
             return next_state
 
-        return bounded_while_loop(cond_func, body_func, state, max_steps=(n**4)).mask_mx
+        return bounded_while_loop(cond_func, body_func, state, max_steps=(n**2)).mask_mx
 
     state = StateStruct(
         final_state.M,

@@ -426,7 +426,10 @@ def specbm(
     lanczos_max_restarts: int,
     subprob_eps: float,
     subprob_max_iters: int,
-    callback_fn: Union[Callable[[Array, Array], Array], None]
+    callback_fn: Union[Callable[[Array, Array], Array], None],
+    l: int,
+    D: Array,
+    W: Array
 ) -> Tuple[Array, Array, Array, Array, Array]:
 
     k = k_curr + k_past
@@ -454,6 +457,9 @@ def specbm(
          "y",
          "V",
          "q0",
+         "l",
+         "D",
+         "W",
          "primal_obj",
          "bar_primal_obj",
          "pen_dual_obj",
@@ -568,7 +574,7 @@ def specbm(
         max_infeas = jnp.max(jnp.abs(z_next - state.b + upsilon_next) / SCALE_A) / SCALE_X
 
         if state.Omega is not None and callback_fn is not None:
-            callback_val = callback_fn(state.C / SCALE_C, state.Omega, state.P)
+            callback_val = callback_fn(state.C / SCALE_C, state.Omega, state.P, l, state.D, state.W)
         else:
             callback_val = None
 
@@ -611,6 +617,9 @@ def specbm(
             y=y_next,
             V=V_next,
             q0=state.q0,
+            l=state.l,
+            D=state.D,
+            W=state.W,
             primal_obj=primal_obj_next,
             bar_primal_obj=bar_primal_obj_next,
             pen_dual_obj=pen_dual_obj_next,
@@ -655,6 +664,9 @@ def specbm(
         y=y,
         V=init_eigvecs,
         q0=q0,
+        l=l,
+        D=D,
+        W=W,
         primal_obj=primal_obj,
         bar_primal_obj=primal_obj,
         pen_dual_obj=init_pen_dual_obj,

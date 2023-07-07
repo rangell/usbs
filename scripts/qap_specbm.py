@@ -1,4 +1,5 @@
 import argparse
+from functools import partial
 import jax
 from jax import lax
 from jax._src.typing import Array
@@ -224,22 +225,37 @@ def get_all_problem_data(C: BCOO) -> Tuple[BCOO, Array, Array, Array]:
             b_ineq_mask.append(0.0)
             i += 1
 
+
     # constraint: objective-relevant entries of Y >= 0, written as -Y <= 0
-    for j in range(C.nse):
-        coord_a, coord_b = C.indices[j][0], C.indices[j][1]
-        if coord_a < coord_b:
-            A_indices.append([i, coord_a, coord_b])
-            A_indices.append([i, coord_b, coord_a])
-            A_data += [-0.5, -0.5]
-            b.append(0.0)
-            b_ineq_mask.append(1.0)
-            i += 1
-        elif coord_a == coord_b:
-            A_indices.append([i, coord_a, coord_a])
-            A_data += [-1.0]
-            b.append(0.0)
-            b_ineq_mask.append(1.0)
-            i += 1
+    triu_indices_mask = (C.indices[:, 0] <= C.indices[:, 1])
+    constraint_indices = jnp.arange(jnp.sum(triu_indices_mask)) + i
+    constraint_triples = jnp.concatenate(
+        [constraint_indices.reshape(-1, 1), C.indices[triu_indices_mask]], axis=1)
+    constraint_triples = jnp.concatenate(
+        [constraint_triples, constraint_triples[:, [0, 2, 1]]], axis=0)
+    A_indices += constraint_triples.tolist()
+    A_data += jnp.full((constraint_triples.shape[0],), -0.5).tolist()
+    b += jnp.full((constraint_indices.shape[0],), 0.0).tolist()
+    b_ineq_mask += jnp.full((constraint_indices.shape[0],), 1.0).tolist()
+    i += constraint_indices.shape[0]
+
+    ## constraint: objective-relevant entries of Y >= 0, written as -Y <= 0
+    #for j in range(C.nse):
+    #    print(j)
+    #    coord_a, coord_b = C.indices[j][0], C.indices[j][1]
+    #    if coord_a < coord_b:
+    #        A_indices.append([i, coord_a, coord_b])
+    #        A_indices.append([i, coord_b, coord_a])
+    #        A_data += [-0.5, -0.5]
+    #        b.append(0.0)
+    #        b_ineq_mask.append(1.0)
+    #        i += 1
+    #    elif coord_a == coord_b:
+    #        A_indices.append([i, coord_a, coord_a])
+    #        A_data += [-1.0]
+    #        b.append(0.0)
+    #        b_ineq_mask.append(1.0)
+    #        i += 1
 
     # build final data structures
     A_indices = jnp.array(A_indices)
@@ -250,24 +266,22 @@ def get_all_problem_data(C: BCOO) -> Tuple[BCOO, Array, Array, Array]:
     return A_indices, A_data, b, b_ineq_mask
 
 
-def create_qap_round(l: int, D: Array, W: BCOO) -> Callable[[BCOO, Array, Array], float]:
-    @jax.jit
-    def qap_round(C: BCOO, Omega: Array, P: Array) -> float:
-        E, _ = reconstruct_from_sketch(Omega, P)
-        def body_func(i: int, best_assign_obj: float) -> float:
-            cost_mx = E[1:, i].reshape(l, l)
-            cost_mx = jnp.max(cost_mx) - cost_mx
-            perm_mx = munkres(l, cost_mx)
-            best_assign_obj = jnp.clip(jnp.trace(W @ perm_mx @ D @ perm_mx.T), a_max=best_assign_obj)
-            # try negative too
-            cost_mx = -E[1:, i].reshape(l, l)
-            cost_mx = jnp.max(cost_mx) - cost_mx
-            perm_mx = munkres(l, cost_mx)
-            best_assign_obj = jnp.clip(jnp.trace(W @ perm_mx @ D @ perm_mx.T), a_max=best_assign_obj)
-            return best_assign_obj
-        best_assign_obj = lax.fori_loop(0, l, body_func, jnp.inf)
+@partial(jax.jit, static_argnames=["l"])
+def qap_round(C: BCOO, Omega: Array, P: Array, l: int, D: Array, W: BCOO) -> float:
+    E, _ = reconstruct_from_sketch(Omega, P)
+    def body_func(i: int, best_assign_obj: float) -> float:
+        cost_mx = E[1:, i].reshape(l, l)
+        cost_mx = jnp.max(cost_mx) - cost_mx
+        perm_mx = munkres(l, cost_mx)
+        best_assign_obj = jnp.clip(jnp.trace(W @ perm_mx @ D @ perm_mx.T), a_max=best_assign_obj)
+        # try negative too
+        cost_mx = -E[1:, i].reshape(l, l)
+        cost_mx = jnp.max(cost_mx) - cost_mx
+        perm_mx = munkres(l, cost_mx)
+        best_assign_obj = jnp.clip(jnp.trace(W @ perm_mx @ D @ perm_mx.T), a_max=best_assign_obj)
         return best_assign_obj
-    return qap_round
+    best_assign_obj = lax.fori_loop(0, l, body_func, jnp.inf)
+    return best_assign_obj
 
 
 def get_hparams():
@@ -344,8 +358,6 @@ if __name__ == "__main__":
     k_curr = hparams.k_curr
     k_past = hparams.k_past
 
-    qap_round = create_qap_round(l, D, W)
-
     X, P, y, z, primal_obj, tr_X = specbm(
         X=X,
         P=P,
@@ -375,4 +387,7 @@ if __name__ == "__main__":
         lanczos_max_restarts=100,  # hparams.lanczos_max_restarts,
         subprob_eps=1e-7,
         subprob_max_iters=15,
-        callback_fn=qap_round)
+        callback_fn=qap_round,
+        l=l,
+        D=D,
+        W=W)
