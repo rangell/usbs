@@ -11,7 +11,7 @@ import jax.numpy as jnp
 from jax import lax
 import numpy as np
 import time
-from typing import Callable, Tuple, Union
+from typing import Callable, Tuple, Union, Any
 
 from solver.lanczos import eigsh_smallest
 from solver.utils import (apply_A_operator_batched,
@@ -427,9 +427,8 @@ def specbm(
     subprob_eps: float,
     subprob_max_iters: int,
     callback_fn: Union[Callable[[Array, Array], Array], None],
-    l: int,
-    D: Array,
-    W: Array
+    callback_static_args: bytes,
+    callback_nonstatic_args: Any
 ) -> Tuple[Array, Array, Array, Array, Array]:
 
     k = k_curr + k_past
@@ -457,9 +456,7 @@ def specbm(
          "y",
          "V",
          "q0",
-         "l",
-         "D",
-         "W",
+         "callback_nonstatic_args",
          "primal_obj",
          "bar_primal_obj",
          "pen_dual_obj",
@@ -574,7 +571,11 @@ def specbm(
         max_infeas = jnp.max(jnp.abs(z_next - state.b + upsilon_next) / SCALE_A) / SCALE_X
 
         if state.Omega is not None and callback_fn is not None:
-            callback_val = callback_fn(state.C / SCALE_C, state.Omega, state.P, l, state.D, state.W)
+            callback_val = callback_fn(
+                state.P,
+                state.Omega,
+                callback_static_args,
+                state.callback_nonstatic_args)
         else:
             callback_val = None
 
@@ -617,9 +618,7 @@ def specbm(
             y=y_next,
             V=V_next,
             q0=state.q0,
-            l=state.l,
-            D=state.D,
-            W=state.W,
+            callback_nonstatic_args=state.callback_nonstatic_args,
             primal_obj=primal_obj_next,
             bar_primal_obj=bar_primal_obj_next,
             pen_dual_obj=pen_dual_obj_next,
@@ -664,9 +663,7 @@ def specbm(
         y=y,
         V=init_eigvecs,
         q0=q0,
-        l=l,
-        D=D,
-        W=W,
+        callback_nonstatic_args=callback_nonstatic_args,
         primal_obj=primal_obj,
         bar_primal_obj=primal_obj,
         pen_dual_obj=init_pen_dual_obj,

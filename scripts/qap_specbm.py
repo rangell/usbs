@@ -7,6 +7,7 @@ from jax.experimental.sparse import BCOO
 import jax.numpy as jnp
 import json
 import numpy as np
+import pickle
 from scipy.spatial.distance import pdist, squareform  # type: ignore
 from typing import Any, Callable, Tuple
 
@@ -239,24 +240,6 @@ def get_all_problem_data(C: BCOO) -> Tuple[BCOO, Array, Array, Array]:
     b_ineq_mask += jnp.full((constraint_indices.shape[0],), 1.0).tolist()
     i += constraint_indices.shape[0]
 
-    ## constraint: objective-relevant entries of Y >= 0, written as -Y <= 0
-    #for j in range(C.nse):
-    #    print(j)
-    #    coord_a, coord_b = C.indices[j][0], C.indices[j][1]
-    #    if coord_a < coord_b:
-    #        A_indices.append([i, coord_a, coord_b])
-    #        A_indices.append([i, coord_b, coord_a])
-    #        A_data += [-0.5, -0.5]
-    #        b.append(0.0)
-    #        b_ineq_mask.append(1.0)
-    #        i += 1
-    #    elif coord_a == coord_b:
-    #        A_indices.append([i, coord_a, coord_a])
-    #        A_data += [-1.0]
-    #        b.append(0.0)
-    #        b_ineq_mask.append(1.0)
-    #        i += 1
-
     # build final data structures
     A_indices = jnp.array(A_indices)
     A_data = jnp.array(A_data)
@@ -266,8 +249,16 @@ def get_all_problem_data(C: BCOO) -> Tuple[BCOO, Array, Array, Array]:
     return A_indices, A_data, b, b_ineq_mask
 
 
-@partial(jax.jit, static_argnames=["l"])
-def qap_round(C: BCOO, Omega: Array, P: Array, l: int, D: Array, W: BCOO) -> float:
+@partial(jax.jit, static_argnames=["callback_static_args"])
+def qap_round(
+    P: Array,
+    Omega: Array,
+    callback_static_args: bytes,
+    callback_nonstatic_args: Any
+) -> float:
+    l = pickle.loads(callback_static_args)["l"]
+    D = callback_nonstatic_args["D"]
+    W = callback_nonstatic_args["W"]
     E, _ = reconstruct_from_sketch(Omega, P)
     def body_func(i: int, best_assign_obj: float) -> float:
         cost_mx = E[1:, i].reshape(l, l)
@@ -358,6 +349,9 @@ if __name__ == "__main__":
     k_curr = hparams.k_curr
     k_past = hparams.k_past
 
+    callback_static_args = pickle.dumps({"l": l})
+    callback_nonstatic_args = {"D": D, "W": W}
+
     X, P, y, z, primal_obj, tr_X = specbm(
         X=X,
         P=P,
@@ -388,6 +382,5 @@ if __name__ == "__main__":
         subprob_eps=1e-7,
         subprob_max_iters=15,
         callback_fn=qap_round,
-        l=l,
-        D=D,
-        W=W)
+        callback_static_args=callback_static_args,
+        callback_nonstatic_args=callback_nonstatic_args)
