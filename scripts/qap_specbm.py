@@ -161,90 +161,144 @@ def build_objective_matrix(D: Array, W: Array) -> BCOO:
 def get_all_problem_data(C: BCOO) -> Tuple[BCOO, Array, Array, Array]:
     n = C.shape[0]
     l = int(jnp.sqrt(n - 1))
-    i = 0  # running constraint-matrix index
 
     # initialize with first constraint: X(0,0) = 1
-    A_indices = [[0, 0, 0]]
-    A_data = [1.0]
-    b = [1.0]
-    b_ineq_mask = [0.0]
-    i += 1
+    A_indices = jnp.array([[0, 0, 0]])
+    A_data = jnp.array([1.0])
+    b = jnp.array([1.0])
+    b_ineq_mask = jnp.array([0.0])
 
+    # TODO: change this from "P" to some other variable depending on paper
     # constraint: diag(Y) = vec(P)
-    for j in range(1, n):
-        A_indices.append([i, j, 0])
-        A_indices.append([i, 0, j])
-        A_indices.append([i, j, j])
-        A_data += [-0.5, -0.5, 1.0]
-        b.append(0.0)
-        b_ineq_mask.append(0.0)
-        i += 1
+    # equivalent to the following:
+    #   for j in range(1, n):
+    #       _A_indices.append([_i, j, 0])
+    #       _A_indices.append([_i, 0, j])
+    #       _A_indices.append([_i, j, j])
+    #       _A_data += [-0.5, -0.5, 1.0]
+    #       _b.append(0.0)
+    #       _b_ineq_mask.append(0.0)
+    #       _i += 1
+    constraint_indices = b.shape[0] + jnp.tile(jnp.arange(0, n-1)[:, None], (1, 3)).reshape(-1,)
+    coord_a = (jnp.tile(jnp.array([[1, 0, 1]]), (n-1, 1)) * jnp.arange(1, n)[:, None]).reshape(-1,)
+    coord_b = (jnp.tile(jnp.array([[0, 1, 1]]), (n-1, 1)) * jnp.arange(1, n)[:, None]).reshape(-1,)
+    A_indices = jnp.concatenate(
+        [A_indices, jnp.vstack([constraint_indices, coord_a, coord_b]).T], axis=0)
+    A_data = jnp.concatenate(
+        [A_data, jnp.tile(jnp.array([[-0.5, -0.5, 1.0]]), (n-1, 1)).reshape(-1,)], axis=0)
+    b = jnp.concatenate([b, jnp.zeros((n-1,))], axis=0)
+    b_ineq_mask = jnp.concatenate([b_ineq_mask, jnp.zeros((n-1,))], axis=0)
 
+    # TODO: change this from "P" to some other variable depending on paper
     # constraint: P1 = 1
-    for j1 in range(l):
-        for j2 in range(l):
-            A_indices.append([i, j1*l + j2 + 1, 0])
-            A_indices.append([i, 0, j1*l + j2 + 1])
-            A_data += [0.5, 0.5]
-        b.append(1.0)
-        b_ineq_mask.append(0.0)
-        i += 1
+    # equivalent to the following:
+    #   for j1 in range(l):
+    #       for j2 in range(l):
+    #           _A_indices.append([_i, j1*l + j2 + 1, 0])
+    #           _A_indices.append([_i, 0, j1*l + j2 + 1])
+    #           _A_data += [0.5, 0.5]
+    #       _b.append(1.0)
+    #       _b_ineq_mask.append(0.0)
+    #       _i += 1
+    constraint_indices = b.shape[0] + jnp.tile(jnp.arange(0, l)[:, None], (1, 2*l)).reshape(-1,)
+    coord_a = (jnp.tile(jnp.array([[1, 0]]), (n-1, 1))
+               * jnp.arange(1, n).reshape(l, l).flatten()[:, None]).reshape(-1,)
+    coord_b = (jnp.tile(jnp.array([[0, 1]]), (n-1, 1))
+               * jnp.arange(1, n).reshape(l, l).flatten()[:, None]).reshape(-1,)
+    A_indices = jnp.concatenate(
+        [A_indices, jnp.vstack([constraint_indices, coord_a, coord_b]).T], axis=0)
+    A_data = jnp.concatenate(
+        [A_data, jnp.tile(jnp.array([[0.5, 0.5]]), (n-1, 1)).reshape(-1,)], axis=0)
+    b = jnp.concatenate([b, jnp.ones((l,))], axis=0)
+    b_ineq_mask = jnp.concatenate([b_ineq_mask, jnp.zeros((l,))], axis=0)
 
+
+    ## TODO: change this from "P" to some other variable depending on paper
     # constraint: 1'P = 1'
-    for j1 in range(l):
-        for j2 in range(l):
-            A_indices.append([i, j1 + j2*l + 1, 0])
-            A_indices.append([i, 0, j1 + j2*l + 1])
-            A_data += [0.5, 0.5]
-        b.append(1.0)
-        b_ineq_mask.append(0.0)
-        i += 1
+    # equivalent to the following:
+    #   for j1 in range(l):
+    #       for j2 in range(l):
+    #           _A_indices.append([_i, j1 + j2*l + 1, 0])
+    #           _A_indices.append([_i, 0, j1 + j2*l + 1])
+    #           _A_data += [0.5, 0.5]
+    #       _b.append(1.0)
+    #       _b_ineq_mask.append(0.0)
+    #       _i += 1
+    constraint_indices = b.shape[0] + jnp.tile(jnp.arange(0, l)[:, None], (1, 2*l)).reshape(-1,)
+    coord_a = (jnp.tile(jnp.array([[1, 0]]), (n-1, 1))
+               * jnp.arange(1, n).reshape(l, l).T.flatten()[:, None]).reshape(-1,)
+    coord_b = (jnp.tile(jnp.array([[0, 1]]), (n-1, 1))
+               * jnp.arange(1, n).reshape(l, l).T.flatten()[:, None]).reshape(-1,)
+    A_indices = jnp.concatenate(
+        [A_indices, jnp.vstack([constraint_indices, coord_a, coord_b]).T], axis=0)
+    A_data = jnp.concatenate(
+        [A_data, jnp.tile(jnp.array([[0.5, 0.5]]), (n-1, 1)).reshape(-1,)], axis=0)
+    b = jnp.concatenate([b, jnp.ones((l,))], axis=0)
+    b_ineq_mask = jnp.concatenate([b_ineq_mask, jnp.zeros((l,))], axis=0)
 
     ## constraint: tr_1(Y) = I
-    for j1 in range(l):
-        for j2 in range(l):
-            for diag_idx in range(l):
-                A_indices.append([i, j1 + diag_idx*l + 1, j2 + diag_idx*l + 1])
-                A_data += [1.0]
-            if j1 == j2:
-                b.append(1.0)
-            else:
-                b.append(0.0)
-            b_ineq_mask.append(0.0)
-            i += 1
+    ## equivalent to the following:
+    #   for j1 in range(l):
+    #       for j2 in range(l):
+    #           for diag_idx in range(l):
+    #               _A_indices.append([_i, j1 + diag_idx*l + 1, j2 + diag_idx*l + 1])
+    #               _A_data += [1.0]
+    #           if j1 == j2:
+    #               _b.append(1.0)
+    #           else:
+    #               _b.append(0.0)
+    #           _b_ineq_mask.append(0.0)
+    #           _i += 1
+    constraint_indices = b.shape[0] + jnp.tile(jnp.arange(0, n-1)[:, None], (1, l)).reshape(-1,)
+    coord_a = 1 + jnp.tile(
+        jnp.arange(l)[:, None, None]
+        + l * jnp.arange(l)[None, None, :], (1, l, 1)).reshape(-1,)
+    coord_b = 1 + jnp.tile(
+        jnp.arange(l)[None, :, None]
+        + l * jnp.arange(l)[None, None, :], (l, 1, 1)).reshape(-1,)
+    A_indices = jnp.concatenate(
+        [A_indices, jnp.vstack([constraint_indices, coord_a, coord_b]).T], axis=0)
+    A_data = jnp.concatenate([A_data, jnp.ones_like(coord_a)], axis=0)
+    b = jnp.concatenate([b, (coord_a == coord_b).reshape(l**2, l).T[0].astype(float)], axis=0)
+    b_ineq_mask = jnp.concatenate([b_ineq_mask, jnp.zeros((n-1,))], axis=0)
 
-    ## constraint: tr_2(Y) = I
-    for j1 in range(l):
-        for j2 in range(l):
-            for diag_idx in range(l):
-                A_indices.append([i, j1*l + diag_idx + 1, j2*l + diag_idx + 1])
-                A_data += [1.0]
-            if j1 == j2:
-                b.append(1.0)
-            else:
-                b.append(0.0)
-            b_ineq_mask.append(0.0)
-            i += 1
-
+    # constraint: tr_2(Y) = I
+    # equivalent to the following:
+    #   for j1 in range(l):
+    #       for j2 in range(l):
+    #           for diag_idx in range(l):
+    #               _A_indices.append([_i, j1*l + diag_idx + 1, j2*l + diag_idx + 1])
+    #               _A_data += [1.0]
+    #           if j1 == j2:
+    #               _b.append(1.0)
+    #           else:
+    #               _b.append(0.0)
+    #           _b_ineq_mask.append(0.0)
+    #           _i += 1
+    constraint_indices = b.shape[0] + jnp.tile(jnp.arange(0, n-1)[:, None], (1, l)).reshape(-1,)
+    coord_a = 1 + jnp.tile(
+        l * jnp.arange(l)[:, None, None]
+        + jnp.arange(l)[None, None, :], (1, l, 1)).reshape(-1,)
+    coord_b = 1 + jnp.tile(
+        l * jnp.arange(l)[None, :, None]
+        + jnp.arange(l)[None, None, :], (l, 1, 1)).reshape(-1,)
+    A_indices = jnp.concatenate(
+        [A_indices, jnp.vstack([constraint_indices, coord_a, coord_b]).T], axis=0)
+    A_data = jnp.concatenate([A_data, jnp.ones_like(coord_a)], axis=0)
+    b = jnp.concatenate([b, (coord_a == coord_b).reshape(l**2, l).T[0].astype(float)], axis=0)
+    b_ineq_mask = jnp.concatenate([b_ineq_mask, jnp.zeros((n-1,))], axis=0)
 
     # constraint: objective-relevant entries of Y >= 0, written as -Y <= 0
     triu_indices_mask = (C.indices[:, 0] <= C.indices[:, 1])
-    constraint_indices = jnp.arange(jnp.sum(triu_indices_mask)) + i
+    constraint_indices = b.shape[0] + jnp.arange(jnp.sum(triu_indices_mask))
     constraint_triples = jnp.concatenate(
-        [constraint_indices.reshape(-1, 1), C.indices[triu_indices_mask]], axis=1)
+        [constraint_indices[:, None], C.indices[triu_indices_mask]], axis=1)
     constraint_triples = jnp.concatenate(
         [constraint_triples, constraint_triples[:, [0, 2, 1]]], axis=0)
-    A_indices += constraint_triples.tolist()
-    A_data += jnp.full((constraint_triples.shape[0],), -0.5).tolist()
-    b += jnp.full((constraint_indices.shape[0],), 0.0).tolist()
-    b_ineq_mask += jnp.full((constraint_indices.shape[0],), 1.0).tolist()
-    i += constraint_indices.shape[0]
-
-    # build final data structures
-    A_indices = jnp.array(A_indices)
-    A_data = jnp.array(A_data)
-    b = jnp.array(b)
-    b_ineq_mask = jnp.array(b_ineq_mask)
+    A_indices = jnp.concatenate([A_indices, constraint_triples], axis=0)
+    A_data = jnp.concatenate([A_data, jnp.full((constraint_triples.shape[0],), -0.5)], axis=0)
+    b = jnp.concatenate([b, jnp.full((constraint_indices.shape[0],), 0.0)], axis=0)
+    b_ineq_mask = jnp.concatenate([b_ineq_mask, jnp.full((constraint_indices.shape[0],), 1.0)], axis=0)
 
     return A_indices, A_data, b, b_ineq_mask
 
