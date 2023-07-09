@@ -1,24 +1,29 @@
+from functools import partial
 import jax
-from jax import lax
 from jax._src.typing import Array
 from jax.experimental.sparse import BCOO
 import jax.numpy as jnp
 from mat73 import loadmat as mat73_loadmat
 import numpy as np
+import pickle
 import scipy  # type: ignore
 from scipy.io import loadmat  # type: ignore
-from scipy.spatial.distance import pdist, squareform  # type: ignore
-from typing import Any, Callable, Tuple
+from typing import Any, Tuple
 
-from scripts.munkres import munkres
 from solver.specbm import specbm
 from solver.utils import reconstruct_from_sketch
 
 from IPython import embed
 
 
-@jax.jit
-def compute_max_cut(C: BCOO, Omega: Array, P: Array) -> int:
+@partial(jax.jit, static_argnames=["callback_static_args"])
+def compute_max_cut(
+    P: Array,
+    Omega: Array,
+    callback_static_args: bytes,
+    callback_nonstatic_args: Any
+) -> float:
+    C = callback_nonstatic_args 
     W, _ = reconstruct_from_sketch(Omega, P)
     W_bin = 2 * (W > 0).astype(float) - 1
     return jnp.max(jnp.diag(-W_bin.T @ C @ W_bin))
@@ -122,7 +127,6 @@ if __name__ == "__main__":
         lanczos_max_restarts=100,  # hparams.lanczos_max_restarts,
         subprob_eps=1e-7,
         subprob_max_iters=15,
-        callback_fn=compute_max_cut)
-
-    embed()
-    exit()
+        callback_fn=compute_max_cut,
+        callback_static_args=pickle.dumps(None),
+        callback_nonstatic_args=C)  # NOTE: this is not the scaled version of C

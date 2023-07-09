@@ -9,7 +9,7 @@ import json
 import numpy as np
 import pickle
 from scipy.spatial.distance import pdist, squareform  # type: ignore
-from typing import Any, Callable, Tuple
+from typing import Any, Tuple
 
 from scripts.munkres import munkres
 from solver.specbm import specbm
