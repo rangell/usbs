@@ -12,8 +12,10 @@ from typing import Any, Tuple
 from misc.munkres import munkres
 from solver.utils import reconstruct_from_sketch
 
+from IPython import embed
 
-def load_and_process_qap(fname: str) -> Tuple[Array, Array]:
+
+def load_and_process_qap(fname: str, num_drop: int = 0) -> Tuple[Array, Array]:
     with open(fname, "r") as f:
         datastr = f.read()
         str_n, str_D, str_W, _ = tuple(datastr.split("\n\n"))
@@ -25,11 +27,15 @@ def load_and_process_qap(fname: str) -> Tuple[Array, Array]:
     if jnp.count_nonzero(D) < jnp.count_nonzero(W):
         D, W = W, D
 
+    n_out = n - num_drop
+    D = D[:n_out, :n_out]
+    W = W[:n_out, :n_out]
+
     # return expanded and padded kronecker product
-    return n, D, W, build_objective_matrix(D, W)
+    return n_out, D, W, build_objective_matrix(D, W)
 
 
-def load_and_process_tsp(fname: str) -> Tuple[Array, Array]:
+def load_and_process_tsp(fname: str, num_drop: int = 0) -> Tuple[Array, Array]:
     # used documentation to implement: http://comopt.ifi.uni-heidelberg.de/software/TSPLIB95/tsp95.pdf
     spec_vars = {}
     with open(fname, "r") as f:
@@ -120,19 +126,23 @@ def load_and_process_tsp(fname: str) -> Tuple[Array, Array]:
                 raise ValueError("Unsupported EDGE_WEIGHT_TYPE.")
             D = jnp.array(D)
             
+
+    n_out = n - num_drop
+    D = D[:n_out, :n_out]
+
     # construct sparse symmetric canonical tour
     W_indices = []
     W_data = []
-    for i in range(n):
-        W_indices.append([i, (i + 1) % n])
-        W_indices.append([(i + 1) % n, i])
+    for i in range(n_out):
+        W_indices.append([i, (i + 1) % n_out])
+        W_indices.append([(i + 1) % n_out, i])
         W_data += [0.5, 0.5]
     W_indices = jnp.array(W_indices)
     W_data = jnp.array(W_data)
-    W = BCOO((W_data, W_indices), shape=(n, n)).todense()
+    W = BCOO((W_data, W_indices), shape=(n_out, n_out)).todense()
 
     # return expanded and padded kronecker product
-    return n, D, W, build_objective_matrix(D, W)
+    return n_out, D, W, build_objective_matrix(D, W)
 
 
 def build_objective_matrix(D: Array, W: Array) -> BCOO:
