@@ -174,35 +174,30 @@ if __name__ == "__main__":
     fill_constraint_index_map(
         np.asarray(old_A_indices), np.asarray(A_indices), constraint_index_map)
 
-    # TODO: use constraint index map to reindex y and z
+    y = jnp.zeros((m,)).at[constraint_index_map].set(y)
+    z = jnp.zeros((m,)).at[constraint_index_map].set((z / SCALE_A) / SCALE_X)
 
-    embed()
-    exit()
+    primal_obj /= SCALE_X * SCALE_C
+    tr_X /= SCALE_X
 
     SCALE_X = 1.0 / float(l + 1)
     SCALE_C = 1.0 / jnp.linalg.norm(C.data)  # equivalent to frobenius norm
     SCALE_A = jnp.zeros((m,))
     SCALE_A = SCALE_A.at[A_indices[:,0]].add(A_data**2)
     SCALE_A = 1.0 / jnp.sqrt(SCALE_A)
-    #SCALE_X = 1.0
-    #SCALE_C = 1.0
-    #SCALE_A = jnp.ones((m,))
 
     scaled_C = BCOO((C.data * SCALE_C, C.indices), shape=C.shape)
     scaled_b = b * SCALE_X * SCALE_A
     scaled_A_data = A_data * SCALE_A.at[A_indices[:,0]].get()
 
-    # TODO: scale data with respect to new scale
-    #X = jnp.zeros((n, n))
-    #Omega = None
-    #P = None
-    #X = None
-    #Omega = jax.random.normal(jax.random.PRNGKey(0), shape=(n, l))
-    #P = jnp.zeros_like(Omega)
-    #y = jnp.zeros((m,))
-    #z = jnp.zeros((m,))
-    #tr_X = 0.0
-    #primal_obj = 0.0
+    # scale data with respect to new scale
+    if X is not None:
+        X *= SCALE_X
+    if P is not None:
+        P *= SCALE_X
+    z *= SCALE_X
+    primal_obj *= SCALE_C * SCALE_X
+    tr_X *= SCALE_X
 
     trace_ub = hparams.trace_factor * float(l + 1) * SCALE_X
 
