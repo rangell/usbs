@@ -18,6 +18,7 @@ from solver.utils import (apply_A_operator_batched,
                           apply_A_adjoint_batched,
                           create_svec_matrix,
                           create_Q_base)
+from utils.common import SDPState
 
 from IPython import embed
 
@@ -398,28 +399,14 @@ def solve_step_subprob(
 
 
 def specbm(
-    X: Union[Array, None],
-    P: Union[Array, None],
-    y: Array,
-    z: Array,
-    primal_obj: float,
-    tr_X: float,
+    sdp_state: SDPState,
     n: int,
     m: int,
     trace_ub: float,
-    C: BCOO,
-    A_data: Array,
-    A_indices: Array,
-    b: Array,
-    b_ineq_mask: Array,
-    Omega: Union[Array, None],
     rho: float,
     beta: float,
     k_curr: int,
     k_past: int,
-    SCALE_C: float,
-    SCALE_X: float,
-    SCALE_A: Array,
     eps: float,
     max_iters: int,
     lanczos_inner_iterations: int,
@@ -433,6 +420,9 @@ def specbm(
 
     k = k_curr + k_past
     U = create_svec_matrix(k)
+    SCALE_C = sdp_state.SCALE_C 
+    SCALE_X = sdp_state.SCALE_X
+    SCALE_A = sdp_state.SCALE_A
 
     StateStruct = namedtuple(
         "StateStruct",
@@ -629,51 +619,61 @@ def specbm(
     q0 /= jnp.linalg.norm(q0)
     init_eigvals, init_eigvecs = eigsh_smallest(
         n=n,
-        C=C,
-        A_data=A_data,
-        A_indices=A_indices,
-        adjoint_left_vec=-y,
+        C=sdp_state.C,
+        A_data=sdp_state.A_data,
+        A_indices=sdp_state.A_indices,
+        adjoint_left_vec=-sdp_state.y,
         q0=q0,
         num_desired=k,
         inner_iterations=lanczos_inner_iterations,
         max_restarts=lanczos_max_restarts,
         tolerance=subprob_eps)
     init_eigvals = -init_eigvals
-    init_pen_dual_obj = jnp.dot(-b, y)
+    init_pen_dual_obj = jnp.dot(-sdp_state.b, sdp_state.y)
     init_pen_dual_obj += trace_ub*jnp.clip(init_eigvals[0], a_min=0)
 
     init_state = StateStruct(
         t=jnp.array(0),
-        C=C,
-        A_data=A_data,
-        A_indices=A_indices,
-        b=b,
-        b_ineq_mask=b_ineq_mask,
+        C=sdp_state.C,
+        A_data=sdp_state.A_data,
+        A_indices=sdp_state.A_indices,
+        b=sdp_state.b,
+        b_ineq_mask=sdp_state.b_ineq_mask,
         upsilon=jnp.zeros((m,)),
-        Omega=Omega,
+        Omega=sdp_state.Omega,
         U=U,
-        X=X,
-        tr_X=tr_X,
-        X_bar=X,
-        tr_X_bar=tr_X,
-        P=P,
-        P_bar=P,
-        z=z,
-        z_bar=z,
-        y=y,
+        X=sdp_state.X,
+        tr_X=sdp_state.tr_X,
+        X_bar=sdp_state.X,
+        tr_X_bar=sdp_state.tr_X,
+        P=sdp_state.P,
+        P_bar=sdp_state.P,
+        z=sdp_state.z,
+        z_bar=sdp_state.z,
+        y=sdp_state.y,
         V=init_eigvecs,
         q0=q0,
         callback_nonstatic_args=callback_nonstatic_args,
-        primal_obj=primal_obj,
-        bar_primal_obj=primal_obj,
+        primal_obj=sdp_state.primal_obj,
+        bar_primal_obj=sdp_state.primal_obj,
         pen_dual_obj=init_pen_dual_obj,
         lb_spec_est=jnp.array(0.0))
 
     final_state = bounded_while_loop(cond_func, body_func, init_state, max_steps=max_iters)
 
-    return (final_state.X,
-            final_state.P,
-            final_state.y,
-            final_state.z,
-            final_state.primal_obj,
-            final_state.tr_X)
+    return SDPState(
+        C=sdp_state.C,
+        A_indices=sdp_state.A_indices,
+        A_data=sdp_state.A_data,
+        b=sdp_state.b,
+        b_ineq_mask=sdp_state.b_ineq_mask,
+        X=final_state.X,
+        P=final_state.P,
+        Omega=sdp_state.Omega,
+        y=final_state.y,
+        z=final_state.z,
+        tr_X=final_state.tr_X,
+        primal_obj=final_state.primal_obj,
+        SCALE_C=sdp_state.SCALE_C,
+        SCALE_X=sdp_state.SCALE_X,
+        SCALE_A=sdp_state.SCALE_A)

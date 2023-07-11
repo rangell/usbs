@@ -4,11 +4,13 @@ from jax import lax
 from jax._src.typing import Array
 from jax.experimental.sparse import BCOO
 import jax.numpy as jnp
+import numba as nb
 import numpy as np
 import pickle
 from scipy.spatial.distance import pdist, squareform  # type: ignore
 from typing import Any, Tuple
 
+from utils.common import SDPState, scale_sdp_state, unscale_sdp_state
 from utils.munkres import munkres
 from solver.utils import reconstruct_from_sketch
 
@@ -306,6 +308,130 @@ def get_all_problem_data(C: BCOO) -> Tuple[BCOO, Array, Array, Array]:
     b_ineq_mask = jnp.concatenate([b_ineq_mask, jnp.full((constraint_indices.shape[0],), 1.0)], axis=0)
 
     return A_indices, A_data, b, b_ineq_mask
+
+
+def initialize_state(C: BCOO, sketch_dim: int) -> SDPState:
+    A_indices, A_data, b, b_ineq_mask = get_all_problem_data(C)
+    n = C.shape[0]
+    m = b.shape[0]
+    l = int(jnp.sqrt(n - 1))
+
+    SCALE_X = 1.0 / float(l + 1)
+    SCALE_C = 1.0 / jnp.linalg.norm(C.data)  # equivalent to frobenius norm
+    SCALE_A = jnp.zeros((m,))
+    SCALE_A = SCALE_A.at[A_indices[:,0]].add(A_data**2)
+    SCALE_A = 1.0 / jnp.sqrt(SCALE_A)
+
+    if sketch_dim == -1:
+        X = jnp.zeros((n, n))
+        Omega = None
+        P = None
+    elif sketch_dim > 0:
+        X = None
+        Omega = jax.random.normal(jax.random.PRNGKey(0), shape=(n, sketch_dim))
+        P = jnp.zeros_like(Omega)
+    else:
+        raise ValueError("Invalid value for sketch_dim")
+
+    y = jnp.zeros((m,))
+    z = jnp.zeros((m,))
+    tr_X = 0.0
+    primal_obj = 0.0
+
+    sdp_state = SDPState(
+        C=C,
+        A_indices=A_indices,
+        A_data=A_data,
+        b=b,
+        b_ineq_mask=b_ineq_mask,
+        X=X,
+        P=P,
+        Omega=Omega,
+        y=y,
+        z=z,
+        tr_X=tr_X,
+        primal_obj=primal_obj,
+        SCALE_C=SCALE_C,
+        SCALE_X=SCALE_X,
+        SCALE_A=SCALE_A)
+
+    sdp_state = scale_sdp_state(sdp_state)
+    return sdp_state
+
+
+@nb.njit
+def _fill_constraint_index_map(old_A_indices, new_A_indices, constraint_index_map) -> None:
+    old_idx = 0
+    for curr_idx in range(new_A_indices.shape[0]):
+        old_row = old_A_indices[old_idx]
+        curr_row = new_A_indices[curr_idx]
+        if curr_row[1] == old_row[1] and curr_row[2] == old_row[2]:
+            constraint_index_map[old_row[0]] = curr_row[0]
+            old_idx += 1
+
+
+def get_implicit_warm_start_state(old_sdp_state: SDPState, C: BCOO, sketch_dim: int) -> SDPState:
+    assert sketch_dim == -1 or sketch_dim == old_sdp_state.Omega.shape[1]
+    old_sdp_state = unscale_sdp_state(old_sdp_state)
+
+    old_l = int(jnp.sqrt(old_sdp_state.C.shape[0] - 1))
+    old_m = old_sdp_state.b.shape[0]
+    l = int(jnp.sqrt(C.shape[0] - 1))
+    num_drop = l - old_l
+    assert sketch_dim in [-1, l]
+    
+    A_indices, A_data, b, b_ineq_mask = get_all_problem_data(C)
+    n = C.shape[0]
+    m = b.shape[0]
+
+    index_map = lambda a : a + num_drop * (a // (l - num_drop))
+
+    X = old_sdp_state.X
+    Omega = old_sdp_state.Omega
+    P = old_sdp_state.P
+    if old_sdp_state.X is not None:
+        X = BCOO.fromdense(old_sdp_state.X)
+        X = BCOO((X.data, jax.vmap(index_map)(X.indices)), shape=(n, n)).todense()
+    if old_sdp_state.P is not None:
+        Omega = jax.random.normal(jax.random.PRNGKey(n), shape=(n, l)).at[jax.vmap(index_map)(
+            jnp.arange(old_sdp_state.Omega.shape[0]))].set(old_sdp_state.Omega)
+        P = jnp.zeros_like(Omega).at[jax.vmap(index_map)(
+            jnp.arange(old_sdp_state.P.shape[0]))].set(old_sdp_state.P)
+    
+    old_A_indices = old_sdp_state.A_indices.at[:, 1:].set(
+        jax.vmap(index_map)(old_sdp_state.A_indices[:, 1:]))
+    constraint_index_map = np.empty((old_m,), dtype=int)
+    _fill_constraint_index_map(
+        np.asarray(old_A_indices), np.asarray(A_indices), constraint_index_map)
+
+    y = jnp.zeros((m,)).at[constraint_index_map].set(old_sdp_state.y)
+    z = jnp.zeros((m,)).at[constraint_index_map].set(old_sdp_state.z)
+
+    SCALE_X = 1.0 / float(l + 1)
+    SCALE_C = 1.0 / jnp.linalg.norm(C.data)  # equivalent to frobenius norm
+    SCALE_A = jnp.zeros((m,))
+    SCALE_A = SCALE_A.at[A_indices[:,0]].add(A_data**2)
+    SCALE_A = 1.0 / jnp.sqrt(SCALE_A)
+
+    sdp_state = SDPState(
+        C=C,
+        A_indices=A_indices,
+        A_data=A_data,
+        b=b,
+        b_ineq_mask=b_ineq_mask,
+        X=X,
+        P=P,
+        Omega=Omega,
+        y=y,
+        z=z,
+        tr_X=old_sdp_state.tr_X,
+        primal_obj=old_sdp_state.primal_obj,
+        SCALE_C=SCALE_C,
+        SCALE_X=SCALE_X,
+        SCALE_A=SCALE_A)
+
+    sdp_state = scale_sdp_state(sdp_state)
+    return sdp_state
 
 
 @partial(jax.jit, static_argnames=["callback_static_args"])
