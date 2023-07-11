@@ -8,10 +8,10 @@ import numpy as np
 import pickle
 
 from solver.specbm import specbm
-from misc.qap_helpers import (load_and_process_qap,
-                              load_and_process_tsp,
-                              get_all_problem_data,
-                              qap_round)
+from utils.qap_helpers import (load_and_process_qap,
+                               load_and_process_tsp,
+                               get_all_problem_data,
+                               qap_round)
 
 from IPython import embed
 

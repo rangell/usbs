@@ -9,7 +9,7 @@ import pickle
 from scipy.spatial.distance import pdist, squareform  # type: ignore
 from typing import Any, Tuple
 
-from misc.munkres import munkres
+from utils.munkres import munkres
 from solver.utils import reconstruct_from_sketch
 
 from IPython import embed
