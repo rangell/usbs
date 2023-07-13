@@ -12,37 +12,30 @@ from typing import Any, Callable, Tuple, Union
 
 from solver.lanczos import eigsh_smallest
 from solver.utils import apply_A_operator_slim, apply_A_adjoint_slim
+from utils.common import SDPState
 
 from IPython import embed
 
 
 def cgal(
-    X: Union[Array, None],
-    P: Union[Array, None],
-    y: Array,
-    z: Array,
-    primal_obj: float,
-    tr_X: float,
+    sdp_state: SDPState,
     n: int,
     m: int,
     trace_ub: float,
-    C: BCOO,
-    A_data: Array,
-    A_indices: Array,
-    b: Array,
-    Omega: Union[Array, None],
     beta0: float,
-    SCALE_C: float,
-    SCALE_X: float,
-    SCALE_A: Array,
     eps: float,
     max_iters: int,
-    line_search: bool,
     lanczos_inner_iterations: int,
     lanczos_max_restarts: int,
-    subprob_tol: float,
-    callback_fn: Union[Callable[[Array, Array], Array], None]
+    subprob_eps: float,
+    callback_fn: Union[Callable[[Array, Array], Array], None],
+    callback_static_args: bytes,
+    callback_nonstatic_args: Any
 ) -> Tuple[Array, Array]:
+
+    SCALE_C = sdp_state.SCALE_C 
+    SCALE_X = sdp_state.SCALE_X
+    SCALE_A = sdp_state.SCALE_A
 
     StateStruct = namedtuple(
         "StateStruct",
@@ -51,11 +44,14 @@ def cgal(
          "A_data",
          "A_indices",
          "b",
+         "b_ineq_mask",
          "Omega",
          "X",
          "P",
          "y",
          "z",
+         "tr_X",
+         "callback_nonstatic_args",
          "primal_obj",
          "obj_gap",
          "infeas_gap"])
@@ -70,8 +66,8 @@ def cgal(
                         time=hcb.call(lambda _: time.time(), arg=0, result_shape=float))
         beta = beta0 * jnp.sqrt(state.t + 1)
 
-        proj_b = jnp.minimum(
-            jnp.maximum(state.z + (1.0 / beta) * state.y, state.b[:, 0]), state.b[:, 1])
+        proj_b = (1 - state.b_ineq_mask) * state.b
+        proj_b += state.b_ineq_mask * jnp.minimum(state.z + (1.0 / beta) * state.y, state.b)
 
         adjoint_left_vec = state.y + beta*(state.z - proj_b)
 
@@ -87,7 +83,7 @@ def cgal(
             num_desired=1,
             inner_iterations=lanczos_inner_iterations,
             max_restarts=lanczos_max_restarts,
-            tolerance=subprob_tol)
+            tolerance=subprob_eps)
 
         # fix trace_ub here to allow for <= trace
         eigvecs = lax.cond(
@@ -107,19 +103,13 @@ def cgal(
         obj_gap = obj_gap / (SCALE_C * SCALE_X)
         obj_gap /= 1.0 + (jnp.abs(state.primal_obj) / (SCALE_C * SCALE_X))
 
-        proj_b = jnp.minimum(jnp.maximum(state.z, state.b[:, 0]), state.b[:, 1])
+        proj_b = (1 - state.b_ineq_mask) * state.b
+        proj_b += state.b_ineq_mask * jnp.minimum(state.z, state.b)
         infeas_gap = jnp.linalg.norm(((state.z - proj_b) / SCALE_A) / SCALE_X) 
         infeas_gap /= 1.0 + jnp.linalg.norm((proj_b / SCALE_A) / SCALE_X)
         max_infeas = jnp.max(jnp.abs((state.z - proj_b) / SCALE_A)) / SCALE_X
 
-        if line_search:
-            AH = trace_ub * apply_A_operator_slim(m, state.A_data, state.A_indices, min_eigvec)
-            eta = state.primal_obj - trace_ub*jnp.dot(min_eigvec, state.C @ min_eigvec)
-            eta += jnp.dot(adjoint_left_vec, state.z - AH)
-            eta /= beta * jnp.sum(jnp.square(AH - state.z))
-            eta = jnp.clip(eta, a_min=0.0, a_max=1.0)
-        else:
-            eta = 2.0 / (state.t + 2.0)
+        eta = 2.0 / (state.t + 2.0)
 
         if state.Omega is None:
             X_next = (1 - eta) * state.X + eta * trace_ub * X_update_dir
@@ -129,14 +119,15 @@ def cgal(
             min_eigvec = min_eigvec.reshape(-1, 1)
             P_next = (1 - eta) * state.P + eta * trace_ub * min_eigvec @ (min_eigvec.T @ state.Omega)
             min_eigvec = min_eigvec.reshape(-1,)
-
+        
+        tr_X_next = (1 - eta) * state.tr_X + eta * trace_ub * jnp.linalg.norm(min_eigvec)**2
         z_next = (1 - eta) * state.z + eta * trace_ub * apply_A_operator_slim(
             m, state.A_data, state.A_indices, min_eigvec)
 
         # update beta before dual step
         beta = beta0 * jnp.sqrt(state.t + 2)
-        proj_b = jnp.minimum(
-            jnp.maximum(z_next + (1.0 / beta) * state.y, state.b[:, 0]), state.b[:, 1])
+        proj_b = (1 - state.b_ineq_mask) * state.b
+        proj_b += state.b_ineq_mask * jnp.minimum(z_next + (1.0 / beta) * state.y, state.b)
         dual_step_size = jnp.clip(
             4 * beta * eta**2 * trace_ub**2 / jnp.sum(jnp.square(z_next - proj_b)),
             a_min=0.0,
@@ -147,7 +138,11 @@ def cgal(
         primal_obj_next += eta * trace_ub * jnp.dot(min_eigvec, state.C @ min_eigvec)
 
         if state.Omega is not None and callback_fn is not None:
-            callback_val = callback_fn(state.C / SCALE_C, state.Omega, state.P)
+            callback_val = callback_fn(
+                state.P,
+                state.Omega,
+                callback_static_args,
+                state.callback_nonstatic_args)
         else:
             callback_val = None
 
@@ -170,41 +165,51 @@ def cgal(
             A_data=state.A_data,
             A_indices=state.A_indices,
             b=state.b,
+            b_ineq_mask=state.b_ineq_mask,
             Omega=state.Omega,
             X=X_next,
             P=P_next,
             y=y_next,
             z=z_next,
+            tr_X=tr_X_next,
+            callback_nonstatic_args=state.callback_nonstatic_args,
             primal_obj=primal_obj_next,
             obj_gap=obj_gap,
             infeas_gap=infeas_gap)
 
     init_state = StateStruct(
         t=0,
-        C=C,
-        A_data=A_data,
-        A_indices=A_indices,
-        b=b,
-        Omega=Omega,
-        X=X,
-        P=P,
-        y=y,
-        z=z,
-        primal_obj=primal_obj,
+        C=sdp_state.C,
+        A_data=sdp_state.A_data,
+        A_indices=sdp_state.A_indices,
+        b=sdp_state.b,
+        b_ineq_mask=sdp_state.b_ineq_mask,
+        Omega=sdp_state.Omega,
+        X=sdp_state.X,
+        P=sdp_state.P,
+        y=sdp_state.y,
+        z=sdp_state.z,
+        tr_X=sdp_state.tr_X,
+        callback_nonstatic_args=callback_nonstatic_args,
+        primal_obj=sdp_state.primal_obj,
         obj_gap=1.1*eps,
         infeas_gap=1.1*eps)
 
     final_state = bounded_while_loop(cond_func, body_func, init_state, max_steps=max_iters)
 
-    #state = init_state
-    #for _ in range(1000):
-    #    state = body_func(state)
-    #    embed()
-    #    exit()
-
-    return (final_state.X,
-            final_state.P,
-            final_state.y,
-            final_state.z,
-            final_state.primal_obj,
-            trace_ub)
+    return SDPState(
+        C=sdp_state.C,
+        A_indices=sdp_state.A_indices,
+        A_data=sdp_state.A_data,
+        b=sdp_state.b,
+        b_ineq_mask=sdp_state.b_ineq_mask,
+        X=final_state.X,
+        P=final_state.P,
+        Omega=sdp_state.Omega,
+        y=final_state.y,
+        z=final_state.z,
+        tr_X=final_state.tr_X,
+        primal_obj=final_state.primal_obj,
+        SCALE_C=sdp_state.SCALE_C,
+        SCALE_X=sdp_state.SCALE_X,
+        SCALE_A=sdp_state.SCALE_A)
