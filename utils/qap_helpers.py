@@ -513,6 +513,70 @@ def get_explicit_warm_start_state(old_sdp_state: SDPState, C: BCOO, sketch_dim: 
     return sdp_state
 
 
+def get_dual_only_warm_start_state(old_sdp_state: SDPState, C: BCOO, sketch_dim: int) -> SDPState:
+    old_sdp_state = unscale_sdp_state(old_sdp_state)
+
+    A_data, A_indices, b, b_ineq_mask = get_all_problem_data(C)
+    n = C.shape[0]
+    m = b.shape[0]
+
+    old_l = int(jnp.sqrt(old_sdp_state.C.shape[0] - 1))
+    old_m = old_sdp_state.b.shape[0]
+    l = int(jnp.sqrt(C.shape[0] - 1))
+    num_drop = l - old_l
+    assert sketch_dim in [-1, l]
+    
+    index_map = lambda a : a + num_drop * jnp.clip(((a - 1) // (l - num_drop)), a_min=0)
+
+    old_A_indices = old_sdp_state.A_indices.at[:, 1:].set(
+        jax.vmap(index_map)(old_sdp_state.A_indices[:, 1:]))
+    constraint_index_map = np.empty((old_m,), dtype=int)
+    _fill_constraint_index_map(
+        np.asarray(old_A_indices), np.asarray(A_indices), constraint_index_map)
+
+    SCALE_X = 1.0 / float(l + 1)
+    SCALE_C = 1.0 / jnp.linalg.norm(C.data)  # equivalent to frobenius norm
+    SCALE_A = jnp.zeros((m,))
+    SCALE_A = SCALE_A.at[A_indices[:,0]].add(A_data**2)
+    SCALE_A = 1.0 / jnp.sqrt(SCALE_A)
+
+    if sketch_dim == -1:
+        X = jnp.zeros((n, n))
+        Omega = None
+        P = None
+    elif sketch_dim > 0:
+        X = None
+        Omega = jax.random.normal(jax.random.PRNGKey(0), shape=(n, sketch_dim))
+        P = jnp.zeros_like(Omega)
+    else:
+        raise ValueError("Invalid value for sketch_dim")
+
+    y = jnp.zeros((m,)).at[constraint_index_map].set(old_sdp_state.y)
+    z = jnp.zeros((m,))
+    tr_X = 0.0
+    primal_obj = 0.0
+
+    sdp_state = SDPState(
+        C=C,
+        A_indices=A_indices,
+        A_data=A_data,
+        b=b,
+        b_ineq_mask=b_ineq_mask,
+        X=X,
+        P=P,
+        Omega=Omega,
+        y=y,
+        z=z,
+        tr_X=tr_X,
+        primal_obj=primal_obj,
+        SCALE_C=SCALE_C,
+        SCALE_X=SCALE_X,
+        SCALE_A=SCALE_A)
+
+    sdp_state = scale_sdp_state(sdp_state)
+    return sdp_state
+
+
 @partial(jax.jit, static_argnames=["callback_static_args"])
 def qap_round(
     P: Array,

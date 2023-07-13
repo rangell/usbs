@@ -9,7 +9,8 @@ from utils.qap_helpers import (load_and_process_qap,
                                qap_round,
                                initialize_state,
                                get_implicit_warm_start_state,
-                               get_explicit_warm_start_state)
+                               get_explicit_warm_start_state,
+                               get_dual_only_warm_start_state)
 
 from IPython import embed
 
@@ -108,6 +109,8 @@ if __name__ == "__main__":
         sdp_state = get_implicit_warm_start_state(old_sdp_state=sdp_state, C=C, sketch_dim=l)
     elif hparams.warm_start_strategy == "explicit":
         sdp_state = get_explicit_warm_start_state(old_sdp_state=sdp_state, C=C, sketch_dim=l)
+    elif hparams.warm_start_strategy == "dual_only":
+        sdp_state = get_dual_only_warm_start_state(old_sdp_state=sdp_state, C=C, sketch_dim=l)
     else:
         raise NotImplementedError("Warm-start strategy not implemented.")
 
