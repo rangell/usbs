@@ -63,23 +63,3 @@ def create_Q_base(m: int, k: int, U: BCOO, A_data: Array, A_indices: Array, V: A
     expanded_mx = svec_proj.reshape(svec_dim_size, 1, m) * svec_proj.reshape(1, svec_dim_size, m)
     final_mx = jnp.sum(expanded_mx, axis=-1)
     return final_mx
-
-
-@jax.jit
-def reconstruct_from_sketch(
-    Omega: Array,
-    P: Array,
-    approx_eps: float = 1e-6
-) -> Tuple[np.ndarray, np.ndarray]:
-    n = Omega.shape[0]
-    rho = jnp.sqrt(n) * approx_eps * jnp.linalg.norm(P, ord=2)
-    P_rho = P + rho * Omega
-    B = Omega.T @ P_rho
-    B = 0.5 * (B + B.T)
-    L = jnp.linalg.cholesky(B)
-    E, Rho, _ = jnp.linalg.svd(
-        jnp.linalg.lstsq(L, P_rho.T, rcond=-1)[0].T,
-        full_matrices=False,  # this compresses the output to be rank `R`
-    )
-    Lambda = jnp.clip(Rho ** 2 - rho, 0, np.inf)
-    return E, Lambda

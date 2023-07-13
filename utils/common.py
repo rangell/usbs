@@ -1,5 +1,9 @@
 from collections import namedtuple
+import jax
+from jax._src.typing import Array
 from jax.experimental.sparse import BCOO
+import jax.numpy as jnp
+from typing import Tuple
 
 
 SDPState = namedtuple("SDPState",
@@ -88,3 +92,23 @@ def unscale_sdp_state(sdp_state: SDPState) -> SDPState:
         SCALE_C=sdp_state.SCALE_C,
         SCALE_X=sdp_state.SCALE_X,
         SCALE_A=sdp_state.SCALE_A)
+
+
+@jax.jit
+def reconstruct_from_sketch(
+    Omega: Array,
+    P: Array,
+    approx_eps: float = 1e-6
+) -> Tuple[Array, Array]:
+    n = Omega.shape[0]
+    rho = jnp.sqrt(n) * approx_eps * jnp.linalg.norm(P, ord=2)
+    P_rho = P + rho * Omega
+    B = Omega.T @ P_rho
+    B = 0.5 * (B + B.T)
+    L = jnp.linalg.cholesky(B)
+    E, Rho, _ = jnp.linalg.svd(
+        jnp.linalg.lstsq(L, P_rho.T, rcond=-1)[0].T,
+        full_matrices=False,  # this compresses the output to be rank `R`
+    )
+    Lambda = jnp.clip(Rho ** 2 - rho, 0, jnp.inf)
+    return E, Lambda

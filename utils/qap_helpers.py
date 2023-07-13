@@ -2,6 +2,7 @@ from functools import partial
 import jax
 from jax import lax
 from jax._src.typing import Array
+from jax.experimental import sparse
 from jax.experimental.sparse import BCOO
 import jax.numpy as jnp
 import numba as nb
@@ -10,9 +11,12 @@ import pickle
 from scipy.spatial.distance import pdist, squareform  # type: ignore
 from typing import Any, Tuple
 
-from utils.common import SDPState, scale_sdp_state, unscale_sdp_state
+from solver.utils import apply_A_operator_batched
+from utils.common import (SDPState,
+                          scale_sdp_state,
+                          unscale_sdp_state,
+                          reconstruct_from_sketch)
 from utils.munkres import munkres
-from solver.utils import reconstruct_from_sketch
 
 from IPython import embed
 
@@ -307,11 +311,11 @@ def get_all_problem_data(C: BCOO) -> Tuple[BCOO, Array, Array, Array]:
     b = jnp.concatenate([b, jnp.full((constraint_indices.shape[0],), 0.0)], axis=0)
     b_ineq_mask = jnp.concatenate([b_ineq_mask, jnp.full((constraint_indices.shape[0],), 1.0)], axis=0)
 
-    return A_indices, A_data, b, b_ineq_mask
+    return A_data, A_indices, b, b_ineq_mask
 
 
 def initialize_state(C: BCOO, sketch_dim: int) -> SDPState:
-    A_indices, A_data, b, b_ineq_mask = get_all_problem_data(C)
+    A_data, A_indices, b, b_ineq_mask = get_all_problem_data(C)
     n = C.shape[0]
     m = b.shape[0]
     l = int(jnp.sqrt(n - 1))
@@ -359,6 +363,11 @@ def initialize_state(C: BCOO, sketch_dim: int) -> SDPState:
     return sdp_state
 
 
+def _apply_A_operator_mx(n: int, m: int, A_data: Array, A_indices: Array, X: Array) -> Array:
+    A = BCOO((A_data, A_indices), shape=(m, n, n))
+    return sparse.bcoo_reduce_sum(A * X[None, :, :], axes=[1,2]).todense()
+
+
 @nb.njit
 def _fill_constraint_index_map(old_A_indices, new_A_indices, constraint_index_map) -> None:
     old_idx = 0
@@ -380,11 +389,11 @@ def get_implicit_warm_start_state(old_sdp_state: SDPState, C: BCOO, sketch_dim: 
     num_drop = l - old_l
     assert sketch_dim in [-1, l]
     
-    A_indices, A_data, b, b_ineq_mask = get_all_problem_data(C)
+    A_data, A_indices, b, b_ineq_mask = get_all_problem_data(C)
     n = C.shape[0]
     m = b.shape[0]
 
-    index_map = lambda a : a + num_drop * (a // (l - num_drop))
+    index_map = lambda a : a + num_drop * jnp.clip(((a - 1) // (l - num_drop)), a_min=0)
 
     X = old_sdp_state.X
     Omega = old_sdp_state.Omega
@@ -426,6 +435,76 @@ def get_implicit_warm_start_state(old_sdp_state: SDPState, C: BCOO, sketch_dim: 
         z=z,
         tr_X=old_sdp_state.tr_X,
         primal_obj=old_sdp_state.primal_obj,
+        SCALE_C=SCALE_C,
+        SCALE_X=SCALE_X,
+        SCALE_A=SCALE_A)
+
+    sdp_state = scale_sdp_state(sdp_state)
+    return sdp_state
+
+def get_explicit_warm_start_state(old_sdp_state: SDPState, C: BCOO, sketch_dim: int) -> SDPState:
+    old_sdp_state = unscale_sdp_state(old_sdp_state)
+
+    old_l = int(jnp.sqrt(old_sdp_state.C.shape[0] - 1))
+    old_m = old_sdp_state.b.shape[0]
+    l = int(jnp.sqrt(C.shape[0] - 1))
+    num_drop = l - old_l
+    assert sketch_dim in [-1, l]
+    
+    A_data, A_indices, b, b_ineq_mask = get_all_problem_data(C)
+    n = C.shape[0]
+    m = b.shape[0]
+
+    index_map = lambda a : a + num_drop * jnp.clip(((a - 1) // (l - num_drop)), a_min=0)
+
+    old_A_indices = old_sdp_state.A_indices.at[:, 1:].set(
+        jax.vmap(index_map)(old_sdp_state.A_indices[:, 1:]))
+    constraint_index_map = np.empty((old_m,), dtype=int)
+    _fill_constraint_index_map(
+        np.asarray(old_A_indices), np.asarray(A_indices), constraint_index_map)
+
+    X = old_sdp_state.X
+    Omega = old_sdp_state.Omega
+    P = old_sdp_state.P
+    if old_sdp_state.X is not None:
+        X = BCOO.fromdense(old_sdp_state.X)
+        X = BCOO((X.data, jax.vmap(index_map)(X.indices)), shape=(n, n)).todense()
+        z = _apply_A_operator_mx(n, m, A_data, A_indices, X) 
+        tr_X = jnp.trace(X)
+        primal_obj = jnp.trace(C @ X)
+    if old_sdp_state.P is not None:
+        Omega = jax.random.normal(jax.random.PRNGKey(n), shape=(n, sketch_dim))
+        E, Lambda = reconstruct_from_sketch(old_sdp_state.Omega, old_sdp_state.P)
+        tr_offset = (old_sdp_state.tr_X - jnp.sum(Lambda)) / Lambda.shape[0]
+        Lambda_tr_correct = Lambda + tr_offset
+        E = jnp.zeros_like(Omega).at[jax.vmap(index_map)(jnp.arange(E.shape[0]))].set(E)
+        sqrt_X_hat = E * jnp.sqrt(Lambda_tr_correct)[None, :]
+        P = sqrt_X_hat @ (sqrt_X_hat.T @ Omega)
+        z = apply_A_operator_batched(m, A_data, A_indices, sqrt_X_hat)
+        tr_X = jnp.sum(Lambda_tr_correct)
+        primal_obj = jnp.trace(sqrt_X_hat.T @ (C @ sqrt_X_hat))
+
+    y = jnp.zeros((m,)).at[constraint_index_map].set(old_sdp_state.y)
+
+    SCALE_X = 1.0 / float(l + 1)
+    SCALE_C = 1.0 / jnp.linalg.norm(C.data)  # equivalent to frobenius norm
+    SCALE_A = jnp.zeros((m,))
+    SCALE_A = SCALE_A.at[A_indices[:,0]].add(A_data**2)
+    SCALE_A = 1.0 / jnp.sqrt(SCALE_A)
+
+    sdp_state = SDPState(
+        C=C,
+        A_indices=A_indices,
+        A_data=A_data,
+        b=b,
+        b_ineq_mask=b_ineq_mask,
+        X=X,
+        P=P,
+        Omega=Omega,
+        y=y,
+        z=z,
+        tr_X=tr_X,
+        primal_obj=primal_obj,
         SCALE_C=SCALE_C,
         SCALE_X=SCALE_X,
         SCALE_A=SCALE_A)
