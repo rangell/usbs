@@ -24,10 +24,12 @@ from IPython import embed
 def load_and_process_qap(fname: str, num_drop: int = 0) -> Tuple[Array, Array]:
     with open(fname, "r") as f:
         datastr = f.read()
-        str_n, str_D, str_W, _ = tuple(datastr.split("\n\n"))
+        split_index = datastr.find("\n\n")
+        str_n, str_data = datastr[:split_index], datastr[split_index+2:]
         n = int(str_n)
-        D = jnp.array([float(v) for v in str_D.split()]).reshape(n, n)
-        W = jnp.array([float(v) for v in str_W.split()]).reshape(n, n)
+        M = jnp.array([float(v) for v in str_data.split()]).reshape(2*n, n)
+        D = M[:n]
+        W = M[n:]
 
     # by convention, W should be sparser than D -- this doesn't really matter
     if jnp.count_nonzero(D) < jnp.count_nonzero(W):
