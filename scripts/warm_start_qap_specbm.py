@@ -1,7 +1,9 @@
 import argparse
+import git
 import jax
 import json
 import pickle
+import sys
 
 from solver.specbm import specbm
 from utils.qap_helpers import (load_and_process_qap,
@@ -44,7 +46,10 @@ if __name__ == "__main__":
 
     # get experiment hparams and print them out
     hparams = get_hparams()
-    print(json.dumps(vars(hparams), indent=4))
+    hparams.solver = "specbm"
+    print("cmd: ", " ".join(["python"] + sys.argv))
+    print("git sha: ", git.Repo(search_parent_directories=True).head.object.hexsha)
+    print("hparams: ", json.dumps(vars(hparams), indent=4))
 
     assert hparams.warm_start_strategy == "none" or hparams.num_drop > 0
 
