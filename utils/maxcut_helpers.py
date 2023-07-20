@@ -214,6 +214,63 @@ def get_explicit_warm_start_state(old_sdp_state: SDPState, C: BCOO, sketch_dim: 
     return sdp_state
 
 
+def get_dual_only_warm_start_state(old_sdp_state: SDPState, C: BCOO, sketch_dim: int) -> SDPState:
+    assert sketch_dim == -1 or sketch_dim == old_sdp_state.Omega.shape[1]
+    old_sdp_state = unscale_sdp_state(old_sdp_state)
+
+    n = C.shape[0]
+    C = scipy.sparse.spdiags((C @ np.ones((n,1))).T, 0, n, n) - C
+    C = 0.5*(C + C.T)
+    C = -0.25*C
+    C = C.tocsc()
+    C = BCOO.from_scipy_sparse(C)
+
+    A_data, A_indices, b, b_ineq_mask = get_all_problem_data(C)
+    m = b.shape[0]
+
+    SCALE_X = 1.0 / float(n)
+    SCALE_C = 1.0 / jnp.linalg.norm(C.data)  # equivalent to frobenius norm
+    SCALE_A = jnp.zeros((m,))
+    SCALE_A = SCALE_A.at[A_indices[:,0]].add(A_data**2)
+    SCALE_A = 1.0 / jnp.sqrt(SCALE_A)
+
+    if sketch_dim == -1:
+        X = jnp.zeros((n, n))
+        Omega = None
+        P = None
+    elif sketch_dim > 0:
+        X = None
+        Omega = jax.random.normal(jax.random.PRNGKey(0), shape=(n, sketch_dim))
+        P = jnp.zeros_like(Omega)
+    else:
+        raise ValueError("Invalid value for sketch_dim")
+
+    y = jnp.zeros((m,)).at[jnp.arange(old_sdp_state.b.shape[0])].set(old_sdp_state.y)
+    z = jnp.zeros((m,))
+    tr_X = 0.0
+    primal_obj = 0.0
+
+    sdp_state = SDPState(
+        C=C,
+        A_indices=A_indices,
+        A_data=A_data,
+        b=b,
+        b_ineq_mask=b_ineq_mask,
+        X=X,
+        P=P,
+        Omega=Omega,
+        y=y,
+        z=z,
+        tr_X=tr_X,
+        primal_obj=primal_obj,
+        SCALE_C=SCALE_C,
+        SCALE_X=SCALE_X,
+        SCALE_A=SCALE_A)
+
+    sdp_state = scale_sdp_state(sdp_state)
+    return sdp_state
+
+
 @partial(jax.jit, static_argnames=["callback_static_args"])
 def compute_max_cut(
     P: Array,

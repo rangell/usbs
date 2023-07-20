@@ -11,7 +11,8 @@ from solver.specbm import specbm
 from utils.maxcut_helpers import (initialize_state,
                                   compute_max_cut,
                                   get_implicit_warm_start_state,
-                                  get_explicit_warm_start_state)
+                                  get_explicit_warm_start_state,
+                                  get_dual_only_warm_start_state)
 
 from IPython import embed
 
@@ -132,7 +133,8 @@ if __name__ == "__main__":
         sdp_state = get_explicit_warm_start_state(
             old_sdp_state=sdp_state, C=C, sketch_dim=hparams.sketch_dim)
     elif hparams.warm_start_strategy == "dual_only":
-        sdp_state = get_dual_only_warm_start_state(old_sdp_state=sdp_state, C=C, sketch_dim=l)
+        sdp_state = get_dual_only_warm_start_state(
+            old_sdp_state=sdp_state, C=C, sketch_dim=hparams.sketch_dim)
     else:
         raise NotImplementedError("Warm-start strategy not implemented.")
 
