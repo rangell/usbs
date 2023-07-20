@@ -407,8 +407,11 @@ def specbm(
     beta: float,
     k_curr: int,
     k_past: int,
-    eps: float,
     max_iters: int,
+    max_time: float,
+    obj_gap_eps: float,
+    infeas_gap_eps: float,
+    max_infeas_eps: float,
     lanczos_inner_iterations: int,
     lanczos_max_restarts: int,
     subprob_eps: float,
@@ -447,6 +450,11 @@ def specbm(
          "V",
          "q0",
          "callback_nonstatic_args",
+         "start_time",
+         "curr_time",
+         "obj_gap",
+         "infeas_gap",
+         "max_infeas",
          "primal_obj",
          "bar_primal_obj",
          "pen_dual_obj",
@@ -454,9 +462,15 @@ def specbm(
 
     @jax.jit
     def cond_func(state: StateStruct) -> Array:
-        #return jnp.logical_or(
-        #    state.t == 0, (state.pen_dual_obj - state.lb_spec_est) / (1.0 + state.pen_dual_obj) > eps)
-        return state.t != -1
+        # NOTE: bounded_while_loop takes care of max_iters
+        return jnp.logical_or(
+            state.t == 0,
+            jnp.logical_and(
+                state.curr_time - state.start_time < max_time,
+                jnp.logical_or(
+                    state.obj_gap > obj_gap_eps,
+                    jnp.logical_or(state.infeas_gap > infeas_gap_eps,
+                                   state.max_infeas > max_infeas_eps))))
 
     @jax.jit
     def body_func(state: StateStruct) -> StateStruct:
@@ -609,6 +623,11 @@ def specbm(
             V=V_next,
             q0=state.q0,
             callback_nonstatic_args=state.callback_nonstatic_args,
+            start_time=state.start_time,
+            curr_time=end_time,
+            obj_gap=obj_gap,
+            infeas_gap=infeas_gap,
+            max_infeas=max_infeas,
             primal_obj=primal_obj_next,
             bar_primal_obj=bar_primal_obj_next,
             pen_dual_obj=pen_dual_obj_next,
@@ -632,6 +651,7 @@ def specbm(
     init_pen_dual_obj = jnp.dot(-sdp_state.b, sdp_state.y)
     init_pen_dual_obj += trace_ub*jnp.clip(init_eigvals[0], a_min=0)
 
+    global_start_time = time.time()
     init_state = StateStruct(
         t=jnp.array(0),
         C=sdp_state.C,
@@ -654,6 +674,11 @@ def specbm(
         V=init_eigvecs,
         q0=q0,
         callback_nonstatic_args=callback_nonstatic_args,
+        start_time=global_start_time,
+        curr_time=global_start_time,
+        obj_gap=1.1*obj_gap_eps,
+        infeas_gap=1.1*infeas_gap_eps,
+        max_infeas=1.1*max_infeas_eps,
         primal_obj=sdp_state.primal_obj,
         bar_primal_obj=sdp_state.primal_obj,
         pen_dual_obj=init_pen_dual_obj,

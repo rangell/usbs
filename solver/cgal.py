@@ -23,8 +23,11 @@ def cgal(
     m: int,
     trace_ub: float,
     beta0: float,
-    eps: float,
     max_iters: int,
+    max_time: float,
+    obj_gap_eps: float,
+    infeas_gap_eps: float,
+    max_infeas_eps: float,
     lanczos_inner_iterations: int,
     lanczos_max_restarts: int,
     subprob_eps: float,
@@ -52,13 +55,24 @@ def cgal(
          "z",
          "tr_X",
          "callback_nonstatic_args",
-         "primal_obj",
+         "start_time",
+         "curr_time",
          "obj_gap",
-         "infeas_gap"])
+         "infeas_gap",
+         "max_infeas",
+         "primal_obj"])
 
     @jax.jit
     def cond_func(state: StateStruct) -> bool:
-        return jnp.logical_or(state.obj_gap > eps, state.infeas_gap > eps)
+        # NOTE: bounded_while_loop takes care of max_iters
+        return jnp.logical_or(
+            state.t == 0,
+            jnp.logical_and(
+                state.curr_time - state.start_time < max_time,
+                jnp.logical_or(
+                    state.obj_gap > obj_gap_eps,
+                    jnp.logical_or(state.infeas_gap > infeas_gap_eps,
+                                   state.max_infeas > max_infeas_eps))))
 
     @jax.jit
     def body_func(state: StateStruct) -> StateStruct:
@@ -173,10 +187,14 @@ def cgal(
             z=z_next,
             tr_X=tr_X_next,
             callback_nonstatic_args=state.callback_nonstatic_args,
-            primal_obj=primal_obj_next,
+            start_time=state.start_time,
+            curr_time=end_time,
             obj_gap=obj_gap,
-            infeas_gap=infeas_gap)
+            infeas_gap=infeas_gap,
+            max_infeas=max_infeas,
+            primal_obj=primal_obj_next)
 
+    global_start_time = time.time()
     init_state = StateStruct(
         t=0,
         C=sdp_state.C,
@@ -191,9 +209,12 @@ def cgal(
         z=sdp_state.z,
         tr_X=sdp_state.tr_X,
         callback_nonstatic_args=callback_nonstatic_args,
-        primal_obj=sdp_state.primal_obj,
-        obj_gap=1.1*eps,
-        infeas_gap=1.1*eps)
+        start_time=global_start_time,
+        curr_time=global_start_time,
+        obj_gap=1.1*obj_gap_eps,
+        infeas_gap=1.1*infeas_gap_eps,
+        max_infeas=1.1*max_infeas_eps,
+        primal_obj=sdp_state.primal_obj)
 
     final_state = bounded_while_loop(cond_func, body_func, init_state, max_steps=max_iters)
 

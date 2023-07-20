@@ -1,6 +1,7 @@
 import argparse
 import git
 import jax
+import jax.numpy as jnp
 import json
 import pickle
 import sys
@@ -22,6 +23,20 @@ def get_hparams():
     parser.add_argument("--data_path", type=str, required=True, help="path to mat file")
     parser.add_argument("--max_iters", type=int, required=True,
                         help="number of iterations to run solver")
+    parser.add_argument("--max_time", type=float, default=jnp.inf,
+                        help="max running time in seconds for one solve")
+    parser.add_argument("--obj_gap_eps", type=float, default=-jnp.inf,
+                        help="early stop if obj_gap is less than this number")
+    parser.add_argument("--infeas_gap_eps", type=float, default=-jnp.inf,
+                        help="early stop if infeas_gap is less than this number")
+    parser.add_argument("--max_infeas_eps", type=float, default=-jnp.inf,
+                        help="early stop if max_infeas is less than this number")
+    parser.add_argument("--lanczos_max_restarts", type=int, default=100,
+                        help="number of restarts to use for thick restart lanczos")
+    parser.add_argument("--subprob_eps", type=float, default=1e-7,
+                        help="error tolerance for IPM, alternating minimization, and lanczos")
+    parser.add_argument("--subprob_max_iters", type=int, default=15,
+                        help="max iters for IPM and alternating minimization")
     parser.add_argument("--trace_factor", type=float, default=1.0,
                         help="how much space to give trace")
     parser.add_argument("--num_drop", type=int, default=0,
@@ -72,11 +87,14 @@ if __name__ == "__main__":
         m=sdp_state.b.shape[0],
         trace_ub=trace_ub,
         beta0=1.0,
-        eps=1e-5,  # hparams.eps,
         max_iters=hparams.max_iters,
+        max_time=hparams.max_time,
+        obj_gap_eps=hparams.obj_gap_eps,
+        infeas_gap_eps=hparams.infeas_gap_eps,
+        max_infeas_eps=hparams.max_infeas_eps,
         lanczos_inner_iterations=min(sdp_state.C.shape[0], 32),
-        lanczos_max_restarts=100,  # hparams.lanczos_max_restarts,
-        subprob_eps=1e-7,
+        lanczos_max_restarts=hparams.lanczos_max_restarts,
+        subprob_eps=hparams.subprob_eps,
         callback_fn=qap_round,
         callback_static_args=callback_static_args,
         callback_nonstatic_args=callback_nonstatic_args)
@@ -114,11 +132,14 @@ if __name__ == "__main__":
         m=sdp_state.b.shape[0],
         trace_ub=trace_ub,
         beta0=1.0,
-        eps=1e-5,  # hparams.eps,
         max_iters=hparams.max_iters,
+        max_time=hparams.max_time,
+        obj_gap_eps=hparams.obj_gap_eps,
+        infeas_gap_eps=hparams.infeas_gap_eps,
+        max_infeas_eps=hparams.max_infeas_eps,
         lanczos_inner_iterations=min(sdp_state.C.shape[0], 32),
-        lanczos_max_restarts=100,  # hparams.lanczos_max_restarts,
-        subprob_eps=1e-7,
+        lanczos_max_restarts=hparams.lanczos_max_restarts,
+        subprob_eps=hparams.subprob_eps,
         callback_fn=qap_round,
         callback_static_args=callback_static_args,
         callback_nonstatic_args=callback_nonstatic_args)

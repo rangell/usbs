@@ -1,6 +1,7 @@
 import argparse
 import git
 import jax
+import jax.numpy as jnp
 import json
 from mat73 import loadmat as mat73_loadmat
 import pickle
@@ -22,6 +23,20 @@ def get_hparams():
     parser.add_argument("--data_path", type=str, required=True, help="path to mat file")
     parser.add_argument("--max_iters", type=int, required=True,
                         help="number of iterations to run solver")
+    parser.add_argument("--max_time", type=float, default=jnp.inf,
+                        help="max running time in seconds for one solve")
+    parser.add_argument("--obj_gap_eps", type=float, default=-jnp.inf,
+                        help="early stop if obj_gap is less than this number")
+    parser.add_argument("--infeas_gap_eps", type=float, default=-jnp.inf,
+                        help="early stop if infeas_gap is less than this number")
+    parser.add_argument("--max_infeas_eps", type=float, default=-jnp.inf,
+                        help="early stop if max_infeas is less than this number")
+    parser.add_argument("--lanczos_max_restarts", type=int, default=100,
+                        help="number of restarts to use for thick restart lanczos")
+    parser.add_argument("--subprob_eps", type=float, default=1e-7,
+                        help="error tolerance for IPM, alternating minimization, and lanczos")
+    parser.add_argument("--subprob_max_iters", type=int, default=15,
+                        help="max iters for IPM and alternating minimization")
     parser.add_argument("--k_curr", type=int, default=1,
                         help="number of new eigenvectors to compute")
     parser.add_argument("--k_past", type=int, default=0,
@@ -97,12 +112,15 @@ if __name__ == "__main__":
         beta=hparams.beta,
         k_curr=k_curr,
         k_past=k_past,
-        eps=1e-5,  # hparams.eps,
-        max_iters=hparams.max_iters,  # hparams.max_iters,
+        max_iters=hparams.max_iters,
+        max_time=hparams.max_time,
+        obj_gap_eps=hparams.obj_gap_eps,
+        infeas_gap_eps=hparams.infeas_gap_eps,
+        max_infeas_eps=hparams.max_infeas_eps,
         lanczos_inner_iterations=min(sdp_state.C.shape[0], 32),
-        lanczos_max_restarts=100,  # hparams.lanczos_max_restarts,
-        subprob_eps=1e-7,
-        subprob_max_iters=15,
+        lanczos_max_restarts=hparams.lanczos_max_restarts,
+        subprob_eps=hparams.subprob_eps,
+        subprob_max_iters=hparams.max_iters,
         callback_fn=compute_max_cut,
         callback_static_args=pickle.dumps(None),
         callback_nonstatic_args=sdp_state.C / sdp_state.SCALE_C)
@@ -154,12 +172,15 @@ if __name__ == "__main__":
         beta=hparams.beta,
         k_curr=k_curr,
         k_past=k_past,
-        eps=1e-5,  # hparams.eps,
-        max_iters=hparams.max_iters,  # hparams.max_iters,
+        max_iters=hparams.max_iters,
+        max_time=hparams.max_time,
+        obj_gap_eps=hparams.obj_gap_eps,
+        infeas_gap_eps=hparams.infeas_gap_eps,
+        max_infeas_eps=hparams.max_infeas_eps,
         lanczos_inner_iterations=min(sdp_state.C.shape[0], 32),
-        lanczos_max_restarts=100,  # hparams.lanczos_max_restarts,
-        subprob_eps=1e-7,
-        subprob_max_iters=15,
+        lanczos_max_restarts=hparams.lanczos_max_restarts,
+        subprob_eps=hparams.subprob_eps,
+        subprob_max_iters=hparams.max_iters,
         callback_fn=compute_max_cut,
         callback_static_args=pickle.dumps(None),
         callback_nonstatic_args=sdp_state.C / sdp_state.SCALE_C)
