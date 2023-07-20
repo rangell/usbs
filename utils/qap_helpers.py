@@ -2,7 +2,6 @@ from functools import partial
 import jax
 from jax import lax
 from jax._src.typing import Array
-from jax.experimental import sparse
 from jax.experimental.sparse import BCOO
 import jax.numpy as jnp
 import numba as nb
@@ -15,7 +14,8 @@ from solver.utils import apply_A_operator_batched
 from utils.common import (SDPState,
                           scale_sdp_state,
                           unscale_sdp_state,
-                          reconstruct_from_sketch)
+                          reconstruct_from_sketch,
+                          apply_A_operator_mx)
 from utils.munkres import munkres
 
 from IPython import embed
@@ -365,11 +365,6 @@ def initialize_state(C: BCOO, sketch_dim: int) -> SDPState:
     return sdp_state
 
 
-def _apply_A_operator_mx(n: int, m: int, A_data: Array, A_indices: Array, X: Array) -> Array:
-    A = BCOO((A_data, A_indices), shape=(m, n, n))
-    return sparse.bcoo_reduce_sum(A * X[None, :, :], axes=[1,2]).todense()
-
-
 @nb.njit
 def _fill_constraint_index_map(old_A_indices, new_A_indices, constraint_index_map) -> None:
     old_idx = 0
@@ -471,7 +466,7 @@ def get_explicit_warm_start_state(old_sdp_state: SDPState, C: BCOO, sketch_dim: 
     if old_sdp_state.X is not None:
         X = BCOO.fromdense(old_sdp_state.X)
         X = BCOO((X.data, jax.vmap(index_map)(X.indices)), shape=(n, n)).todense()
-        z = _apply_A_operator_mx(n, m, A_data, A_indices, X) 
+        z = apply_A_operator_mx(n, m, A_data, A_indices, X) 
         tr_X = jnp.trace(X)
         primal_obj = jnp.trace(C @ X)
     if old_sdp_state.P is not None:

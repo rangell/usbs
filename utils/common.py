@@ -2,6 +2,7 @@ from collections import namedtuple
 import jax
 from jax._src.typing import Array
 from jax.experimental.sparse import BCOO
+from jax.experimental import sparse
 import jax.numpy as jnp
 from typing import Tuple
 
@@ -112,3 +113,8 @@ def reconstruct_from_sketch(
     )
     Lambda = jnp.clip(Rho ** 2 - rho, 0, jnp.inf)
     return E, Lambda
+
+
+def apply_A_operator_mx(n: int, m: int, A_data: Array, A_indices: Array, X: Array) -> Array:
+    A = BCOO((A_data, A_indices), shape=(m, n, n))
+    return sparse.bcoo_reduce_sum(A * X[None, :, :], axes=[1,2]).todense()

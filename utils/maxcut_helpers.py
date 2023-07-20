@@ -16,7 +16,8 @@ from solver.utils import apply_A_operator_batched
 from utils.common import (SDPState,
                           scale_sdp_state,
                           unscale_sdp_state,
-                          reconstruct_from_sketch)
+                          reconstruct_from_sketch,
+                          apply_A_operator_mx)
 
 from IPython import embed
 
@@ -139,6 +140,71 @@ def get_implicit_warm_start_state(old_sdp_state: SDPState, C: BCOO, sketch_dim: 
         y=y,
         z=z,
         tr_X=old_sdp_state.tr_X,
+        primal_obj=primal_obj,
+        SCALE_C=SCALE_C,
+        SCALE_X=SCALE_X,
+        SCALE_A=SCALE_A)
+
+    sdp_state = scale_sdp_state(sdp_state)
+    return sdp_state
+
+
+def get_explicit_warm_start_state(old_sdp_state: SDPState, C: BCOO, sketch_dim: int) -> SDPState:
+    assert sketch_dim == -1 or sketch_dim == old_sdp_state.Omega.shape[1]
+    old_sdp_state = unscale_sdp_state(old_sdp_state)
+
+    n = C.shape[0]
+    C = scipy.sparse.spdiags((C @ np.ones((n,1))).T, 0, n, n) - C
+    C = 0.5*(C + C.T)
+    C = -0.25*C
+    C = C.tocsc()
+    C = BCOO.from_scipy_sparse(C)
+
+    A_data, A_indices, b, b_ineq_mask = get_all_problem_data(C)
+    m = b.shape[0]
+
+    X = old_sdp_state.X
+    Omega = old_sdp_state.Omega
+    P = old_sdp_state.P
+    if old_sdp_state.X is not None:
+        X = BCOO.fromdense(old_sdp_state.X)
+        X = BCOO((X.data, X.indices), shape=(n, n)).todense()
+        z = apply_A_operator_mx(n, m, A_data, A_indices, X) 
+        tr_X = jnp.trace(X)
+        primal_obj = jnp.trace(C @ X)
+    if old_sdp_state.P is not None:
+        Omega = jax.random.normal(jax.random.PRNGKey(n), shape=(n, sketch_dim))
+        E, Lambda = reconstruct_from_sketch(old_sdp_state.Omega, old_sdp_state.P)
+        tr_offset = (old_sdp_state.tr_X - jnp.sum(Lambda)) / Lambda.shape[0]
+        Lambda_tr_correct = Lambda + tr_offset
+        E = BCOO.fromdense(E)
+        E = BCOO((E.data, E.indices), shape=Omega.shape).todense()
+        sqrt_X_hat = E * jnp.sqrt(Lambda_tr_correct)[None, :]
+        P = sqrt_X_hat @ (sqrt_X_hat.T @ Omega)
+        z = apply_A_operator_batched(m, A_data, A_indices, sqrt_X_hat)
+        tr_X = jnp.sum(Lambda_tr_correct)
+        primal_obj = jnp.trace(sqrt_X_hat.T @ (C @ sqrt_X_hat))
+
+    y = jnp.zeros((m,)).at[jnp.arange(old_sdp_state.b.shape[0])].set(old_sdp_state.y)
+
+    SCALE_X = 1.0 / float(n)
+    SCALE_C = 1.0 / jnp.linalg.norm(C.data)  # equivalent to frobenius norm
+    SCALE_A = jnp.zeros((m,))
+    SCALE_A = SCALE_A.at[A_indices[:,0]].add(A_data**2)
+    SCALE_A = 1.0 / jnp.sqrt(SCALE_A)
+
+    sdp_state = SDPState(
+        C=C,
+        A_indices=A_indices,
+        A_data=A_data,
+        b=b,
+        b_ineq_mask=b_ineq_mask,
+        X=X,
+        P=P,
+        Omega=Omega,
+        y=y,
+        z=z,
+        tr_X=tr_X,
         primal_obj=primal_obj,
         SCALE_C=SCALE_C,
         SCALE_X=SCALE_X,
