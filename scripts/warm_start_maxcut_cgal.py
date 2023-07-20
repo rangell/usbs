@@ -1,6 +1,7 @@
 import argparse
 import git
 import jax
+import jax.numpy as jnp
 import json
 from mat73 import loadmat as mat73_loadmat
 import pickle
