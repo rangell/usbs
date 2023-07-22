@@ -120,7 +120,7 @@ if __name__ == "__main__":
         lanczos_inner_iterations=min(sdp_state.C.shape[0], 32),
         lanczos_max_restarts=hparams.lanczos_max_restarts,
         subprob_eps=hparams.subprob_eps,
-        subprob_max_iters=hparams.max_iters,
+        subprob_max_iters=hparams.subprob_max_iters,
         callback_fn=compute_max_cut,
         callback_static_args=pickle.dumps(None),
         callback_nonstatic_args=sdp_state.C / sdp_state.SCALE_C)
@@ -180,7 +180,7 @@ if __name__ == "__main__":
         lanczos_inner_iterations=min(sdp_state.C.shape[0], 32),
         lanczos_max_restarts=hparams.lanczos_max_restarts,
         subprob_eps=hparams.subprob_eps,
-        subprob_max_iters=hparams.max_iters,
+        subprob_max_iters=hparams.subprob_max_iters,
         callback_fn=compute_max_cut,
         callback_static_args=pickle.dumps(None),
         callback_nonstatic_args=sdp_state.C / sdp_state.SCALE_C)
