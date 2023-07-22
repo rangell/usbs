@@ -686,6 +686,9 @@ def specbm(
 
     final_state = bounded_while_loop(cond_func, body_func, init_state, max_steps=max_iters)
 
+    embed()
+    exit()
+
     return SDPState(
         C=sdp_state.C,
         A_indices=sdp_state.A_indices,
