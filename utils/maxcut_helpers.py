@@ -10,6 +10,7 @@ import numba as nb
 import numpy as np
 import scipy  # type: ignore
 from scipy.spatial.distance import pdist, squareform  # type: ignore
+from scipy.sparse import csc_matrix  # type:ignore
 from typing import Any, Tuple
 
 from solver.utils import apply_A_operator_batched
@@ -32,7 +33,7 @@ def get_all_problem_data(C: BCOO) -> Tuple[BCOO, Array, Array, Array]:
     return A_data, A_indices, b, b_ineq_mask
 
 
-def initialize_state(C: BCOO, sketch_dim: int) -> SDPState:
+def initialize_state(C: csc_matrix, sketch_dim: int) -> SDPState:
     n = C.shape[0]
     C = scipy.sparse.spdiags((C @ np.ones((n,1))).T, 0, n, n) - C
     C = 0.5*(C + C.T)
@@ -118,9 +119,12 @@ def get_implicit_warm_start_state(old_sdp_state: SDPState, C: BCOO, sketch_dim: 
 
     old_diag_mask = (old_sdp_state.C.indices[:, 0] == old_sdp_state.C.indices[:, 1])
     diag_mask = (C.indices[:, 0] == C.indices[:, 1])
+    old_C_diag = jnp.zeros((old_sdp_state.C.shape[0],)).at[
+        old_sdp_state.C.indices[old_diag_mask][:, 0]].set(old_sdp_state.C.data[old_diag_mask])
+    C_diag = jnp.zeros((C.shape[0],)).at[C.indices[diag_mask][:, 0]].set(C.data[diag_mask])
     primal_obj = old_sdp_state.primal_obj
-    primal_obj -= jnp.dot(old_sdp_state.C.data[old_diag_mask], old_sdp_state.z)
-    primal_obj += jnp.dot(C.data[diag_mask], z)
+    primal_obj -= jnp.dot(old_C_diag, old_sdp_state.z)
+    primal_obj += jnp.dot(C_diag, z)
 
     SCALE_X = 1.0 / float(n)
     SCALE_C = 1.0 / jnp.linalg.norm(C.data)  # equivalent to frobenius norm
