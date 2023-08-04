@@ -8,12 +8,12 @@ import pickle
 import time
 
 import cvxpy as cp
+import jax
 from jax.experimental.sparse import BCOO
 import jax.numpy as jnp
 import numba as nb
 from numba.typed import List
 import numpy as np
-from lightning_lite.utilities.seed import seed_everything as new_seed_everything
 from scipy.sparse import csr_matrix, coo_matrix, dok_matrix
 from scipy.sparse import vstack as sp_vstack
 from scipy.special import softmax
@@ -45,6 +45,14 @@ class EccClusterer(object):
 
         C = BCOO.from_scipy_sparse(-self.edge_weights)
         #C = BCOO.fromdense(C.todense()[:200, :200])
+
+        # TODO:
+        # - fix the numpy warning
+        # - check if scaling still is a problem
+        # - implement correct version of scaling for other methods (sqrt of largest eigenval)
+        # - implement accerlated alternating minimization
+        # - add seeding to specbm and cgal implementations
+
         self.sdp_state = initialize_state(C=C, sketch_dim=-1)
 
     def add_constraint(self, ecc_constraint: csr_matrix):
@@ -900,6 +908,7 @@ def get_hparams() -> argparse.Namespace:
 
 
 if __name__ == '__main__':
+    jax.config.update("jax_enable_x64", True)
 
     hparams = get_hparams()
 
@@ -928,8 +937,6 @@ if __name__ == '__main__':
 
     logging.info('Experiment args:\n{}'.format(
         json.dumps(vars(hparams), sort_keys=True, indent=4)))
-
-    new_seed_everything(hparams.seed)
 
     with open(hparams.data_path, 'rb') as f:
         logging.info('Loading preprocessed data.')
