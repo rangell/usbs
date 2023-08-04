@@ -10,7 +10,6 @@ import time
 import cvxpy as cp
 from jax.experimental.sparse import BCOO
 import jax.numpy as jnp
-import higra as hg
 import numba as nb
 from numba.typed import List
 import numpy as np
@@ -45,6 +44,7 @@ class EccClusterer(object):
         self.incompat_mx = None
 
         C = BCOO.from_scipy_sparse(-self.edge_weights)
+        C = BCOO.fromdense(C.todense()[:150, :150])
         self.sdp_state = initialize_state(C=C, sketch_dim=-1)
 
     def add_constraint(self, ecc_constraint: csr_matrix):

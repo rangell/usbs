@@ -42,25 +42,6 @@ def get_all_problem_data(C: BCOO) -> Tuple[BCOO, Array, Array, Array]:
     b = jnp.concatenate([b, jnp.full((constraint_indices.shape[0],), 0.0)], axis=0)
     b_ineq_mask = jnp.concatenate([b_ineq_mask, jnp.full((constraint_indices.shape[0],), 1.0)], axis=0)
 
-    #constraint_idx = b.shape[0]
-    #_A_indices = []
-    #_A_data = []
-    #_b = []
-    #_b_ineq_mask = []
-    #for i in range(n):
-    #    for j in range(i+1, n):
-    #        _A_indices.append([constraint_idx, i, j])
-    #        _A_indices.append([constraint_idx, j, i])
-    #        _A_data += [-0.5, -0.5]
-    #        _b += [0.0]
-    #        _b_ineq_mask += [1.0]
-    #        constraint_idx += 1
-
-    #A_indices = jnp.concatenate([A_indices, jnp.array(_A_indices)], axis=0)
-    #A_data = jnp.concatenate([A_data, jnp.array(_A_data)], axis=0)
-    #b = jnp.concatenate([b, jnp.array(_b)], axis=0)
-    #b_ineq_mask = jnp.concatenate([b_ineq_mask, jnp.array(_b_ineq_mask)], axis=0)
-
     return A_data, A_indices, b, b_ineq_mask
 
 
@@ -74,6 +55,9 @@ def initialize_state(C: BCOO, sketch_dim: int) -> SDPState:
     SCALE_A = jnp.zeros((m,))
     SCALE_A = SCALE_A.at[A_indices[:,0]].add(A_data**2)
     SCALE_A = 1.0 / jnp.sqrt(SCALE_A)
+    SCALE_C = 1.0
+    SCALE_X = 1.0
+    SCALE_A = jnp.ones_like(SCALE_A)
 
     if sketch_dim == -1:
         X = jnp.zeros((n, n))

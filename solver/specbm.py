@@ -40,6 +40,8 @@ def solve_quad_subprob_ipm(
     n: int,
     m: int,
     k: int,
+    eta_init: Array,
+    S_init: Array,
     ipm_eps: float,
     ipm_max_iters: int
 ) -> Tuple[Array, Array]:
@@ -59,13 +61,20 @@ def solve_quad_subprob_ipm(
     h_2 = (trace_ub / tr_X_bar) * (bar_primal_obj - jnp.dot(z_bar, y) - (jnp.dot(z_bar, b) / rho))
     svec_I = svec(jnp.eye(k))
 
-    # initialize all Lagrangian variables
-    S_init = 0.99 * (jnp.eye(k) / (k + 1.0))
-    eta_init = lax.cond(
-        bar_primal_obj == 0.0,
-        lambda _: jnp.asarray([0.00001]),
-        lambda _: jnp.asarray([0.99 * (1.0 / (k + 1.0))]),
-        None)
+    eta_init = jnp.asarray([(tr_X_bar / trace_ub) * eta_init])
+    S_init = S_init / trace_ub
+
+    ## initialize all Lagrangian variables
+    #S_init = 0.99 * (jnp.eye(k) / (k + 1.0))
+    #eta_init = lax.cond(
+    #    bar_primal_obj == 0.0,
+    #    lambda _: jnp.asarray([0.00001]),
+    #    lambda _: jnp.asarray([0.99 * (1.0 / (k + 1.0))]),
+    #    None)
+
+    #jax.debug.print("S_init: {S_init}", S_init=S_init)
+    #jax.debug.print("eta_init: {eta_init}", eta_init=eta_init)
+
     T_init = svec_inv(Q_11 @ svec(S_init) + eta_init * q_12 + h_1)
     zeta_init = jnp.dot(q_12, svec(S_init)) + eta_init * q_22 + h_2
     dual_infeas_vals = jnp.append(jnp.diag(T_init), zeta_init)
@@ -90,9 +99,20 @@ def solve_quad_subprob_ipm(
         F_2 += -ipm_state.zeta + ipm_state.omega
 
         # create and solve linear system for S update direction
-        S_inv = jnp.linalg.inv(ipm_state.S)
+        S_inv = jnp.linalg.pinv(ipm_state.S)
+        #_d, _P = jnp.linalg.eigh(ipm_state.S)
+        #_S_inv = (_P * (jnp.nan_to_num(1.0 / _d[None, :]))) @ _P.T
+        #S_pinv = jnp.linalg.pinv(ipm_state.S, rcond=1e-20)
         T_sym_kron_S_inv = 0.5 * U @ (jnp.kron(ipm_state.T, S_inv)
                                       + jnp.kron(S_inv, ipm_state.T)) @ U.T
+        #jax.debug.print("ipm_state.S : {ipm_state_S}", ipm_state_S=ipm_state.S)
+        #jax.debug.print("S_eigh: {S_eigh}", S_eigh=jnp.linalg.eigh(ipm_state.S))
+        #jax.debug.print("_S_inv : {_S_inv}", _S_inv=_S_inv)
+        #jax.debug.print("_S_inv @ S : {prod}", prod=_S_inv @ ipm_state.S)
+        #jax.debug.print("S_inv : {S_inv}", S_inv=S_inv)
+        #jax.debug.print("S_inv @ S : {prod}", prod=S_inv @ ipm_state.S)
+        #jax.debug.print("S_pinv : {S_pinv}", S_pinv=S_pinv)
+        #jax.debug.print("S_pinv @ S : {prod}", prod=S_pinv @ ipm_state.S)
         coeff_mx = Q_11 + T_sym_kron_S_inv
         coeff_mx -= (jnp.outer(q_12, kappa_1 * q_12 + svec_I)
                      + jnp.outer(svec_I, q_12 - kappa_2 * svec_I)) / (kappa_1 * kappa_2 + 1)
@@ -107,7 +127,12 @@ def solve_quad_subprob_ipm(
                                       + jnp.dot(svec_I, svec(ipm_state.S))
                                       + ipm_state.eta - 1))
                           / (kappa_1 * kappa_2 + 1)) * svec_I
+        #jax.debug.print("coeff_mx : {coeff_mx}", coeff_mx=coeff_mx)
+        #jax.debug.print("ordinate_vals : {ordinate_vals}", ordinate_vals=ordinate_vals)
+        #delta_svec_S = jnp.nan_to_num(jnp.linalg.solve(coeff_mx, ordinate_vals)) # maps nan, inf, -inf to 0.0
         delta_svec_S = jnp.linalg.solve(coeff_mx, ordinate_vals)
+
+        #jax.debug.print("delta_svec_S : {delta_svec_S}", delta_svec_S=delta_svec_S)
 
         # substitute back in to get all of the other update directions
         delta_eta = (-jnp.dot(kappa_1 * q_12 + svec_I, delta_svec_S)
@@ -130,8 +155,12 @@ def solve_quad_subprob_ipm(
         step_size_numers = jnp.concatenate([ipm_state.eta, ipm_state.zeta, ipm_state.omega])
         step_size_denoms = jnp.concatenate([delta_eta, delta_zeta, delta_omega])
 
+        #jax.debug.print("step_size_denoms : {step_size_denoms}", step_size_denoms=step_size_denoms)
+        #jax.debug.print("step_size_numers : {step_size_numers}", step_size_numers=step_size_numers)
         step_size = jnp.clip(-1.0 / jnp.min(step_size_denoms / step_size_numers), a_max=1.0)
+        #jax.debug.print("step_size : {step_size}", step_size=step_size)
         step_size = 0.99 * lax.cond(step_size <= 0.0, lambda _: 1.0, lambda _: step_size, None)
+        #jax.debug.print("step_size : {step_size}", step_size=step_size)
 
         step_size = bounded_while_loop(
             lambda step_size: jnp.linalg.eigh(ipm_state.S + step_size * delta_S)[0][0] < 0.0,
@@ -139,11 +168,14 @@ def solve_quad_subprob_ipm(
             step_size,
             max_steps=100)
 
+        #jax.debug.print("step_size : {step_size}", step_size=step_size)
+
         step_size = bounded_while_loop(
             lambda step_size: jnp.linalg.eigh(ipm_state.T + step_size * delta_T)[0][0] < 0.0,
             lambda step_size: step_size * 0.8, 
             step_size,
             max_steps=100)
+        #jax.debug.print("step_size : {step_size}", step_size=step_size)
 
         S_next = ipm_state.S + step_size * delta_S
         eta_next = ipm_state.eta + step_size * delta_eta
@@ -156,6 +188,15 @@ def solve_quad_subprob_ipm(
                    + omega_next * (1 - jnp.dot(svec_I, svec(S_next)) - eta_next)) / (2*k + 4.0)
         mu_next *= lax.cond(step_size > 0.2, lambda _: 0.5 - 0.4 * step_size**2, lambda _: 1.0, None)
         mu_next = jnp.clip(mu_next, a_max=ipm_state.mu)
+
+        #jax.debug.print("i: {i} - step_size: {step_size} - mu: {mu} - mu_next: {mu_next}"
+        #                " - eta: {eta} - eta_next: {eta_next}",
+        #                i=ipm_state.i,
+        #                mu=ipm_state.mu.squeeze(),
+        #                eta=ipm_state.eta.squeeze(),
+        #                step_size=step_size,
+        #                mu_next=mu_next.squeeze(),
+        #                eta_next=eta_next.squeeze())
 
         return IPMState(
             i=ipm_state.i+1,
@@ -324,8 +365,7 @@ def compute_lb_spec_est_ipm(
         obj_gap=1.0)
 
     final_ipm_state = bounded_while_loop(
-        lambda ipm_state: jnp.logical_and(ipm_state.mu.squeeze() > ipm_eps,
-                                          ipm_state.obj_gap > ipm_eps),
+        lambda ipm_state: ipm_state.mu.squeeze() > ipm_eps,
         body_func, 
         init_ipm_state,
         max_steps=ipm_max_iters)
@@ -380,6 +420,8 @@ def solve_step_subprob(
             n=n,
             m=m,
             k=k,
+            eta_init=state.eta,
+            S_init=state.S,
             ipm_eps=subprob_eps,
             ipm_max_iters=subprob_max_iters)
         S_eigvals, S_eigvecs = jnp.linalg.eigh(S_next)
@@ -389,11 +431,32 @@ def solve_step_subprob(
         z_next = eta_next * z_bar + A_operator_VSV_T
         upsilon_next = b_ineq_mask * jnp.clip(b - z_next + (rho * y), a_min=0.0)
         upsilon_gap = jnp.max(jnp.abs(state.upsilon - upsilon_next))
-        return SubprobStateStruct(
+        _subprob_state = SubprobStateStruct(
             i=state.i + 1, eta=eta_next, S=S_next, upsilon=upsilon_next, upsilon_gap=upsilon_gap)
+        #jax.debug.print("subprob state : {subprob_state}",
+        #                subprob_state=_subprob_state)
+        #jax.debug.print("upsilon_gap : {upsilon_gap}", upsilon_gap=upsilon_gap)
+        return _subprob_state
+
+    
+    tr_X_bar = lax.cond(tr_X_bar > 0.0, lambda _: tr_X_bar, lambda _: trace_ub, None)
+    S_init = 0.99 * (jnp.eye(k) / (k + 1.0))
+    eta_init = lax.cond(
+        bar_primal_obj == 0.0,
+        lambda _: jnp.asarray([0.00001]),
+        lambda _: jnp.asarray([0.99 * (1.0 / (k + 1.0))]),
+        None)
+    #jax.debug.print("blah bar_primal_obj: {bar_primal_obj}", bar_primal_obj=bar_primal_obj)
+    #jax.debug.print("blah S_init: {S_init}", S_init=S_init)
+    #jax.debug.print("blah eta_init: {eta_init}", eta_init=eta_init)
+
+    eta_init = (trace_ub / tr_X_bar) * eta_init.squeeze()
+    S_init = trace_ub * S_init
+
+    #jax.debug.print("Blah blah blah")
     
     init_state = SubprobStateStruct(
-        i=0, eta=jnp.array(0.0), S=jnp.zeros((k, k)), upsilon=upsilon, upsilon_gap=jnp.array(1.0))
+        i=0, eta=eta_init, S=S_init, upsilon=upsilon, upsilon_gap=jnp.array(1.0))
     final_state = bounded_while_loop(cond_func, body_func, init_state, max_steps=subprob_max_iters)
     return final_state.eta, final_state.S, final_state.upsilon
 
