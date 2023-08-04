@@ -286,54 +286,54 @@ class EccClusterer(object):
                 parent_data[i] = rchild_data[rchild_ptr]
                 rchild_ptr += 1
 
-    def cut_trellis(self, t: Trellis):
-        num_ecc = len(self.ecc_constraints)
-        num_points = self.n - num_ecc
+    #def cut_trellis(self, t: Trellis):
+    #    num_ecc = len(self.ecc_constraints)
+    #    num_points = self.n - num_ecc
 
-        membership_indptr = t.leaves_indptr
-        membership_indices = t.leaves_indices
-        membership_data = self.get_membership_data(membership_indptr,
-                                                   membership_indices)
-        obj_vals = np.zeros((t.num_nodes,))
-        num_ecc_sat = np.zeros((t.num_nodes,))
+    #    membership_indptr = t.leaves_indptr
+    #    membership_indices = t.leaves_indices
+    #    membership_data = self.get_membership_data(membership_indptr,
+    #                                               membership_indices)
+    #    obj_vals = np.zeros((t.num_nodes,))
+    #    num_ecc_sat = np.zeros((t.num_nodes,))
 
-        for node in t.internal_nodes_topo_ordered():
-            node_start = membership_indptr[node]
-            node_end = membership_indptr[node+1]
-            leaves = membership_indices[node_start:node_end]
-            if num_ecc > 0:
-                num_ecc_sat[node] = self.get_num_ecc_sat(leaves, num_points)
-            obj_vals[node] = self.get_intra_cluster_energy(leaves)
-            for lchild, rchild in t.get_child_pairs_iter(node):
-                cpair_num_ecc_sat = num_ecc_sat[lchild] + num_ecc_sat[rchild]
-                cpair_obj_val = obj_vals[lchild] + obj_vals[rchild]
-                if (num_ecc_sat[node] < cpair_num_ecc_sat 
-                    or (num_ecc_sat[node] == cpair_num_ecc_sat
-                        and obj_vals[node] < cpair_obj_val)):
-                    num_ecc_sat[node] = cpair_num_ecc_sat
-                    obj_vals[node] = cpair_obj_val
-                    lchild_start = membership_indptr[lchild]
-                    lchild_end = membership_indptr[lchild+1]
-                    rchild_start = membership_indptr[rchild]
-                    rchild_end = membership_indptr[rchild+1]
-                    self.merge_memberships(
-                            membership_indices[lchild_start:lchild_end],
-                            membership_data[lchild_start:lchild_end],
-                            membership_indices[rchild_start:rchild_end],
-                            membership_data[rchild_start:rchild_end],
-                            membership_indices[node_start:node_end],
-                            membership_data[node_start:node_end],
-                    )
+    #    for node in t.internal_nodes_topo_ordered():
+    #        node_start = membership_indptr[node]
+    #        node_end = membership_indptr[node+1]
+    #        leaves = membership_indices[node_start:node_end]
+    #        if num_ecc > 0:
+    #            num_ecc_sat[node] = self.get_num_ecc_sat(leaves, num_points)
+    #        obj_vals[node] = self.get_intra_cluster_energy(leaves)
+    #        for lchild, rchild in t.get_child_pairs_iter(node):
+    #            cpair_num_ecc_sat = num_ecc_sat[lchild] + num_ecc_sat[rchild]
+    #            cpair_obj_val = obj_vals[lchild] + obj_vals[rchild]
+    #            if (num_ecc_sat[node] < cpair_num_ecc_sat 
+    #                or (num_ecc_sat[node] == cpair_num_ecc_sat
+    #                    and obj_vals[node] < cpair_obj_val)):
+    #                num_ecc_sat[node] = cpair_num_ecc_sat
+    #                obj_vals[node] = cpair_obj_val
+    #                lchild_start = membership_indptr[lchild]
+    #                lchild_end = membership_indptr[lchild+1]
+    #                rchild_start = membership_indptr[rchild]
+    #                rchild_end = membership_indptr[rchild+1]
+    #                self.merge_memberships(
+    #                        membership_indices[lchild_start:lchild_end],
+    #                        membership_data[lchild_start:lchild_end],
+    #                        membership_indices[rchild_start:rchild_end],
+    #                        membership_data[rchild_start:rchild_end],
+    #                        membership_indices[node_start:node_end],
+    #                        membership_data[node_start:node_end],
+    #                )
 
-        # The value of `node` is the root since we iterate over the trellis
-        # nodes in topological order bottom up. Moreover, the values of
-        # `node_start` and `node_end` also correspond to the root of the
-        # trellis.
-        best_clustering = membership_data[node_start:node_end]
-        if num_ecc > 0:
-            best_clustering = best_clustering[:-num_ecc]
+    #    # The value of `node` is the root since we iterate over the trellis
+    #    # nodes in topological order bottom up. Moreover, the values of
+    #    # `node_start` and `node_end` also correspond to the root of the
+    #    # trellis.
+    #    best_clustering = membership_data[node_start:node_end]
+    #    if num_ecc > 0:
+    #        best_clustering = best_clustering[:-num_ecc]
 
-        return best_clustering, obj_vals[node], num_ecc_sat[node]
+    #    return best_clustering, obj_vals[node], num_ecc_sat[node]
 
     def pred(self):
         num_ecc = len(self.ecc_constraints)
@@ -344,28 +344,28 @@ class EccClusterer(object):
         end_solve_time = time.time()
 
         # Build trellis
-        t = self.build_trellis(pw_probs)
+        #t = self.build_trellis(pw_probs)
 
         # Cut trellis
-        pred_clustering, cut_obj_value, num_ecc_satisfied = self.cut_trellis(t)
+        #pred_clustering, cut_obj_value, num_ecc_satisfied = self.cut_trellis(t)
 
-        metrics = {
-                'sdp_solve_time': end_solve_time - start_solve_time,
-                'sdp_obj_value': sdp_obj_value,
-                'cut_obj_value': cut_obj_value,
-                'num_ecc_satisfied': int(num_ecc_satisfied),
-                'num_ecc': num_ecc,
-                'frac_ecc_satisfied': num_ecc_satisfied / num_ecc
-                        if num_ecc > 0 else 0.0,
-                'num_ecc_feats': self.ecc_mx.nnz 
-                        if self.ecc_mx is not None else 0,
-                'num_pos_ecc_feats': (self.ecc_mx > 0).nnz
-                        if self.ecc_mx is not None else 0,
-                'num_neg_ecc_feats': (self.ecc_mx < 0).nnz
-                        if self.ecc_mx is not None else 0,
-        }
+        #metrics = {
+        #        'sdp_solve_time': end_solve_time - start_solve_time,
+        #        'sdp_obj_value': sdp_obj_value,
+        #        'cut_obj_value': cut_obj_value,
+        #        'num_ecc_satisfied': int(num_ecc_satisfied),
+        #        'num_ecc': num_ecc,
+        #        'frac_ecc_satisfied': num_ecc_satisfied / num_ecc
+        #                if num_ecc > 0 else 0.0,
+        #        'num_ecc_feats': self.ecc_mx.nnz 
+        #                if self.ecc_mx is not None else 0,
+        #        'num_pos_ecc_feats': (self.ecc_mx > 0).nnz
+        #                if self.ecc_mx is not None else 0,
+        #        'num_neg_ecc_feats': (self.ecc_mx < 0).nnz
+        #                if self.ecc_mx is not None else 0,
+        #}
 
-        return pred_clustering, metrics
+        #return pred_clustering, metrics
 
 
 def get_cluster_feats(point_feats: csr_matrix):
