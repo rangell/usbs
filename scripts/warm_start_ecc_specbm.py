@@ -16,13 +16,12 @@ from numba.typed import List
 import numpy as np
 from scipy.sparse import csr_matrix, coo_matrix, dok_matrix
 from scipy.sparse import vstack as sp_vstack
-from scipy.special import softmax
 from sklearn.metrics import adjusted_rand_score as rand_idx
 from sklearn.metrics import homogeneity_completeness_v_measure as cluster_f1
 
 from solver.specbm import specbm
 from utils.ecc_helpers import initialize_state
-from utils.trellis import Trellis
+#from utils.trellis import Trellis
 
 from IPython import embed
 
@@ -227,9 +226,10 @@ class EccClusterer(object):
         return sdp_obj_value, pw_probs
 
     def build_trellis(self, pw_probs: np.ndarray):
-        t = Trellis(adj_mx=pw_probs)
-        t.fit()
-        return t
+        #t = Trellis(adj_mx=pw_probs)
+        #t.fit()
+        #return t
+        return None
 
     def get_intra_cluster_energy(self, leaves: np.ndarray):
         row_mask = np.isin(self.edge_weights.row, leaves)

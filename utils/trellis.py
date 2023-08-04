@@ -4,7 +4,7 @@ import logging
 import pickle
 from typing import List, Tuple
 
-import higra as hg
+#import higra as hg
 import numba as nb
 import numpy as np
 from sklearn.metrics import adjusted_rand_score as rand_idx
