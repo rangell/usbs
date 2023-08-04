@@ -44,7 +44,7 @@ class EccClusterer(object):
         self.incompat_mx = None
 
         C = BCOO.from_scipy_sparse(-self.edge_weights)
-        C = BCOO.fromdense(C.todense()[:200, :200])
+        #C = BCOO.fromdense(C.todense()[:200, :200])
         self.sdp_state = initialize_state(C=C, sketch_dim=-1)
 
     def add_constraint(self, ecc_constraint: csr_matrix):
