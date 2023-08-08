@@ -29,31 +29,21 @@ from IPython import embed
 class EccClusterer(object):
 
     def __init__(self,
-                 edge_weights: csr_matrix,
+                 edge_weights: coo_matrix,
                  features: np.ndarray,
                  hparams: argparse.Namespace):
 
         self.hparams = hparams
-        self.edge_weights = edge_weights.tocoo()
-        self.edge_weights = 0.5 * (self.edge_weights + self.edge_weights.T)
+        self.edge_weights = edge_weights
+        self.edge_weights = 0.5 * (self.edge_weights + self.edge_weights.T).tocoo()
         self.features = features
         self.n = self.features.shape[0]
         self.ecc_constraints = []
         self.ecc_mx = None
         self.incompat_mx = None
 
-        C = BCOO.from_scipy_sparse(-self.edge_weights)
-        #C = BCOO.fromdense(C.todense()[:200, :200])
-
-        # TODO:
-        # x fix the numpy warning
-        # x config jax to use 64-bit floating point in this experiment
-        # - check if scaling still is a problem
-        # - implement correct version of scaling for other methods (sqrt of largest eigenval)
-        # - implement accerlated alternating minimization (if needed, maybe don't)
-        # - add seeding to specbm and cgal implementations
-
-        self.sdp_state = initialize_state(C=C, sketch_dim=-1)
+        C = BCOO.from_scipy_sparse(-self.edge_weights).astype(float)
+        self.sdp_state = initialize_state(C=C, sketch_dim=hparams.sketch_dim)
 
     def add_constraint(self, ecc_constraint: csr_matrix):
         # TODO: call warm-start functions here
@@ -127,30 +117,29 @@ class EccClusterer(object):
         trace_ub = (self.hparams.trace_factor
                     * float(self.sdp_state.C.shape[0])
                     * self.sdp_state.SCALE_X)
-        self.sdp_state = specbm(
-            sdp_state=self.sdp_state,
-            n=self.sdp_state.C.shape[0],
-            m=self.sdp_state.b.shape[0],
-            trace_ub=trace_ub,
-            rho=hparams.rho,
-            beta=hparams.beta,
-            k_curr=self.hparams.k_curr,
-            k_past=self.hparams.k_past,
-            max_iters=self.hparams.max_iters,
-            max_time=self.hparams.max_time,
-            obj_gap_eps=self.hparams.obj_gap_eps,
-            infeas_gap_eps=self.hparams.infeas_gap_eps,
-            max_infeas_eps=self.hparams.max_infeas_eps,
-            lanczos_inner_iterations=min(self.sdp_state.C.shape[0], 32),
-            lanczos_max_restarts=self.hparams.lanczos_max_restarts,
-            subprob_eps=self.hparams.subprob_eps,
-            subprob_max_iters=hparams.subprob_max_iters,
-            callback_fn=None,
-            callback_static_args=None,
-            callback_nonstatic_args=None)
+
+        #self.sdp_state = specbm(
+        #    sdp_state=self.sdp_state,
+        #    n=self.sdp_state.C.shape[0],
+        #    m=self.sdp_state.b.shape[0],
+        #    trace_ub=trace_ub,
+        #    rho=hparams.rho,
+        #    beta=hparams.beta,
+        #    k_curr=self.hparams.k_curr,
+        #    k_past=self.hparams.k_past,
+        #    max_iters=self.hparams.max_iters,
+        #    max_time=self.hparams.max_time,
+        #    obj_gap_eps=self.hparams.obj_gap_eps,
+        #    infeas_gap_eps=self.hparams.infeas_gap_eps,
+        #    max_infeas_eps=self.hparams.max_infeas_eps,
+        #    lanczos_inner_iterations=min(self.sdp_state.C.shape[0], 32),
+        #    lanczos_max_restarts=self.hparams.lanczos_max_restarts,
+        #    subprob_eps=self.hparams.subprob_eps,
+        #    subprob_max_iters=hparams.subprob_max_iters,
+        #    callback_fn=None,
+        #    callback_static_args=None,
+        #    callback_nonstatic_args=None)
         
-        embed()
-        exit()
 
         num_points = self.features.shape[0]
         num_ecc = len(self.ecc_constraints)
@@ -189,7 +178,7 @@ class EccClusterer(object):
 
         # formulate SDP
         logging.info('Constructing optimization problem')
-        W = csr_matrix((self.edge_weights.data,
+        W = coo_matrix((self.edge_weights.data,
                         (self.edge_weights.row, self.edge_weights.col)),
                         shape=(self.n, self.n))
         X = cp.Variable((self.n, self.n), PSD=True)
@@ -210,8 +199,11 @@ class EccClusterer(object):
 
         logging.info('Solving optimization problem')
         sdp_obj_value = prob.solve(
-                solver=cp.SCS, verbose=True, max_iters=self.max_sdp_iters
+                solver=cp.SCS, verbose=True, max_iters=10000
         )
+
+        embed()
+        exit()
 
         pw_probs = X.value
         pw_probs = np.clip(pw_probs, a_min=0.0, a_max=1.0)
@@ -940,29 +932,46 @@ if __name__ == '__main__':
         json.dumps(vars(hparams), sort_keys=True, indent=4)))
 
     with open(hparams.data_path, 'rb') as f:
-        logging.info('Loading preprocessed data.')
-        preprocessed_data = pickle.load(f)
+        logging.info('loading preprocessed data.')
+        blocks_preprocessed = pickle.load(f)
 
-    edge_weights = preprocessed_data['edge_weights'].tocsr()
-    point_features = preprocessed_data['point_features']
-    gold_clustering = preprocessed_data['labels'].astype(int)
+    ecc_for_replay = {}
+    mlcl_for_replay = {}
+    pred_clusterings = {}
+    num_blocks = len(blocks_preprocessed)
 
-    assert edge_weights.shape[0] == point_features.shape[0]
-    num_clusters = np.unique(gold_clustering).size
+    #sub_blocks_preprocessed = {}
+    #sub_blocks_preprocessed['d schmidt'] = blocks_preprocessed['d schmidt']
+    sub_blocks_preprocessed = blocks_preprocessed
 
-    logging.info(f'\t number of points: {edge_weights.shape[0]}')
-    logging.info(f'\t number of clusters: {num_clusters}')
-    logging.info(f'\t number of features: {point_features.shape[1]}')
+    for i, (block_name, block_data) in enumerate(sub_blocks_preprocessed.items()):
+        edge_weights = block_data['edge_weights']
+        point_features = block_data['point_features'].tocsr()
+        gold_clustering = block_data['labels']
 
-    (ecc_for_replay, mlcl_for_replay, pred_clusterings) = simulate(
-            edge_weights,
-            point_features,
-            gold_clustering,
-            hparams
-    )
+        assert edge_weights.shape[0] == point_features.shape[0]
+        num_clusters = np.unique(gold_clustering).size
+
+        logging.info(f'loaded block \"{block_name}\" ({i+1}/{num_blocks})')
+        logging.info(f'\t number of points: {edge_weights.shape[0]}')
+        logging.info(f'\t number of clusters: {num_clusters}')
+        logging.info(f'\t number of features: {point_features.shape[1]}')
+
+        (block_ecc_for_replay,
+         block_mlcl_for_replay,
+         round_pred_clusterings) = simulate(
+                edge_weights,
+                point_features,
+                gold_clustering,
+                hparams
+        )
+
+        ecc_for_replay[block_name] = block_ecc_for_replay
+        mlcl_for_replay[block_name] = block_mlcl_for_replay
+        pred_clusterings[block_name] = round_pred_clusterings
 
     if not hparams.debug:
-        logging.info('Dumping ecc and mlcl constraints for replay')
+        logging.info('dumping ecc and mlcl constraints for replay')
         ecc_fname = os.path.join(hparams.output_dir, 'ecc_for_replay.pkl')
         mlcl_fname = os.path.join(hparams.output_dir, 'mlcl_for_replay.pkl')
         pred_fname = os.path.join(hparams.output_dir, 'pred_clusterings.pkl')

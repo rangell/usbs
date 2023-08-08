@@ -40,7 +40,7 @@ def get_all_problem_data(C: BCOO) -> Tuple[BCOO, Array, Array, Array]:
     constraint_triples = jnp.concatenate(
         [constraint_triples, constraint_triples[:, [0, 2, 1]]], axis=0)
     A_indices = jnp.concatenate([A_indices, constraint_triples], axis=0)
-    A_data = jnp.concatenate([A_data, jnp.full((constraint_triples.shape[0],), -1.0)], axis=0)
+    A_data = jnp.concatenate([A_data, jnp.full((constraint_triples.shape[0],), -0.5)], axis=0)
     b = jnp.concatenate([b, jnp.full((constraint_indices.shape[0],), 0.0)], axis=0)
     b_ineq_mask = jnp.concatenate([b_ineq_mask, jnp.full((constraint_indices.shape[0],), 1.0)], axis=0)
 
@@ -62,10 +62,6 @@ def initialize_state(C: BCOO, sketch_dim: int) -> SDPState:
     norm_A = jnp.sqrt(eigsh(A_matrix @ A_matrix.T, k=1, which="LM", return_eigenvectors=False)[0])
     SCALE_A /= norm_A
 
-    #SCALE_X = 1.0
-    #SCALE_C = 1.0
-    #SCALE_A = jnp.ones_like(b)
-
     if sketch_dim == -1:
         X = jnp.zeros((n, n))
         Omega = None
@@ -79,8 +75,8 @@ def initialize_state(C: BCOO, sketch_dim: int) -> SDPState:
 
     y = jnp.zeros((m,))
     z = jnp.zeros((m,))
-    tr_X = 0.0
-    primal_obj = 0.0
+    tr_X = jnp.array(0.0)
+    primal_obj = jnp.array(0.0)
 
     sdp_state = SDPState(
         C=C,
