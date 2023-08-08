@@ -46,10 +46,11 @@ class EccClusterer(object):
         #C = BCOO.fromdense(C.todense()[:200, :200])
 
         # TODO:
-        # - fix the numpy warning
+        # x fix the numpy warning
+        # x config jax to use 64-bit floating point in this experiment
         # - check if scaling still is a problem
         # - implement correct version of scaling for other methods (sqrt of largest eigenval)
-        # - implement accerlated alternating minimization
+        # - implement accerlated alternating minimization (if needed, maybe don't)
         # - add seeding to specbm and cgal implementations
 
         self.sdp_state = initialize_state(C=C, sketch_dim=-1)

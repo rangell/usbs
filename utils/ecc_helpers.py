@@ -8,6 +8,8 @@ import numba as nb
 import numpy as np
 import pickle
 from scipy.spatial.distance import pdist, squareform  # type: ignore
+from scipy.sparse import coo_matrix
+from scipy.sparse.linalg import eigsh
 from typing import Any, Tuple
 
 from solver.utils import apply_A_operator_batched
@@ -38,7 +40,7 @@ def get_all_problem_data(C: BCOO) -> Tuple[BCOO, Array, Array, Array]:
     constraint_triples = jnp.concatenate(
         [constraint_triples, constraint_triples[:, [0, 2, 1]]], axis=0)
     A_indices = jnp.concatenate([A_indices, constraint_triples], axis=0)
-    A_data = jnp.concatenate([A_data, jnp.full((constraint_triples.shape[0],), -0.5)], axis=0)
+    A_data = jnp.concatenate([A_data, jnp.full((constraint_triples.shape[0],), -1.0)], axis=0)
     b = jnp.concatenate([b, jnp.full((constraint_indices.shape[0],), 0.0)], axis=0)
     b_ineq_mask = jnp.concatenate([b_ineq_mask, jnp.full((constraint_indices.shape[0],), 1.0)], axis=0)
 
@@ -52,12 +54,17 @@ def initialize_state(C: BCOO, sketch_dim: int) -> SDPState:
 
     SCALE_X = 1.0 / float(n)
     SCALE_C = 1.0 / jnp.linalg.norm(C.data)  # equivalent to frobenius norm
-    SCALE_A = jnp.zeros((m,))
-    SCALE_A = SCALE_A.at[A_indices[:,0]].add(A_data**2)
-    SCALE_A = 1.0 / jnp.sqrt(SCALE_A)
-    SCALE_C = 1.0
-    SCALE_X = 1.0
-    SCALE_A = jnp.ones_like(SCALE_A)
+    SCALE_A = 1.0 / jnp.sqrt(jnp.zeros((m,)).at[A_indices[:,0]].add(A_data**2))
+    A_tensor = BCOO((A_data, A_indices), shape=(m, n, n))
+    A_matrix = SCALE_A[:, None] * A_tensor.reshape(m, n**2)
+    A_matrix = coo_matrix(
+        (A_matrix.data, (A_matrix.indices[:,0], A_matrix.indices[:,1])), shape=A_matrix.shape)
+    norm_A = jnp.sqrt(eigsh(A_matrix @ A_matrix.T, k=1, which="LM", return_eigenvectors=False)[0])
+    SCALE_A /= norm_A
+
+    #SCALE_X = 1.0
+    #SCALE_C = 1.0
+    #SCALE_A = jnp.ones_like(b)
 
     if sketch_dim == -1:
         X = jnp.zeros((n, n))
