@@ -7,6 +7,8 @@ import jax.numpy as jnp
 import numba as nb
 import numpy as np
 import pickle
+from scipy.sparse import coo_matrix
+from scipy.sparse.linalg import eigsh
 from scipy.spatial.distance import pdist, squareform  # type: ignore
 from typing import Any, Tuple
 
@@ -198,7 +200,7 @@ def get_all_problem_data(C: BCOO) -> Tuple[BCOO, Array, Array, Array]:
     A_indices = jnp.concatenate(
         [A_indices, jnp.vstack([constraint_indices, coord_a, coord_b]).T], axis=0)
     A_data = jnp.concatenate(
-        [A_data, jnp.tile(jnp.array([[-0.5, -0.5, 1.0]]), (n-1, 1)).reshape(-1,)], axis=0)
+        [A_data, jnp.tile(jnp.array([[-1.0, -1.0, 2.0]]), (n-1, 1)).reshape(-1,)], axis=0)
     b = jnp.concatenate([b, jnp.zeros((n-1,))], axis=0)
     b_ineq_mask = jnp.concatenate([b_ineq_mask, jnp.zeros((n-1,))], axis=0)
 
@@ -221,8 +223,8 @@ def get_all_problem_data(C: BCOO) -> Tuple[BCOO, Array, Array, Array]:
     A_indices = jnp.concatenate(
         [A_indices, jnp.vstack([constraint_indices, coord_a, coord_b]).T], axis=0)
     A_data = jnp.concatenate(
-        [A_data, jnp.tile(jnp.array([[0.5, 0.5]]), (n-1, 1)).reshape(-1,)], axis=0)
-    b = jnp.concatenate([b, jnp.ones((l,))], axis=0)
+        [A_data, jnp.tile(jnp.array([[1.0, 1.0]]), (n-1, 1)).reshape(-1,)], axis=0)
+    b = jnp.concatenate([b, 2.0*jnp.ones((l,))], axis=0)
     b_ineq_mask = jnp.concatenate([b_ineq_mask, jnp.zeros((l,))], axis=0)
 
 
@@ -245,8 +247,8 @@ def get_all_problem_data(C: BCOO) -> Tuple[BCOO, Array, Array, Array]:
     A_indices = jnp.concatenate(
         [A_indices, jnp.vstack([constraint_indices, coord_a, coord_b]).T], axis=0)
     A_data = jnp.concatenate(
-        [A_data, jnp.tile(jnp.array([[0.5, 0.5]]), (n-1, 1)).reshape(-1,)], axis=0)
-    b = jnp.concatenate([b, jnp.ones((l,))], axis=0)
+        [A_data, jnp.tile(jnp.array([[1.0, 1.0]]), (n-1, 1)).reshape(-1,)], axis=0)
+    b = jnp.concatenate([b, 2.0*jnp.ones((l,))], axis=0)
     b_ineq_mask = jnp.concatenate([b_ineq_mask, jnp.zeros((l,))], axis=0)
 
     ## constraint: tr_1(Y) = I
@@ -271,8 +273,10 @@ def get_all_problem_data(C: BCOO) -> Tuple[BCOO, Array, Array, Array]:
         + l * jnp.arange(l)[None, None, :], (l, 1, 1)).reshape(-1,)
     A_indices = jnp.concatenate(
         [A_indices, jnp.vstack([constraint_indices, coord_a, coord_b]).T], axis=0)
-    A_data = jnp.concatenate([A_data, jnp.ones_like(coord_a)], axis=0)
-    b = jnp.concatenate([b, (coord_a == coord_b).reshape(l**2, l).T[0].astype(float)], axis=0)
+    A_indices = jnp.concatenate(
+        [A_indices, jnp.vstack([constraint_indices, coord_b, coord_a]).T], axis=0)
+    A_data = jnp.concatenate([A_data, jnp.ones_like(coord_a), jnp.ones_like(coord_a)], axis=0)
+    b = jnp.concatenate([b, 2.0*(coord_a == coord_b).reshape(l**2, l).T[0].astype(float)], axis=0)
     b_ineq_mask = jnp.concatenate([b_ineq_mask, jnp.zeros((n-1,))], axis=0)
 
     # constraint: tr_2(Y) = I
@@ -297,8 +301,10 @@ def get_all_problem_data(C: BCOO) -> Tuple[BCOO, Array, Array, Array]:
         + jnp.arange(l)[None, None, :], (l, 1, 1)).reshape(-1,)
     A_indices = jnp.concatenate(
         [A_indices, jnp.vstack([constraint_indices, coord_a, coord_b]).T], axis=0)
-    A_data = jnp.concatenate([A_data, jnp.ones_like(coord_a)], axis=0)
-    b = jnp.concatenate([b, (coord_a == coord_b).reshape(l**2, l).T[0].astype(float)], axis=0)
+    A_indices = jnp.concatenate(
+        [A_indices, jnp.vstack([constraint_indices, coord_b, coord_a]).T], axis=0)
+    A_data = jnp.concatenate([A_data, jnp.ones_like(coord_a), jnp.ones_like(coord_a)], axis=0)
+    b = jnp.concatenate([b, 2.0*(coord_a == coord_b).reshape(l**2, l).T[0].astype(float)], axis=0)
     b_ineq_mask = jnp.concatenate([b_ineq_mask, jnp.zeros((n-1,))], axis=0)
 
     # constraint: objective-relevant entries of Y >= 0, written as -Y <= 0
@@ -309,7 +315,7 @@ def get_all_problem_data(C: BCOO) -> Tuple[BCOO, Array, Array, Array]:
     constraint_triples = jnp.concatenate(
         [constraint_triples, constraint_triples[:, [0, 2, 1]]], axis=0)
     A_indices = jnp.concatenate([A_indices, constraint_triples], axis=0)
-    A_data = jnp.concatenate([A_data, jnp.full((constraint_triples.shape[0],), -0.5)], axis=0)
+    A_data = jnp.concatenate([A_data, jnp.full((constraint_triples.shape[0],), -1.0)], axis=0)
     b = jnp.concatenate([b, jnp.full((constraint_indices.shape[0],), 0.0)], axis=0)
     b_ineq_mask = jnp.concatenate([b_ineq_mask, jnp.full((constraint_indices.shape[0],), 1.0)], axis=0)
 
@@ -324,9 +330,13 @@ def initialize_state(C: BCOO, sketch_dim: int) -> SDPState:
 
     SCALE_X = 1.0 / float(l + 1)
     SCALE_C = 1.0 / jnp.linalg.norm(C.data)  # equivalent to frobenius norm
-    SCALE_A = jnp.zeros((m,))
-    SCALE_A = SCALE_A.at[A_indices[:,0]].add(A_data**2)
-    SCALE_A = 1.0 / jnp.sqrt(SCALE_A)
+    SCALE_A = 1.0 / jnp.sqrt(jnp.zeros((m,)).at[A_indices[:,0]].add(A_data**2))
+    A_tensor = BCOO((A_data, A_indices), shape=(m, n, n))
+    A_matrix = SCALE_A[:, None] * A_tensor.reshape(m, n**2)
+    A_matrix = coo_matrix(
+        (A_matrix.data, (A_matrix.indices[:,0], A_matrix.indices[:,1])), shape=A_matrix.shape)
+    norm_A = jnp.sqrt(eigsh(A_matrix @ A_matrix.T, k=1, which="LM", return_eigenvectors=False)[0])
+    SCALE_A /= norm_A
 
     if sketch_dim == -1:
         X = jnp.zeros((n, n))
