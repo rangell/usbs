@@ -412,6 +412,7 @@ def specbm(
     n: int,
     m: int,
     trace_ub: float,
+    trace_factor: float,
     rho: float,
     beta: float,
     k_curr: int,
@@ -467,7 +468,8 @@ def specbm(
          "primal_obj",
          "bar_primal_obj",
          "pen_dual_obj",
-         "lb_spec_est"])
+         "lb_spec_est",
+         "neg_obj_lb"])
 
     @jax.jit
     def cond_func(state: StateStruct) -> Array:
@@ -537,6 +539,10 @@ def specbm(
             tolerance=subprob_eps)
         cand_eigvals = -cand_eigvals
         cand_pen_dual_obj = jnp.dot(-state.b, y_cand) + trace_ub*jnp.clip(cand_eigvals[0], a_min=0)
+        neg_obj_lb = jnp.clip(
+            jnp.dot(-state.b, y_cand)
+            + (trace_ub / trace_factor)*jnp.clip(cand_eigvals[0], a_min=0),
+            a_max=state.neg_obj_lb)
 
         lb_spec_est = compute_lb_spec_est_ipm(
             C=state.C,
@@ -577,7 +583,7 @@ def specbm(
         bar_primal_obj_next = eta * state.bar_primal_obj
         bar_primal_obj_next += jnp.trace(curr_VSV_T_factor.T @ (state.C @ curr_VSV_T_factor))
         
-        obj_gap = jnp.abs(primal_obj_next + pen_dual_obj_next) / (SCALE_C * SCALE_X)
+        obj_gap = jnp.abs(primal_obj_next + neg_obj_lb) / (SCALE_C * SCALE_X)
         obj_gap /= 1.0 + (jnp.abs(primal_obj_next) / (SCALE_C * SCALE_X))
         infeas_gap = jnp.linalg.norm((z_next - state.b + upsilon_next) / SCALE_A) / SCALE_X
         infeas_gap /= 1.0 + jnp.linalg.norm((state.b / SCALE_A) / SCALE_X)
@@ -596,7 +602,7 @@ def specbm(
         jax.debug.print("t: {t} - end_time: {end_time} - pen_dual_obj: {pen_dual_obj}"
                         " - cand_pen_dual_obj: {cand_pen_dual_obj} - lb_spec_est: {lb_spec_est}"
                         " - pen_dual_obj_next: {pen_dual_obj_next} - primal_obj: {primal_obj}"
-                        " - obj_gap: {obj_gap} - infeas_gap: {infeas_gap}"
+                        " - neg_obj_lb: {neg_obj_lb} - obj_gap: {obj_gap} - infeas_gap: {infeas_gap}"
                         " - max_infeas: {max_infeas} - callback_val: {callback_val}",
                         t=state.t,
                         end_time=end_time,
@@ -605,6 +611,7 @@ def specbm(
                         lb_spec_est=lb_spec_est,
                         pen_dual_obj_next=pen_dual_obj_next,
                         primal_obj=primal_obj_next / (SCALE_C * SCALE_X),
+                        neg_obj_lb=neg_obj_lb,
                         obj_gap=obj_gap,
                         infeas_gap=infeas_gap,
                         max_infeas=max_infeas,
@@ -640,7 +647,8 @@ def specbm(
             primal_obj=primal_obj_next,
             bar_primal_obj=bar_primal_obj_next,
             pen_dual_obj=pen_dual_obj_next,
-            lb_spec_est=lb_spec_est)
+            lb_spec_est=lb_spec_est,
+            neg_obj_lb=neg_obj_lb)
 
 
     q0 = jax.random.normal(jax.random.PRNGKey(0), shape=(n,))
@@ -691,7 +699,8 @@ def specbm(
         primal_obj=sdp_state.primal_obj,
         bar_primal_obj=sdp_state.primal_obj,
         pen_dual_obj=init_pen_dual_obj,
-        lb_spec_est=jnp.array(0.0))
+        lb_spec_est=jnp.array(0.0),
+        neg_obj_lb=jnp.inf)
 
     final_state = bounded_while_loop(cond_func, body_func, init_state, max_steps=max_iters)
 

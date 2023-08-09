@@ -118,28 +118,31 @@ class EccClusterer(object):
                     * float(self.sdp_state.C.shape[0])
                     * self.sdp_state.SCALE_X)
 
-        #self.sdp_state = specbm(
-        #    sdp_state=self.sdp_state,
-        #    n=self.sdp_state.C.shape[0],
-        #    m=self.sdp_state.b.shape[0],
-        #    trace_ub=trace_ub,
-        #    rho=hparams.rho,
-        #    beta=hparams.beta,
-        #    k_curr=self.hparams.k_curr,
-        #    k_past=self.hparams.k_past,
-        #    max_iters=self.hparams.max_iters,
-        #    max_time=self.hparams.max_time,
-        #    obj_gap_eps=self.hparams.obj_gap_eps,
-        #    infeas_gap_eps=self.hparams.infeas_gap_eps,
-        #    max_infeas_eps=self.hparams.max_infeas_eps,
-        #    lanczos_inner_iterations=min(self.sdp_state.C.shape[0], 32),
-        #    lanczos_max_restarts=self.hparams.lanczos_max_restarts,
-        #    subprob_eps=self.hparams.subprob_eps,
-        #    subprob_max_iters=hparams.subprob_max_iters,
-        #    callback_fn=None,
-        #    callback_static_args=None,
-        #    callback_nonstatic_args=None)
+        self.sdp_state = specbm(
+            sdp_state=self.sdp_state,
+            n=self.sdp_state.C.shape[0],
+            m=self.sdp_state.b.shape[0],
+            trace_ub=trace_ub,
+            trace_factor=hparams.trace_factor,
+            rho=hparams.rho,
+            beta=hparams.beta,
+            k_curr=self.hparams.k_curr,
+            k_past=self.hparams.k_past,
+            max_iters=self.hparams.max_iters,
+            max_time=self.hparams.max_time,
+            obj_gap_eps=self.hparams.obj_gap_eps,
+            infeas_gap_eps=self.hparams.infeas_gap_eps,
+            max_infeas_eps=self.hparams.max_infeas_eps,
+            lanczos_inner_iterations=min(self.sdp_state.C.shape[0], 32),
+            lanczos_max_restarts=self.hparams.lanczos_max_restarts,
+            subprob_eps=self.hparams.subprob_eps,
+            subprob_max_iters=hparams.subprob_max_iters,
+            callback_fn=None,
+            callback_static_args=None,
+            callback_nonstatic_args=None)
         
+        embed()
+        exit()
 
         num_points = self.features.shape[0]
         num_ecc = len(self.ecc_constraints)
