@@ -20,6 +20,7 @@ from sklearn.metrics import adjusted_rand_score as rand_idx
 from sklearn.metrics import homogeneity_completeness_v_measure as cluster_f1
 
 from solver.specbm import specbm
+from utils.common import unscale_sdp_state
 from utils.ecc_helpers import initialize_state
 from utils.trellis import Trellis
 
@@ -114,97 +115,97 @@ class EccClusterer(object):
 
     def build_and_solve_sdp(self):
 
-        #trace_ub = (self.hparams.trace_factor
-        #            * float(self.sdp_state.C.shape[0])
-        #            * self.sdp_state.SCALE_X)
+        trace_ub = (self.hparams.trace_factor
+                    * float(self.sdp_state.C.shape[0])
+                    * self.sdp_state.SCALE_X)
 
-        #self.sdp_state = specbm(
-        #    sdp_state=self.sdp_state,
-        #    n=self.sdp_state.C.shape[0],
-        #    m=self.sdp_state.b.shape[0],
-        #    trace_ub=trace_ub,
-        #    trace_factor=hparams.trace_factor,
-        #    rho=hparams.rho,
-        #    beta=hparams.beta,
-        #    k_curr=self.hparams.k_curr,
-        #    k_past=self.hparams.k_past,
-        #    max_iters=self.hparams.max_iters,
-        #    max_time=self.hparams.max_time,
-        #    obj_gap_eps=self.hparams.obj_gap_eps,
-        #    infeas_gap_eps=self.hparams.infeas_gap_eps,
-        #    max_infeas_eps=self.hparams.max_infeas_eps,
-        #    lanczos_inner_iterations=min(self.sdp_state.C.shape[0], 32),
-        #    lanczos_max_restarts=self.hparams.lanczos_max_restarts,
-        #    subprob_eps=self.hparams.subprob_eps,
-        #    subprob_max_iters=hparams.subprob_max_iters,
-        #    callback_fn=None,
-        #    callback_static_args=None,
-        #    callback_nonstatic_args=None)
+        self.sdp_state = specbm(
+            sdp_state=self.sdp_state,
+            n=self.sdp_state.C.shape[0],
+            m=self.sdp_state.b.shape[0],
+            trace_ub=trace_ub,
+            trace_factor=hparams.trace_factor,
+            rho=hparams.rho,
+            beta=hparams.beta,
+            k_curr=self.hparams.k_curr,
+            k_past=self.hparams.k_past,
+            max_iters=self.hparams.max_iters,
+            max_time=self.hparams.max_time,
+            obj_gap_eps=self.hparams.obj_gap_eps,
+            infeas_gap_eps=self.hparams.infeas_gap_eps,
+            max_infeas_eps=self.hparams.max_infeas_eps,
+            lanczos_inner_iterations=min(self.sdp_state.C.shape[0], 32),
+            lanczos_max_restarts=self.hparams.lanczos_max_restarts,
+            subprob_eps=self.hparams.subprob_eps,
+            subprob_max_iters=hparams.subprob_max_iters,
+            callback_fn=None,
+            callback_static_args=None,
+            callback_nonstatic_args=None)
         
 
-        num_points = self.features.shape[0]
-        num_ecc = len(self.ecc_constraints)
+        #num_points = self.features.shape[0]
+        #num_ecc = len(self.ecc_constraints)
 
-        if num_ecc > 0:
-            # "negative" sdp constraints
-            uni_feats = sp_vstack([self.features, self.ecc_mx])
-            self.incompat_mx = np.zeros(
-                    (num_points+num_ecc, num_ecc), dtype=bool)
-            self._set_incompat_mx(num_points+num_ecc,
-                                  num_ecc,
-                                  uni_feats.indptr,
-                                  uni_feats.indices,
-                                  uni_feats.data,
-                                  self.ecc_mx.indptr,
-                                  self.ecc_mx.indices,
-                                  self.ecc_mx.data,
-                                  self.incompat_mx)
-            ortho_indices = [(a, b+num_points)
-                    for a, b in zip(*np.where(self.incompat_mx))]
+        #if num_ecc > 0:
+        #    # "negative" sdp constraints
+        #    uni_feats = sp_vstack([self.features, self.ecc_mx])
+        #    self.incompat_mx = np.zeros(
+        #            (num_points+num_ecc, num_ecc), dtype=bool)
+        #    self._set_incompat_mx(num_points+num_ecc,
+        #                          num_ecc,
+        #                          uni_feats.indptr,
+        #                          uni_feats.indices,
+        #                          uni_feats.data,
+        #                          self.ecc_mx.indptr,
+        #                          self.ecc_mx.indices,
+        #                          self.ecc_mx.data,
+        #                          self.incompat_mx)
+        #    ortho_indices = [(a, b+num_points)
+        #            for a, b in zip(*np.where(self.incompat_mx))]
 
-            # "positive" sdp constraints
-            bin_features = self.features.astype(bool).tocsc()
-            pos_ecc_mx = (self.ecc_mx > 0)
-            (ecc_indices,
-             points_indptr,
-             points_indices) = self._get_feat_satisfied_hyperplanes(
-                     bin_features.indptr,
-                     bin_features.indices,
-                     pos_ecc_mx.indptr,
-                     pos_ecc_mx.indices,
-                     self.incompat_mx)
-            ecc_indices = [x + num_points for x in ecc_indices]
-            points_indptr = list(points_indptr)
-            points_indices = list(points_indices)
+        #    # "positive" sdp constraints
+        #    bin_features = self.features.astype(bool).tocsc()
+        #    pos_ecc_mx = (self.ecc_mx > 0)
+        #    (ecc_indices,
+        #     points_indptr,
+        #     points_indices) = self._get_feat_satisfied_hyperplanes(
+        #             bin_features.indptr,
+        #             bin_features.indices,
+        #             pos_ecc_mx.indptr,
+        #             pos_ecc_mx.indices,
+        #             self.incompat_mx)
+        #    ecc_indices = [x + num_points for x in ecc_indices]
+        #    points_indptr = list(points_indptr)
+        #    points_indices = list(points_indices)
 
-        # formulate SDP
-        logging.info('Constructing optimization problem')
-        W = coo_matrix((self.edge_weights.data,
-                        (self.edge_weights.row, self.edge_weights.col)),
-                        shape=(self.n, self.n))
-        X = cp.Variable((self.n, self.n), PSD=True)
-        # standard correlation clustering constraints
-        constraints = [
-                cp.diag(X) == np.ones((self.n,)),
-                X >= 0
-        ]
-        if num_ecc > 0:
-            # "negative" ecc constraints
-            constraints.extend([X[i,j] <= 0 for i, j in ortho_indices])
-            # "positive" ecc constraints
-            for idx, i in enumerate(ecc_indices):
-                j_s = points_indices[points_indptr[idx]: points_indptr[idx+1]]
-                constraints.append(sum([X[i,j] for j in j_s]) >= 1)
+        ## formulate SDP
+        #logging.info('Constructing optimization problem')
+        #W = coo_matrix((self.edge_weights.data,
+        #                (self.edge_weights.row, self.edge_weights.col)),
+        #                shape=(self.n, self.n))
+        #X = cp.Variable((self.n, self.n), PSD=True)
+        ## standard correlation clustering constraints
+        #constraints = [
+        #        cp.diag(X) == np.ones((self.n,)),
+        #        X >= 0
+        #]
+        #if num_ecc > 0:
+        #    # "negative" ecc constraints
+        #    constraints.extend([X[i,j] <= 0 for i, j in ortho_indices])
+        #    # "positive" ecc constraints
+        #    for idx, i in enumerate(ecc_indices):
+        #        j_s = points_indices[points_indptr[idx]: points_indptr[idx+1]]
+        #        constraints.append(sum([X[i,j] for j in j_s]) >= 1)
 
-        prob = cp.Problem(cp.Maximize(cp.trace(W @ X)), constraints)
+        #prob = cp.Problem(cp.Maximize(cp.trace(W @ X)), constraints)
 
-        logging.info('Solving optimization problem')
-        sdp_obj_value = prob.solve(
-                solver=cp.SCS, verbose=True, max_iters=10000
-        )
+        #logging.info('Solving optimization problem')
+        #sdp_obj_value = prob.solve(
+        #        solver=cp.SCS, verbose=True, max_iters=10000
+        #)
 
-        pw_probs = X.value
-        pw_probs = np.clip(pw_probs, a_min=0.0, a_max=1.0)
+        #pw_probs = X.value
+        #pw_probs = np.clip(pw_probs, a_min=0.0, a_max=1.0)
 
         #if self.incompat_mx is not None:
         #    # discourage incompatible nodes from clustering together
@@ -214,6 +215,11 @@ class EccClusterer(object):
         #    )
         #    pw_probs[self.incompat_mx] -= np.sum(pw_probs)
         #pw_probs = np.triu(pw_probs, k=1)
+
+        unscaled_state = unscale_sdp_state(self.sdp_state)
+        sdp_obj_value = float(jnp.trace(-unscaled_state.C @ unscaled_state.X))
+        pw_probs = np.array(jnp.clip(unscaled_state.X, a_min=0.0, a_max=1.0))
+        
         return sdp_obj_value, pw_probs
 
     def build_trellis(self, pw_probs: np.ndarray):
@@ -805,6 +811,9 @@ def simulate(edge_weights: csr_matrix,
             assert metrics['match_feat_coeff'] == 1.0
             logging.info('Achieved perfect clustering at round %d.', r)
             break
+
+        embed()
+        exit()
 
         # generate a new constraint
         while True:
