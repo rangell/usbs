@@ -1,15 +1,9 @@
-import copy
-import heapq
-import logging
-import pickle
 from typing import List, Tuple
 
-#import higra as hg
 import numba as nb
 import numpy as np
-from sklearn.metrics import adjusted_rand_score as rand_idx
-
-from IPython import embed
+from scipy.cluster.hierarchy import linkage
+from scipy.spatial.distance import squareform
 
 
 @nb.njit
@@ -128,6 +122,17 @@ def build_trellis_from_trees(trees: np.ndarray):
             child_pairs_indices)
 
 
+@nb.njit
+def convert_Z_to_parents(Z: np.ndarray) -> np.ndarray:
+    num_internal_nodes = Z.shape[0]
+    parents = np.empty((2 * num_internal_nodes + 1,), dtype=np.int64)
+    for i in range(num_internal_nodes):
+        parents[int(Z[i, 0])] = i + num_internal_nodes + 1
+        parents[int(Z[i, 1])] = i + num_internal_nodes + 1
+    parents[-1] = parents.shape[0] - 1
+    return parents
+
+
 class Trellis(object):
 
     def __init__(self, adj_mx: np.ndarray):
@@ -136,31 +141,12 @@ class Trellis(object):
         self.topo_order = None
 
     def fit(self):
-
-        # graph is not necessarily connected, we trivially connect the graph with small weights
-        pos_indices = np.where(self.adj_mx > 0)
-        min_pos_val = np.min(self.adj_mx[pos_indices]) * 0.9
-        trivial_connected_indices = (np.arange(self.n - 1), np.arange(1, self.n))
-        supplement_indices = set(zip(*trivial_connected_indices)).difference(
-            set(zip(*pos_indices)))
-        supplement_indices = tuple(np.array(ind) for ind in zip(*supplement_indices))
-        self.adj_mx[supplement_indices] += min_pos_val
-
-        # get the HAC tree, not necessarily contained in beam search
-        g, w = hg.adjacency_matrix_2_undirected_graph(self.adj_mx)
-        dists = -1.0 * w
-        
-        hac_tree, _ = hg.binary_partition_tree_average_linkage(g, dists)
-
-        trees = [hac_tree.parents()]
-
-        trees += [
-            hg.binary_partition_tree_single_linkage(g, dists)[0].parents(),
-            hg.binary_partition_tree_exponential_linkage(g, dists, -1.0)[0].parents(),
-            hg.binary_partition_tree_exponential_linkage(g, dists, 1.0)[0].parents()
-        ]
-
-        trees = np.vstack(trees)
+        dist_mx = np.triu(1 - self.adj_mx, k=1)
+        dist_mx += dist_mx.T
+        flat_dist_mx = squareform(dist_mx)
+        link_fns = ["average", "single", "complete", "ward", "median", "centroid", "weighted"]
+        trees = np.vstack([convert_Z_to_parents(linkage(flat_dist_mx, link_fn))
+                           for link_fn in link_fns])
 
         # build trellis
         (self.leaves_indptr,
