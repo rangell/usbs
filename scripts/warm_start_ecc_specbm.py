@@ -21,7 +21,7 @@ from sklearn.metrics import homogeneity_completeness_v_measure as cluster_f1
 
 from solver.specbm import specbm
 from utils.common import unscale_sdp_state
-from utils.ecc_helpers import initialize_state
+from utils.ecc_helpers import initialize_state, warm_start_add_constraint
 from utils.trellis import Trellis
 
 from IPython import embed
@@ -47,10 +47,66 @@ class EccClusterer(object):
         self.sdp_state = initialize_state(C=C, sketch_dim=hparams.sketch_dim)
 
     def add_constraint(self, ecc_constraint: csr_matrix):
-        # TODO: call warm-start functions here
         self.ecc_constraints.append(ecc_constraint)
         self.ecc_mx = sp_vstack(self.ecc_constraints)
         self.n += 1
+
+        # TODO: call warm-start functions here
+        num_points = self.features.shape[0]
+        num_ecc = len(self.ecc_constraints)
+
+        # "negative" SDP constraints
+        uni_feats = sp_vstack([self.features, self.ecc_mx])
+        self.incompat_mx = np.zeros(
+                (num_points+num_ecc, num_ecc), dtype=bool)
+        self._set_incompat_mx(num_points+num_ecc,
+                              num_ecc,
+                              uni_feats.indptr,
+                              uni_feats.indices,
+                              uni_feats.data,
+                              self.ecc_mx.indptr,
+                              self.ecc_mx.indices,
+                              self.ecc_mx.data,
+                              self.incompat_mx)
+        ortho_indices = [(a, b+num_points)
+                for a, b in zip(*np.where(self.incompat_mx)) if b == num_ecc - 1]
+        assert len(ortho_indices) == 0  # TODO: check this is correct
+
+        # "positive" SDP constraints
+        bin_features = self.features.astype(bool).tocsc()
+        pos_ecc_mx = (self.ecc_mx > 0)
+        (ecc_indices,
+         points_indptr,
+         points_indices) = self._get_feat_satisfied_hyperplanes(
+                 bin_features.indptr,
+                 bin_features.indices,
+                 pos_ecc_mx.indptr,
+                 pos_ecc_mx.indices,
+                 self.incompat_mx)
+        ecc_indices = [x + num_points for x in ecc_indices]
+        points_indptr = list(points_indptr)
+        points_indices = list(points_indices)
+
+        assert num_ecc == 1 # TODO: need to limit sum_gt_one_constraints to only the ones added this round
+
+        sum_gt_one_constraints = []
+        for idx, i in enumerate(ecc_indices):
+            j_s = points_indices[points_indptr[idx]: points_indptr[idx+1]]
+            sum_gt_one_constraints.append([(i,j) for j in j_s])
+        
+        self.sdp_state = warm_start_add_constraint(
+            old_sdp_state=self.sdp_state,
+            ortho_indices=ortho_indices,
+            sum_gt_one_constraints=sum_gt_one_constraints,
+            sketch_dim=-1)
+
+        ## "positive" ecc constraints
+        #for idx, i in enumerate(ecc_indices):
+        #    j_s = points_indices[points_indptr[idx]: points_indptr[idx+1]]
+        #    constraints.append(sum([X[i,j] for j in j_s]) >= 1)
+
+        embed()
+        exit()
 
     @staticmethod
     @nb.njit(parallel=True)
@@ -150,7 +206,7 @@ class EccClusterer(object):
         #    # "negative" sdp constraints
         #    uni_feats = sp_vstack([self.features, self.ecc_mx])
         #    self.incompat_mx = np.zeros(
-        #            (num_points+num_ecc, num_ecc), dtype=bool)
+        #            (num_points+num_ec, num_ecc), dtype=bool)
         #    self._set_incompat_mx(num_points+num_ecc,
         #                          num_ecc,
         #                          uni_feats.indptr,
@@ -811,9 +867,6 @@ def simulate(edge_weights: csr_matrix,
             assert metrics['match_feat_coeff'] == 1.0
             logging.info('Achieved perfect clustering at round %d.', r)
             break
-
-        embed()
-        exit()
 
         # generate a new constraint
         while True:

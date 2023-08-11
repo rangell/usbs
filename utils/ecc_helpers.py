@@ -10,7 +10,7 @@ import pickle
 from scipy.spatial.distance import pdist, squareform  # type: ignore
 from scipy.sparse import coo_matrix
 from scipy.sparse.linalg import eigsh
-from typing import Any, Tuple
+from typing import Any, Tuple, List
 
 from solver.utils import apply_A_operator_batched
 from utils.common import (SDPState,
@@ -97,3 +97,43 @@ def initialize_state(C: BCOO, sketch_dim: int) -> SDPState:
 
     sdp_state = scale_sdp_state(sdp_state)
     return sdp_state
+
+
+def warm_start_add_constraint(
+    old_sdp_state: SDPState,
+    ortho_indices: List[Tuple[int, int]],
+    sum_gt_one_constraints: List[List[int]],
+    sketch_dim: int) -> SDPState:
+
+    assert sketch_dim == -1
+    old_sdp_state = unscale_sdp_state(old_sdp_state)
+
+    n = old_sdp_state.C.shape[0] + 1
+    C = BCOO((old_sdp_state.C.data, old_sdp_state.C.indices), shape=(n, n))
+
+    # TODO: update constraints here
+
+    # add the additional diagonal == 1 constraint for the new ecc
+    A_indices = jnp.concatenate([old_sdp_state.A_indices,
+                                 jnp.array([[old_sdp_state.b.shape[0], n-1, n-1]])], axis=0)
+    A_data = jnp.concatenate([old_sdp_state.A_data, jnp.array([1.0])], axis=0)
+    b = jnp.concatenate([old_sdp_state.b, jnp.array([1.0])], axis=0)
+    b_ineq_mask = jnp.concatenate([old_sdp_state.b_ineq_mask, jnp.array([0.0])], axis=0)
+
+    # TODO: add constraints for ortho indices
+
+    # add sum greater than one (feature satisfying hyperplanes) constraints
+    num_hyperplanes = len(sum_gt_one_constraints)
+    constraint_triples = jnp.array([(b.shape[0] + i, u, v)
+                                    for i, pairs in enumerate(sum_gt_one_constraints)
+                                    for u, v in pairs])
+    A_indices = jnp.concatenate([A_indices, constraint_triples], axis=0)
+    A_data = jnp.concatenate([A_data, jnp.full((constraint_triples.shape[0],), -1.0)], axis=0)
+    b = jnp.concatenate([b, jnp.full((num_hyperplanes,), -1.0)], axis=0)
+    b_ineq_mask = jnp.concatenate([b_ineq_mask, jnp.full((num_hyperplanes,), 1.0)], axis=0)
+
+    embed()
+    exit()
+
+def cold_start_add_constraint(old_sdp_state: SDPState, sketch_dim: int) -> SDPState:
+    pass
