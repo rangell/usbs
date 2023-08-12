@@ -180,7 +180,9 @@ def warm_start_add_constraint(
     #norm_A = jnp.sqrt(eigsh(A_matrix @ A_matrix.T, k=1, which="LM", return_eigenvectors=False)[0])
     #SCALE_A /= norm_A
 
-    SCALE_A = jnp.ones_like(b)
+    # SCALE_A = jnp.ones_like(b)
+
+    SCALE_A = jnp.full(b.shape, 10.0).at[jnp.arange(old_sdp_state.b.shape[0])].set(jnp.ones_like(old_sdp_state.b))
 
     sdp_state = SDPState(
         C=C,
