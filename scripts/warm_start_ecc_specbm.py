@@ -21,7 +21,9 @@ from sklearn.metrics import homogeneity_completeness_v_measure as cluster_f1
 
 from solver.specbm import specbm
 from utils.common import unscale_sdp_state
-from utils.ecc_helpers import initialize_state, warm_start_add_constraint
+from utils.ecc_helpers import (initialize_state,
+                               warm_start_add_constraint,
+                               cold_start_add_constraint)
 from utils.trellis import Trellis
 
 from IPython import embed
@@ -92,11 +94,20 @@ class EccClusterer(object):
             if i == self.n - 1:
                 sum_gt_one_constraints.append([(i,j) for j in j_s])
         
-        self.sdp_state = warm_start_add_constraint(
-            old_sdp_state=self.sdp_state,
-            ortho_indices=ortho_indices,
-            sum_gt_one_constraints=sum_gt_one_constraints,
-            sketch_dim=-1)
+        if self.hparams.warm_start_strategy == "none":
+            self.sdp_state = cold_start_add_constraint(
+                old_sdp_state=self.sdp_state,
+                ortho_indices=ortho_indices,
+                sum_gt_one_constraints=sum_gt_one_constraints,
+                sketch_dim=-1)
+        elif self.hparams.warm_start_strategy == "implicit":
+            self.sdp_state = warm_start_add_constraint(
+                old_sdp_state=self.sdp_state,
+                ortho_indices=ortho_indices,
+                sum_gt_one_constraints=sum_gt_one_constraints,
+                sketch_dim=-1)
+        else:
+            raise NotImplementedError()
 
     @staticmethod
     @nb.njit(parallel=True)
@@ -864,7 +875,7 @@ def get_hparams() -> argparse.Namespace:
                         help="dimension of Nystrom sketch")
     parser.add_argument("--warm_start_strategy", type=str,
                         choices=["implicit", "explicit", "dual_only", "none"],
-                        help="warm-start strategy to use")
+                        required=True, help="warm-start strategy to use")
 
     # for constraint generation
     parser.add_argument('--max_rounds', type=int, default=100,
