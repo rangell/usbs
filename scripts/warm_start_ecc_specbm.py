@@ -70,7 +70,6 @@ class EccClusterer(object):
                               self.incompat_mx)
         ortho_indices = [(a, b+num_points)
                 for a, b in zip(*np.where(self.incompat_mx)) if b == num_ecc - 1]
-        assert len(ortho_indices) == 0  # TODO: check this is correct
 
         # "positive" SDP constraints
         bin_features = self.features.astype(bool).tocsc()
@@ -87,26 +86,17 @@ class EccClusterer(object):
         points_indptr = list(points_indptr)
         points_indices = list(points_indices)
 
-        assert num_ecc == 1 # TODO: need to limit sum_gt_one_constraints to only the ones added this round
-
         sum_gt_one_constraints = []
         for idx, i in enumerate(ecc_indices):
             j_s = points_indices[points_indptr[idx]: points_indptr[idx+1]]
-            sum_gt_one_constraints.append([(i,j) for j in j_s])
+            if i == self.n - 1:
+                sum_gt_one_constraints.append([(i,j) for j in j_s])
         
         self.sdp_state = warm_start_add_constraint(
             old_sdp_state=self.sdp_state,
             ortho_indices=ortho_indices,
             sum_gt_one_constraints=sum_gt_one_constraints,
             sketch_dim=-1)
-
-        ## "positive" ecc constraints
-        #for idx, i in enumerate(ecc_indices):
-        #    j_s = points_indices[points_indptr[idx]: points_indptr[idx+1]]
-        #    constraints.append(sum([X[i,j] for j in j_s]) >= 1)
-
-        embed()
-        exit()
 
     @staticmethod
     @nb.njit(parallel=True)
@@ -198,80 +188,6 @@ class EccClusterer(object):
             callback_static_args=None,
             callback_nonstatic_args=None)
         
-
-        #num_points = self.features.shape[0]
-        #num_ecc = len(self.ecc_constraints)
-
-        #if num_ecc > 0:
-        #    # "negative" sdp constraints
-        #    uni_feats = sp_vstack([self.features, self.ecc_mx])
-        #    self.incompat_mx = np.zeros(
-        #            (num_points+num_ec, num_ecc), dtype=bool)
-        #    self._set_incompat_mx(num_points+num_ecc,
-        #                          num_ecc,
-        #                          uni_feats.indptr,
-        #                          uni_feats.indices,
-        #                          uni_feats.data,
-        #                          self.ecc_mx.indptr,
-        #                          self.ecc_mx.indices,
-        #                          self.ecc_mx.data,
-        #                          self.incompat_mx)
-        #    ortho_indices = [(a, b+num_points)
-        #            for a, b in zip(*np.where(self.incompat_mx))]
-
-        #    # "positive" sdp constraints
-        #    bin_features = self.features.astype(bool).tocsc()
-        #    pos_ecc_mx = (self.ecc_mx > 0)
-        #    (ecc_indices,
-        #     points_indptr,
-        #     points_indices) = self._get_feat_satisfied_hyperplanes(
-        #             bin_features.indptr,
-        #             bin_features.indices,
-        #             pos_ecc_mx.indptr,
-        #             pos_ecc_mx.indices,
-        #             self.incompat_mx)
-        #    ecc_indices = [x + num_points for x in ecc_indices]
-        #    points_indptr = list(points_indptr)
-        #    points_indices = list(points_indices)
-
-        ## formulate SDP
-        #logging.info('Constructing optimization problem')
-        #W = coo_matrix((self.edge_weights.data,
-        #                (self.edge_weights.row, self.edge_weights.col)),
-        #                shape=(self.n, self.n))
-        #X = cp.Variable((self.n, self.n), PSD=True)
-        ## standard correlation clustering constraints
-        #constraints = [
-        #        cp.diag(X) == np.ones((self.n,)),
-        #        X >= 0
-        #]
-        #if num_ecc > 0:
-        #    # "negative" ecc constraints
-        #    constraints.extend([X[i,j] <= 0 for i, j in ortho_indices])
-        #    # "positive" ecc constraints
-        #    for idx, i in enumerate(ecc_indices):
-        #        j_s = points_indices[points_indptr[idx]: points_indptr[idx+1]]
-        #        constraints.append(sum([X[i,j] for j in j_s]) >= 1)
-
-        #prob = cp.Problem(cp.Maximize(cp.trace(W @ X)), constraints)
-
-        #logging.info('Solving optimization problem')
-        #sdp_obj_value = prob.solve(
-        #        solver=cp.SCS, verbose=True, max_iters=10000
-        #)
-
-        #pw_probs = X.value
-        #pw_probs = np.clip(pw_probs, a_min=0.0, a_max=1.0)
-
-        #if self.incompat_mx is not None:
-        #    # discourage incompatible nodes from clustering together
-        #    self.incompat_mx = np.concatenate(
-        #            (np.zeros((num_points+num_ecc, num_points), dtype=bool),
-        #             self.incompat_mx), axis=1
-        #    )
-        #    pw_probs[self.incompat_mx] -= np.sum(pw_probs)
-        #pw_probs = np.triu(pw_probs, k=1)
-
         unscaled_state = unscale_sdp_state(self.sdp_state)
         sdp_obj_value = float(jnp.trace(-unscaled_state.C @ unscaled_state.X))
         pw_probs = np.array(jnp.clip(unscaled_state.X, a_min=0.0, a_max=1.0))
@@ -1000,7 +916,7 @@ if __name__ == '__main__':
     num_blocks = len(blocks_preprocessed)
 
     #sub_blocks_preprocessed = {}
-    #sub_blocks_preprocessed['d schmidt'] = blocks_preprocessed['d schmidt']
+    #sub_blocks_preprocessed['a moore'] = blocks_preprocessed['a moore']
     sub_blocks_preprocessed = blocks_preprocessed
 
     for i, (block_name, block_data) in enumerate(sub_blocks_preprocessed.items()):
