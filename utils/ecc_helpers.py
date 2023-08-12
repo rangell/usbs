@@ -182,7 +182,7 @@ def warm_start_add_constraint(
 
     # SCALE_A = jnp.ones_like(b0)
 
-    SCALE_A = jnp.full(b.shape, 0.1).at[jnp.arange(old_sdp_state.b.shape[0])].set(jnp.ones_like(old_sdp_state.b))
+    SCALE_A = jnp.full(b.shape, 0.01).at[jnp.arange(old_sdp_state.b.shape[0])].set(jnp.ones_like(old_sdp_state.b))
 
     sdp_state = SDPState(
         C=C,
