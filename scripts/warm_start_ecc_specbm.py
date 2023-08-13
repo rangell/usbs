@@ -176,6 +176,10 @@ class EccClusterer(object):
                     * float(self.sdp_state.C.shape[0])
                     * self.sdp_state.SCALE_X)
 
+        if len(self.ecc_constraints) == 1:
+            with open("old_state.pkl", "wb") as f:
+                pickle.dump(unscale_sdp_state(self.sdp_state), f)
+
         self.sdp_state = specbm(
             sdp_state=self.sdp_state,
             n=self.sdp_state.C.shape[0],
@@ -198,6 +202,11 @@ class EccClusterer(object):
             callback_fn=None,
             callback_static_args=None,
             callback_nonstatic_args=None)
+
+        if len(self.ecc_constraints) == 1:
+            with open("new_state.pkl", "wb") as f:
+                pickle.dump(unscale_sdp_state(self.sdp_state), f)
+            exit()
         
         unscaled_state = unscale_sdp_state(self.sdp_state)
         sdp_obj_value = float(jnp.trace(-unscaled_state.C @ unscaled_state.X))
