@@ -23,6 +23,7 @@ from solver.specbm import specbm
 from utils.common import unscale_sdp_state
 from utils.ecc_helpers import (initialize_state,
                                warm_start_add_constraint,
+                               dual_only_add_constraint,
                                cold_start_add_constraint)
 from utils.trellis import Trellis
 
@@ -96,6 +97,12 @@ class EccClusterer(object):
         
         if self.hparams.warm_start_strategy == "none":
             self.sdp_state = cold_start_add_constraint(
+                old_sdp_state=self.sdp_state,
+                ortho_indices=ortho_indices,
+                sum_gt_one_constraints=sum_gt_one_constraints,
+                sketch_dim=-1)
+        if self.hparams.warm_start_strategy == "dual_only":
+            self.sdp_state = dual_only_add_constraint(
                 old_sdp_state=self.sdp_state,
                 ortho_indices=ortho_indices,
                 sum_gt_one_constraints=sum_gt_one_constraints,
