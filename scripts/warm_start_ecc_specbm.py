@@ -101,7 +101,7 @@ class EccClusterer(object):
                 ortho_indices=ortho_indices,
                 sum_gt_one_constraints=sum_gt_one_constraints,
                 sketch_dim=-1)
-        if self.hparams.warm_start_strategy == "dual_only":
+        elif self.hparams.warm_start_strategy == "dual_only":
             self.sdp_state = dual_only_add_constraint(
                 old_sdp_state=self.sdp_state,
                 ortho_indices=ortho_indices,
