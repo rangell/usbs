@@ -7,7 +7,6 @@ import os
 import pickle
 import time
 
-import cvxpy as cp
 import jax
 from jax.experimental.sparse import BCOO
 import jax.numpy as jnp
