@@ -21,7 +21,6 @@ fsspec==2023.6.0
 gitdb==4.0.10
 GitPython==3.1.32
 h5py==3.9.0
-higra==0.6.7
 idna==3.4
 importlib-metadata==6.7.0
 importlib-resources==6.0.0
@@ -60,7 +59,6 @@ pure-eval==0.2.2
 Pygments==2.15.1
 pyparsing==3.0.9
 python-dateutil==2.8.2
-pytorch-lightning==2.0.6
 pytz==2023.3
 PyYAML==6.0.1
 qdldl==0.1.7.post0
@@ -74,8 +72,6 @@ smmap==5.0.0
 stack-data==0.6.2
 sympy==1.12
 threadpoolctl==3.2.0
-torch==2.0.1
-torchmetrics==1.0.1
 tqdm==4.65.0
 traitlets==5.9.0
 typeguard==4.0.0
