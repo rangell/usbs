@@ -118,7 +118,7 @@ class EccClusterer(object):
                 old_sdp_state=self.sdp_state,
                 ortho_indices=ortho_indices,
                 sum_gt_one_constraints=sum_gt_one_constraints,
-                num_pred_clusters=self.num_pred_clusters,
+                prev_pred_clusters=jnp.array(self.prev_pred_clusters),
                 sketch_dim=-1)
         else:
             raise NotImplementedError()
@@ -351,7 +351,7 @@ class EccClusterer(object):
         # Cut trellis
         pred_clustering, cut_obj_value, num_ecc_satisfied = self.cut_trellis(t)
 
-        self.num_pred_clusters = np.unique(pred_clustering).shape[0]
+        self.prev_pred_clusters = pred_clustering
 
         metrics = {
                 'sdp_solve_time': end_solve_time - start_solve_time,

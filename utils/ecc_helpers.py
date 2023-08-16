@@ -421,13 +421,14 @@ def column_drop_add_constraint(
     old_sdp_state: SDPState,
     ortho_indices: List[Tuple[int, int]],
     sum_gt_one_constraints: List[List[int]],
-    num_pred_clusters: int,
+    prev_pred_clusters: Array,
     sketch_dim: int) -> SDPState:
 
     assert sketch_dim == -1
     old_sdp_state = unscale_sdp_state(old_sdp_state)
 
-    n = old_sdp_state.C.shape[0] + 1
+    old_n = old_sdp_state.C.shape[0]
+    n = old_n + 1
     C = BCOO((old_sdp_state.C.data, old_sdp_state.C.indices), shape=(n, n))
 
     # add the additional diagonal == 1 constraint for the new ecc
@@ -477,17 +478,20 @@ def column_drop_add_constraint(
 
     columns_to_drop = [v for l in sum_gt_one_constraints for pairs in l for v in pairs]
     columns_to_drop = jnp.array(list(set(columns_to_drop)))
+    columns_to_drop = columns_to_drop[columns_to_drop < old_n]
+    columns_to_drop = jnp.where(jnp.isin(prev_pred_clusters, prev_pred_clusters[columns_to_drop]))[0]
 
     X = old_sdp_state.X
     Omega = old_sdp_state.Omega
     P = old_sdp_state.P
     if old_sdp_state.X is not None:
-        # compute rank-`num_pred_clusters` approximation of X
-        eigvals, eigvecs = jnp.linalg.eigh(old_sdp_state.X)
-        X_trunc = ((eigvecs[:,-num_pred_clusters:]
-                    * eigvals[None, -num_pred_clusters:])
-                   @ eigvecs[:, -num_pred_clusters:].T)
-        X = BCOO.fromdense(X_trunc)
+        ## compute rank-`num_pred_clusters` approximation of X
+        #eigvals, eigvecs = jnp.linalg.eigh(old_sdp_state.X)
+        #X_trunc = ((eigvecs[:,-num_pred_clusters:]
+        #            * eigvals[None, -num_pred_clusters:])
+        #           @ eigvecs[:, -num_pred_clusters:].T)
+        #X = BCOO.fromdense(X_trunc)
+        X = BCOO.fromdense(X)
         drop_mask = jnp.isin(X.indices, columns_to_drop)
         drop_mask = (drop_mask[:, 0] | drop_mask[:, 1])
         X = BCOO((X.data[~drop_mask], X.indices[~drop_mask]), shape=(n, n)).todense()
@@ -496,6 +500,13 @@ def column_drop_add_constraint(
         assert False
 
     y = jnp.zeros((m,)).at[jnp.arange(old_sdp_state.b.shape[0])].set(old_sdp_state.y)
+
+    # drop relevant entries in y
+    reset_constraint_mask = (jnp.isin(A_indices[:, 1], columns_to_drop)
+                             | jnp.isin(A_indices[:, 2], columns_to_drop))
+    y = y.at[jnp.unique(A_indices[reset_constraint_mask, 0])].set(0.0)
+
+
     tr_X = jnp.trace(X)
     primal_obj = jnp.trace(C @ X)
 
