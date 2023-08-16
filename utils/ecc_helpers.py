@@ -60,7 +60,7 @@ def initialize_state(C: BCOO, sketch_dim: int) -> SDPState:
     A_matrix = coo_matrix(
         (A_matrix.data, (A_matrix.indices[:,0], A_matrix.indices[:,1])), shape=A_matrix.shape)
     norm_A = jnp.sqrt(eigsh(A_matrix @ A_matrix.T, k=1, which="LM", return_eigenvectors=False)[0])
-    SCALE_A /= norm_A
+    #SCALE_A /= norm_A
 
     #SCALE_A = jnp.ones_like(b)
 
@@ -178,7 +178,7 @@ def warm_start_add_constraint(
     A_matrix = coo_matrix(
         (A_matrix.data, (A_matrix.indices[:,0], A_matrix.indices[:,1])), shape=A_matrix.shape)
     norm_A = jnp.sqrt(eigsh(A_matrix @ A_matrix.T, k=1, which="LM", return_eigenvectors=False)[0])
-    SCALE_A /= norm_A
+    #SCALE_A /= norm_A
 
     # SCALE_A = jnp.ones_like(b0)
 
@@ -286,7 +286,7 @@ def cold_start_add_constraint(
     A_matrix = coo_matrix(
         (A_matrix.data, (A_matrix.indices[:,0], A_matrix.indices[:,1])), shape=A_matrix.shape)
     norm_A = jnp.sqrt(eigsh(A_matrix @ A_matrix.T, k=1, which="LM", return_eigenvectors=False)[0])
-    SCALE_A /= norm_A
+    #SCALE_A /= norm_A
 
     #SCALE_A = jnp.ones_like(b)
 
@@ -392,7 +392,7 @@ def dual_only_add_constraint(
     A_matrix = coo_matrix(
         (A_matrix.data, (A_matrix.indices[:,0], A_matrix.indices[:,1])), shape=A_matrix.shape)
     norm_A = jnp.sqrt(eigsh(A_matrix @ A_matrix.T, k=1, which="LM", return_eigenvectors=False)[0])
-    SCALE_A /= norm_A
+    #SCALE_A /= norm_A
 
     #SCALE_A = jnp.ones_like(b)
 
@@ -507,7 +507,7 @@ def column_drop_add_constraint(
     A_matrix = coo_matrix(
         (A_matrix.data, (A_matrix.indices[:,0], A_matrix.indices[:,1])), shape=A_matrix.shape)
     norm_A = jnp.sqrt(eigsh(A_matrix @ A_matrix.T, k=1, which="LM", return_eigenvectors=False)[0])
-    SCALE_A /= norm_A
+    #SCALE_A /= norm_A
 
     # SCALE_A = jnp.ones_like(b0)
 
