@@ -22,6 +22,7 @@ from solver.specbm import specbm
 from utils.common import unscale_sdp_state
 from utils.ecc_helpers import (initialize_state,
                                warm_start_add_constraint,
+                               column_drop_add_constraint,
                                dual_only_add_constraint,
                                cold_start_add_constraint)
 from utils.trellis import Trellis
@@ -112,6 +113,13 @@ class EccClusterer(object):
                 ortho_indices=ortho_indices,
                 sum_gt_one_constraints=sum_gt_one_constraints,
                 sketch_dim=-1)
+        elif self.hparams.warm_start_strategy == "column_drop":
+            self.sdp_state = column_drop_add_constraint(
+                old_sdp_state=self.sdp_state,
+                ortho_indices=ortho_indices,
+                sum_gt_one_constraints=sum_gt_one_constraints,
+                num_pred_clusters=self.num_pred_clusters,
+                sketch_dim=-1)
         else:
             raise NotImplementedError()
 
@@ -182,9 +190,9 @@ class EccClusterer(object):
                     * float(self.sdp_state.C.shape[0])
                     * self.sdp_state.SCALE_X)
 
-        if len(self.ecc_constraints) == 1:
-            with open("old_state.pkl", "wb") as f:
-                pickle.dump(unscale_sdp_state(self.sdp_state), f)
+        #if len(self.ecc_constraints) == 1:
+        #    with open("old_state.pkl", "wb") as f:
+        #        pickle.dump(unscale_sdp_state(self.sdp_state), f)
 
         self.sdp_state = specbm(
             sdp_state=self.sdp_state,
@@ -209,10 +217,10 @@ class EccClusterer(object):
             callback_static_args=None,
             callback_nonstatic_args=None)
 
-        if len(self.ecc_constraints) == 1:
-            with open("new_state.pkl", "wb") as f:
-                pickle.dump(unscale_sdp_state(self.sdp_state), f)
-            exit()
+        #if len(self.ecc_constraints) == 1:
+        #    with open("new_state.pkl", "wb") as f:
+        #        pickle.dump(unscale_sdp_state(self.sdp_state), f)
+        #    exit()
         
         unscaled_state = unscale_sdp_state(self.sdp_state)
         sdp_obj_value = float(jnp.trace(-unscaled_state.C @ unscaled_state.X))
@@ -342,6 +350,8 @@ class EccClusterer(object):
 
         # Cut trellis
         pred_clustering, cut_obj_value, num_ecc_satisfied = self.cut_trellis(t)
+
+        self.num_pred_clusters = np.unique(pred_clustering).shape[0]
 
         metrics = {
                 'sdp_solve_time': end_solve_time - start_solve_time,
@@ -889,7 +899,7 @@ def get_hparams() -> argparse.Namespace:
     parser.add_argument("--sketch_dim", type=int, default=0,
                         help="dimension of Nystrom sketch")
     parser.add_argument("--warm_start_strategy", type=str,
-                        choices=["implicit", "explicit", "dual_only", "none"],
+                        choices=["implicit", "explicit", "dual_only", "none", "column_drop"],
                         required=True, help="warm-start strategy to use")
 
     # for constraint generation
