@@ -476,7 +476,7 @@ def column_drop_add_constraint(
 
     m = b.shape[0]
 
-    columns_to_drop = [v for l in sum_gt_one_constraints for pairs in l for v in pairs if len(l) < 3]
+    columns_to_drop = [v for l in sum_gt_one_constraints for pairs in l for v in pairs if len(l) < 2]
     columns_to_drop = jnp.array(list(set(columns_to_drop)))
     #columns_to_drop = columns_to_drop[columns_to_drop < old_n]
     #columns_to_drop = jnp.where(jnp.isin(prev_pred_clusters, prev_pred_clusters[columns_to_drop]))[0]
