@@ -499,9 +499,9 @@ def column_drop_add_constraint(
     if old_sdp_state.P is not None:
         assert False
 
-    y = jnp.zeros_like(b)
+    #y = jnp.zeros_like(b)
 
-    #y = jnp.zeros((m,)).at[jnp.arange(old_sdp_state.b.shape[0])].set(old_sdp_state.y)
+    y = jnp.zeros((m,)).at[jnp.arange(old_sdp_state.b.shape[0])].set(old_sdp_state.y)
 
     ## drop relevant entries in y
     #reset_constraint_mask = (jnp.isin(A_indices[:, 1], columns_to_drop)
