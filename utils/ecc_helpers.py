@@ -524,7 +524,7 @@ def column_drop_add_constraint(
     #SCALE_A /= norm_A
 
     SCALE_A = jnp.ones_like(b)
-    SCALE_A = SCALE_A.at[old_sdp_state.b.shape[0]:].set(0.5)
+    SCALE_A = SCALE_A.at[old_sdp_state.b.shape[0]:].set(2.0)
 
     sdp_state = SDPState(
         C=C,
