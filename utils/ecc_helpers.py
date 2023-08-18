@@ -280,15 +280,15 @@ def cold_start_add_constraint(
 
     SCALE_X = 1.0 / float(n)
     SCALE_C = 1.0 / jnp.linalg.norm(C.data)  # equivalent to frobenius norm
-    #SCALE_A = 1.0 / jnp.sqrt(jnp.zeros((m,)).at[A_indices[:,0]].add(A_data**2))
-    #A_tensor = BCOO((A_data, A_indices), shape=(m, n, n))
-    #A_matrix = SCALE_A[:, None] * A_tensor.reshape(m, n**2)
-    #A_matrix = coo_matrix(
-    #    (A_matrix.data, (A_matrix.indices[:,0], A_matrix.indices[:,1])), shape=A_matrix.shape)
-    #norm_A = jnp.sqrt(eigsh(A_matrix @ A_matrix.T, k=1, which="LM", return_eigenvectors=False)[0])
-    #SCALE_A /= norm_A
+    SCALE_A = 1.0 / jnp.sqrt(jnp.zeros((m,)).at[A_indices[:,0]].add(A_data**2))
+    A_tensor = BCOO((A_data, A_indices), shape=(m, n, n))
+    A_matrix = SCALE_A[:, None] * A_tensor.reshape(m, n**2)
+    A_matrix = coo_matrix(
+        (A_matrix.data, (A_matrix.indices[:,0], A_matrix.indices[:,1])), shape=A_matrix.shape)
+    norm_A = jnp.sqrt(eigsh(A_matrix @ A_matrix.T, k=1, which="LM", return_eigenvectors=False)[0])
+    SCALE_A /= norm_A
 
-    SCALE_A = jnp.ones_like(b)
+    #SCALE_A = jnp.ones_like(b)
 
     sdp_state = SDPState(
         C=C,
