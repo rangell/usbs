@@ -478,8 +478,8 @@ def column_drop_add_constraint(
 
     columns_to_drop = [v for l in sum_gt_one_constraints for pairs in l for v in pairs if len(l) <= 2]
     columns_to_drop = jnp.array(list(set(columns_to_drop)))
-    columns_to_drop = columns_to_drop[columns_to_drop < old_n]
-    columns_to_drop = jnp.where(jnp.isin(prev_pred_clusters, prev_pred_clusters[columns_to_drop]))[0]
+    #columns_to_drop = columns_to_drop[columns_to_drop < old_n]
+    #columns_to_drop = jnp.where(jnp.isin(prev_pred_clusters, prev_pred_clusters[columns_to_drop]))[0]
 
     num_pred_clusters = jnp.unique(prev_pred_clusters).shape[0]
 
@@ -487,13 +487,13 @@ def column_drop_add_constraint(
     Omega = old_sdp_state.Omega
     P = old_sdp_state.P
     if old_sdp_state.X is not None:
-        ## compute rank-`num_pred_clusters` approximation of X
-        #eigvals, eigvecs = jnp.linalg.eigh(old_sdp_state.X)
-        #X_trunc = ((eigvecs[:,-num_pred_clusters:]
-        #            * eigvals[None, -num_pred_clusters:])
-        #           @ eigvecs[:, -num_pred_clusters:].T)
-        #X = BCOO.fromdense(X_trunc)
-        X = BCOO.fromdense(X)
+        # compute rank-`num_pred_clusters` approximation of X
+        eigvals, eigvecs = jnp.linalg.eigh(old_sdp_state.X)
+        X_trunc = ((eigvecs[:,-num_pred_clusters:]
+                    * eigvals[None, -num_pred_clusters:])
+                   @ eigvecs[:, -num_pred_clusters:].T)
+        X = BCOO.fromdense(X_trunc)
+        #X = BCOO.fromdense(X)
         drop_mask = jnp.isin(X.indices, columns_to_drop)
         drop_mask = (drop_mask[:, 0] | drop_mask[:, 1])
         X = BCOO((X.data[~drop_mask], X.indices[~drop_mask]), shape=(n, n)).todense()
