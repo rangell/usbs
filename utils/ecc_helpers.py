@@ -479,8 +479,8 @@ def column_drop_add_constraint(
     columns_to_drop = [v for l in sum_gt_one_constraints for pairs in l for v in pairs if len(l) <= 2]
     #columns_to_drop = [v for l in sum_gt_one_constraints for pairs in l for v in pairs]
     columns_to_drop = jnp.array(list(set(columns_to_drop)))
-    columns_to_drop = columns_to_drop[columns_to_drop < old_n]
-    columns_to_drop = jnp.where(jnp.isin(prev_pred_clusters, prev_pred_clusters[columns_to_drop]))[0]
+    #columns_to_drop = columns_to_drop[columns_to_drop < old_n]
+    #columns_to_drop = jnp.where(jnp.isin(prev_pred_clusters, prev_pred_clusters[columns_to_drop]))[0]
 
     num_pred_clusters = jnp.unique(prev_pred_clusters).shape[0]
 
@@ -504,10 +504,10 @@ def column_drop_add_constraint(
 
     y = jnp.zeros((m,)).at[jnp.arange(old_sdp_state.b.shape[0])].set(old_sdp_state.y)
 
-    ## drop relevant entries in y
-    #reset_constraint_mask = (jnp.isin(A_indices[:, 1], columns_to_drop)
-    #                         | jnp.isin(A_indices[:, 2], columns_to_drop))
-    #y = y.at[jnp.unique(A_indices[reset_constraint_mask, 0])].set(0.0)
+    # drop relevant entries in y
+    reset_constraint_mask = (jnp.isin(A_indices[:, 1], columns_to_drop)
+                             | jnp.isin(A_indices[:, 2], columns_to_drop))
+    y = y.at[jnp.unique(A_indices[reset_constraint_mask, 0])].set(0.0)
 
     #y = jnp.zeros_like(b)
 
