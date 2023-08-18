@@ -954,7 +954,7 @@ if __name__ == '__main__':
     sub_blocks_preprocessed = {}
     #sub_blocks_preprocessed['a moore'] = blocks_preprocessed['a moore']
     #sub_blocks_preprocessed['j taylor'] = blocks_preprocessed['j taylor']
-    #sub_blocks_preprocessed = blocks_preprocessed
+    sub_blocks_preprocessed = blocks_preprocessed
 
     for i, (block_name, block_data) in enumerate(sub_blocks_preprocessed.items()):
         edge_weights = block_data['edge_weights']
