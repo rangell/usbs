@@ -509,7 +509,7 @@ def column_drop_add_constraint(
     #                         | jnp.isin(A_indices[:, 2], columns_to_drop))
     #y = y.at[jnp.unique(A_indices[reset_constraint_mask, 0])].set(0.0)
 
-    #y = jnp.zeros_like(b)
+    y = jnp.zeros_like(b)
 
     tr_X = jnp.trace(X)
     primal_obj = jnp.trace(C @ X)
