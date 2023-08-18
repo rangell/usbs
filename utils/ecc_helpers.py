@@ -62,9 +62,6 @@ def initialize_state(C: BCOO, sketch_dim: int) -> SDPState:
     norm_A = jnp.sqrt(eigsh(A_matrix @ A_matrix.T, k=1, which="LM", return_eigenvectors=False)[0])
     SCALE_A /= norm_A
 
-    embed()
-    exit()
-
     #SCALE_A = jnp.ones_like(b)
 
     if sketch_dim == -1:
