@@ -390,6 +390,10 @@ def embed_match_add_constraint(
     equality_columns = jnp.array(list(set(equality_columns)))
     equality_columns = equality_columns[equality_columns < old_n]
 
+    # TODO: fix this?
+    if equality_columns.size == 0:
+        assert False
+
     num_pred_clusters = jnp.unique(prev_pred_clusters).shape[0]
 
     X = old_sdp_state.X
