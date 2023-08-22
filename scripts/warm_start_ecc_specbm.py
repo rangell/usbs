@@ -24,9 +24,8 @@ from solver.specbm import specbm
 from utils.common import unscale_sdp_state
 from utils.ecc_helpers import (initialize_state,
                                cold_start_add_constraint,
-                               warm_start_add_constraint,
-                               dual_only_add_constraint,
-                               column_drop_add_constraint)
+                               column_drop_add_constraint,
+                               embed_match_add_constraint)
 from utils.trellis import Trellis
 
 from IPython import embed
@@ -196,20 +195,15 @@ class EccClusterer(object):
                 ortho_indices=ortho_indices,
                 sum_gt_one_constraints=sum_gt_one_constraints,
                 sketch_dim=-1)
-        elif self.hparams.warm_start_strategy == "dual_only":
-            self.sdp_state = dual_only_add_constraint(
-                old_sdp_state=self.sdp_state,
-                ortho_indices=ortho_indices,
-                sum_gt_one_constraints=sum_gt_one_constraints,
-                sketch_dim=-1)
-        elif self.hparams.warm_start_strategy == "implicit":
-            self.sdp_state = warm_start_add_constraint(
-                old_sdp_state=self.sdp_state,
-                ortho_indices=ortho_indices,
-                sum_gt_one_constraints=sum_gt_one_constraints,
-                sketch_dim=-1)
         elif self.hparams.warm_start_strategy == "column_drop":
             self.sdp_state = column_drop_add_constraint(
+                old_sdp_state=self.sdp_state,
+                ortho_indices=ortho_indices,
+                sum_gt_one_constraints=sum_gt_one_constraints,
+                prev_pred_clusters=jnp.array(self.prev_pred_clusters),
+                sketch_dim=-1)
+        elif self.hparams.warm_start_strategy == "embed_match":
+            self.sdp_state = embed_match_add_constraint(
                 old_sdp_state=self.sdp_state,
                 ortho_indices=ortho_indices,
                 sum_gt_one_constraints=sum_gt_one_constraints,
@@ -998,8 +992,7 @@ def get_hparams() -> argparse.Namespace:
     parser.add_argument("--sketch_dim", type=int, default=0,
                         help="dimension of Nystrom sketch")
     parser.add_argument("--warm_start_strategy", type=str,
-                        choices=["implicit", "explicit", "dual_only",
-                                 "none", "column_drop", "obj_drop"],
+                        choices=["none", "column_drop", "embed_match"],
                         required=True, help="warm-start strategy to use")
 
     # for constraint generation
@@ -1057,8 +1050,8 @@ if __name__ == '__main__':
     sub_blocks_preprocessed = {}
     #sub_blocks_preprocessed['a moore'] = blocks_preprocessed['a moore']
     #sub_blocks_preprocessed['j taylor'] = blocks_preprocessed['j taylor']
-    sub_blocks_preprocessed['s patel'] = blocks_preprocessed['s patel']
-    #sub_blocks_preprocessed = blocks_preprocessed
+    #sub_blocks_preprocessed['s patel'] = blocks_preprocessed['s patel']
+    sub_blocks_preprocessed = blocks_preprocessed
 
     for i, (block_name, block_data) in enumerate(sub_blocks_preprocessed.items()):
         edge_weights = block_data['edge_weights']
