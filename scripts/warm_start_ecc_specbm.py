@@ -23,10 +23,10 @@ from sklearn.metrics import homogeneity_completeness_v_measure as cluster_f1
 from solver.specbm import specbm
 from utils.common import unscale_sdp_state
 from utils.ecc_helpers import (initialize_state,
+                               cold_start_add_constraint,
                                warm_start_add_constraint,
-                               column_drop_add_constraint,
                                dual_only_add_constraint,
-                               cold_start_add_constraint)
+                               column_drop_add_constraint)
 from utils.trellis import Trellis
 
 from IPython import embed
@@ -279,15 +279,11 @@ class EccClusterer(object):
 
         return (ecc_indices, points_indptr, points_indices)
 
-    def build_and_solve_sdp(self):
-
+    def _call_sdp_solver(self) -> None:
+        # modifies `self.sdp_state`
         trace_ub = (self.hparams.trace_factor
                     * float(self.sdp_state.C.shape[0])
                     * self.sdp_state.SCALE_X)
-
-        #if len(self.ecc_constraints) == 1:
-        #    with open("old_state.pkl", "wb") as f:
-        #        pickle.dump(unscale_sdp_state(self.sdp_state), f)
 
         self.sdp_state = specbm(
             sdp_state=self.sdp_state,
@@ -311,6 +307,14 @@ class EccClusterer(object):
             callback_fn=None,
             callback_static_args=None,
             callback_nonstatic_args=None)
+
+    def build_and_solve_sdp(self):
+
+        #if len(self.ecc_constraints) == 1:
+        #    with open("old_state.pkl", "wb") as f:
+        #        pickle.dump(unscale_sdp_state(self.sdp_state), f)
+
+        self._call_sdp_solver()
 
         #if len(self.ecc_constraints) == 1:
         #    with open("new_state.pkl", "wb") as f:
@@ -994,7 +998,8 @@ def get_hparams() -> argparse.Namespace:
     parser.add_argument("--sketch_dim", type=int, default=0,
                         help="dimension of Nystrom sketch")
     parser.add_argument("--warm_start_strategy", type=str,
-                        choices=["implicit", "explicit", "dual_only", "none", "column_drop"],
+                        choices=["implicit", "explicit", "dual_only",
+                                 "none", "column_drop", "obj_drop"],
                         required=True, help="warm-start strategy to use")
 
     # for constraint generation
