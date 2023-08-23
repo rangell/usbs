@@ -41,7 +41,7 @@ class EccClusterer(object):
         self.hparams = hparams
 
         self.edge_weights = edge_weights
-        self.create_sparse_laplacian(eps=0.5)
+        self.create_sparse_laplacian(eps=0.1)
 
         self.features = features
         self.n = self.features.shape[0]
