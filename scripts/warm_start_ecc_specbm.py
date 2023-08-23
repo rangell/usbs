@@ -111,7 +111,7 @@ class EccClusterer(object):
         pos_probs = pos_energies / np.sum(pos_energies)
         neg_probs = neg_energies / np.sum(neg_energies)
 
-        num_sample_edges = np.ceil(pos_n * np.log(pos_n) / (2 * eps ** 2)).astype(int)
+        num_sample_edges = np.ceil(pos_n * np.log(pos_n) / (eps ** 2)).astype(int)
 
         if num_sample_edges < pos_m:
             sampled_edges = np.random.multinomial(num_sample_edges, pos_probs, size=1)
