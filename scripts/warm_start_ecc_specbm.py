@@ -14,6 +14,7 @@ import numba as nb
 from numba.typed import List
 import numpy as np
 from scipy.sparse import csr_matrix, coo_matrix, dok_matrix
+from scipy.sparse import triu as sp_triu
 from scipy.sparse import vstack as sp_vstack
 from scipy.sparse.csgraph import laplacian
 from sklearn import random_projection
@@ -42,6 +43,7 @@ class EccClusterer(object):
 
         self.edge_weights = edge_weights
         self.create_sparse_laplacian(eps=0.5)
+        self.edge_weights = -sp_triu(self.sparse_laplacian, k=1)
 
         self.features = features
         self.n = self.features.shape[0]
@@ -111,7 +113,7 @@ class EccClusterer(object):
         pos_probs = pos_energies / np.sum(pos_energies)
         neg_probs = neg_energies / np.sum(neg_energies)
 
-        num_sample_edges = np.ceil(pos_n * np.log(pos_n) / (eps ** 2)).astype(int)
+        num_sample_edges = np.ceil(pos_n * np.log(pos_n) / (2 * eps ** 2)).astype(int)
 
         if num_sample_edges < pos_m:
             sampled_edges = np.random.multinomial(num_sample_edges, pos_probs, size=1)
