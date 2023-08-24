@@ -42,8 +42,10 @@ class EccClusterer(object):
         self.hparams = hparams
 
         self.edge_weights = edge_weights
-        self.create_sparse_laplacian(eps=0.5)
-        self.edge_weights = -sp_triu(self.sparse_laplacian, k=1)
+        #self.create_sparse_laplacian(eps=0.5)
+        #self.edge_weights = -sp_triu(self.sparse_laplacian, k=1)
+
+        self.edge_weights = (self.edge_weights + self.edge_weights.T).tocoo()
 
         self.features = features
         self.n = self.features.shape[0]
@@ -51,7 +53,8 @@ class EccClusterer(object):
         self.ecc_mx = None
         self.incompat_mx = None
 
-        C = BCOO.from_scipy_sparse(self.sparse_laplacian).astype(float)
+        #C = BCOO.from_scipy_sparse(self.sparse_laplacian).astype(float)
+        C = BCOO.from_scipy_sparse(-self.edge_weights).astype(float)
         self.sdp_state = initialize_state(C=C, sketch_dim=hparams.sketch_dim)
 
     def create_sparse_laplacian(self, eps: float):
@@ -407,6 +410,7 @@ class EccClusterer(object):
                 if (num_ecc_sat[node] < cpair_num_ecc_sat 
                     or (num_ecc_sat[node] == cpair_num_ecc_sat
                         and obj_vals[node] < cpair_obj_val)):
+                        ## ^^^ this line might need to be <= instead of <
                     num_ecc_sat[node] = cpair_num_ecc_sat
                     obj_vals[node] = cpair_obj_val
                     lchild_start = membership_indptr[lchild]
