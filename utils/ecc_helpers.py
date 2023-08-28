@@ -110,7 +110,8 @@ def cold_start_add_constraint(
     assert sketch_dim == -1
     old_sdp_state = unscale_sdp_state(old_sdp_state)
 
-    n = old_sdp_state.C.shape[0] + 1
+    old_n = old_sdp_state.C.shape[0]
+    n = old_n + 1
     C = BCOO((old_sdp_state.C.data, old_sdp_state.C.indices), shape=(n, n))
 
     # add the additional diagonal == 1 constraint for the new ecc
@@ -119,6 +120,24 @@ def cold_start_add_constraint(
     A_data = jnp.concatenate([old_sdp_state.A_data, jnp.array([1.0])], axis=0)
     b = jnp.concatenate([old_sdp_state.b, jnp.array([1.0])], axis=0)
     b_ineq_mask = jnp.concatenate([old_sdp_state.b_ineq_mask, jnp.array([0.0])], axis=0)
+
+    # singleton expansion: if a satisfying hyperplane can only be satisfied by one
+    #   point, then that means the representation for the ecc and the point must
+    #   be exactly the same. To make optimization easier we add extra hyperplanes,
+    #   replacing the ecc index with the singleton index. We add similar constraints
+    #   for orthogonal indices.
+    supp_constraints = []
+    supp_ortho_indices = []
+    for hyperplane in [h for h in sum_gt_one_constraints if len(h) == 1]:
+        _, point_idx = hyperplane[0]
+        for other_hyperplane in sum_gt_one_constraints:
+            if other_hyperplane != hyperplane:
+                supp_constraints.append([(point_idx, v) for _, v in other_hyperplane])
+        for u, v in ortho_indices:
+            assert v == old_n
+            supp_ortho_indices.append((u, point_idx))
+    sum_gt_one_constraints += supp_constraints
+    ortho_indices += supp_ortho_indices
 
     # add ortho indices constraints
     if len(ortho_indices) > 0:
@@ -131,18 +150,6 @@ def cold_start_add_constraint(
         A_data = jnp.concatenate([A_data, jnp.full((constraint_triples.shape[0],), 1.0)], axis=0)
         b = jnp.concatenate([b, jnp.full((num_ortho_indices,), 0.0)], axis=0)
         b_ineq_mask = jnp.concatenate([b_ineq_mask, jnp.full((num_ortho_indices,), 1.0)], axis=0)
-
-    # singleton expansion: if a satisfying hyperplane can only be satisfied by one
-    #   point, then that means the representation for the ecc and the point must
-    #   be exactly the same. To make optimization easier we add extra hyperplanes,
-    #   replacing the ecc index with the singleton index
-    supp_constraints = []
-    for hyperplane in [h for h in sum_gt_one_constraints if len(h) == 1]:
-        _, point_idx = hyperplane[0]
-        for other_hyperplane in sum_gt_one_constraints:
-            if other_hyperplane != hyperplane:
-                supp_constraints.append([(point_idx, v) for _, v in other_hyperplane])
-    sum_gt_one_constraints += supp_constraints
 
     # add sum greater than one (feature satisfying hyperplanes) constraints
     num_hyperplanes = len(sum_gt_one_constraints)
@@ -228,6 +235,24 @@ def column_drop_add_constraint(
     b = jnp.concatenate([old_sdp_state.b, jnp.array([1.0])], axis=0)
     b_ineq_mask = jnp.concatenate([old_sdp_state.b_ineq_mask, jnp.array([0.0])], axis=0)
 
+    # singleton expansion: if a satisfying hyperplane can only be satisfied by one
+    #   point, then that means the representation for the ecc and the point must
+    #   be exactly the same. To make optimization easier we add extra hyperplanes,
+    #   replacing the ecc index with the singleton index. We add similar constraints
+    #   for orthogonal indices.
+    supp_constraints = []
+    supp_ortho_indices = []
+    for hyperplane in [h for h in sum_gt_one_constraints if len(h) == 1]:
+        _, point_idx = hyperplane[0]
+        for other_hyperplane in sum_gt_one_constraints:
+            if other_hyperplane != hyperplane:
+                supp_constraints.append([(point_idx, v) for _, v in other_hyperplane])
+        for u, v in ortho_indices:
+            assert v == old_n
+            supp_ortho_indices.append((u, point_idx))
+    sum_gt_one_constraints += supp_constraints
+    ortho_indices += supp_ortho_indices
+
     # add ortho indices constraints
     if len(ortho_indices) > 0:
         num_ortho_indices = len(ortho_indices)
@@ -239,18 +264,6 @@ def column_drop_add_constraint(
         A_data = jnp.concatenate([A_data, jnp.full((constraint_triples.shape[0],), 1.0)], axis=0)
         b = jnp.concatenate([b, jnp.full((num_ortho_indices,), 0.0)], axis=0)
         b_ineq_mask = jnp.concatenate([b_ineq_mask, jnp.full((num_ortho_indices,), 1.0)], axis=0)
-
-    # singleton expansion: if a satisfying hyperplane can only be satisfied by one
-    #   point, then that means the representation for the ecc and the point must
-    #   be exactly the same. To make optimization easier we add extra hyperplanes,
-    #   replacing the ecc index with the singleton index
-    supp_constraints = []
-    for hyperplane in [h for h in sum_gt_one_constraints if len(h) == 1]:
-        _, point_idx = hyperplane[0]
-        for other_hyperplane in sum_gt_one_constraints:
-            if other_hyperplane != hyperplane:
-                supp_constraints.append([(point_idx, v) for _, v in other_hyperplane])
-    sum_gt_one_constraints += supp_constraints
 
     # add sum greater than one (feature satisfying hyperplanes) constraints
     num_hyperplanes = len(sum_gt_one_constraints)
@@ -348,6 +361,24 @@ def embed_match_add_constraint(
     b = jnp.concatenate([old_sdp_state.b, jnp.array([1.0])], axis=0)
     b_ineq_mask = jnp.concatenate([old_sdp_state.b_ineq_mask, jnp.array([0.0])], axis=0)
 
+    # singleton expansion: if a satisfying hyperplane can only be satisfied by one
+    #   point, then that means the representation for the ecc and the point must
+    #   be exactly the same. To make optimization easier we add extra hyperplanes,
+    #   replacing the ecc index with the singleton index. We add similar constraints
+    #   for orthogonal indices.
+    supp_constraints = []
+    supp_ortho_indices = []
+    for hyperplane in [h for h in sum_gt_one_constraints if len(h) == 1]:
+        _, point_idx = hyperplane[0]
+        for other_hyperplane in sum_gt_one_constraints:
+            if other_hyperplane != hyperplane:
+                supp_constraints.append([(point_idx, v) for _, v in other_hyperplane])
+        for u, v in ortho_indices:
+            assert v == old_n
+            supp_ortho_indices.append((u, point_idx))
+    sum_gt_one_constraints += supp_constraints
+    ortho_indices += supp_ortho_indices
+
     # add ortho indices constraints
     if len(ortho_indices) > 0:
         num_ortho_indices = len(ortho_indices)
@@ -359,18 +390,6 @@ def embed_match_add_constraint(
         A_data = jnp.concatenate([A_data, jnp.full((constraint_triples.shape[0],), 1.0)], axis=0)
         b = jnp.concatenate([b, jnp.full((num_ortho_indices,), 0.0)], axis=0)
         b_ineq_mask = jnp.concatenate([b_ineq_mask, jnp.full((num_ortho_indices,), 1.0)], axis=0)
-
-    # singleton expansion: if a satisfying hyperplane can only be satisfied by one
-    #   point, then that means the representation for the ecc and the point must
-    #   be exactly the same. To make optimization easier we add extra hyperplanes,
-    #   replacing the ecc index with the singleton index
-    supp_constraints = []
-    for hyperplane in [h for h in sum_gt_one_constraints if len(h) == 1]:
-        _, point_idx = hyperplane[0]
-        for other_hyperplane in sum_gt_one_constraints:
-            if other_hyperplane != hyperplane:
-                supp_constraints.append([(point_idx, v) for _, v in other_hyperplane])
-    sum_gt_one_constraints += supp_constraints
 
     # add sum greater than one (feature satisfying hyperplanes) constraints
     num_hyperplanes = len(sum_gt_one_constraints)
@@ -394,7 +413,12 @@ def embed_match_add_constraint(
     if equality_columns.size == 0:
         assert False
 
-    num_pred_clusters = jnp.unique(prev_pred_clusters).shape[0]
+    #columns_to_drop = [v for v, _ in ortho_indices]
+    columns_to_drop = []
+    columns_to_drop = jnp.array(list(set(columns_to_drop)))
+
+    #num_pred_clusters = int(jnp.unique(prev_pred_clusters).shape[0])
+    num_pred_clusters = n
 
     X = old_sdp_state.X
     Omega = old_sdp_state.Omega
@@ -409,7 +433,10 @@ def embed_match_add_constraint(
                     * eigvals[None, -num_pred_clusters:])
                    @ eigvecs[:, -num_pred_clusters:].T)
         X = BCOO.fromdense(X_trunc)
-        X = BCOO((X.data, X.indices), shape=(n, n)).todense()
+        drop_mask = jnp.isin(X.indices, columns_to_drop)
+        drop_mask = (drop_mask[:, 0] | drop_mask[:, 1])
+        X = BCOO((X.data[~drop_mask], X.indices[~drop_mask]), shape=(n, n)).todense()
+        #X = BCOO((X.data, X.indices), shape=(n, n)).todense()
         z = apply_A_operator_mx(n, m, A_data, A_indices, X) 
     if old_sdp_state.P is not None:
         assert False

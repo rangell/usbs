@@ -42,10 +42,8 @@ class EccClusterer(object):
         self.hparams = hparams
 
         self.edge_weights = edge_weights
-        #self.create_sparse_laplacian(eps=0.5)
-        #self.edge_weights = -sp_triu(self.sparse_laplacian, k=1)
-
-        self.edge_weights = (self.edge_weights + self.edge_weights.T).tocoo()
+        self.create_sparse_laplacian(eps=0.5)
+        self.edge_weights = -sp_triu(self.sparse_laplacian, k=1)
 
         self.features = features
         self.n = self.features.shape[0]
@@ -53,8 +51,7 @@ class EccClusterer(object):
         self.ecc_mx = None
         self.incompat_mx = None
 
-        #C = BCOO.from_scipy_sparse(self.sparse_laplacian).astype(float)
-        C = BCOO.from_scipy_sparse(-self.edge_weights).astype(float)
+        C = BCOO.from_scipy_sparse(self.sparse_laplacian).astype(float)
         self.sdp_state = initialize_state(C=C, sketch_dim=hparams.sketch_dim)
 
     def create_sparse_laplacian(self, eps: float):
@@ -309,16 +306,7 @@ class EccClusterer(object):
 
     def build_and_solve_sdp(self):
 
-        #if len(self.ecc_constraints) == 1:
-        #    with open("old_state.pkl", "wb") as f:
-        #        pickle.dump(unscale_sdp_state(self.sdp_state), f)
-
         self._call_sdp_solver()
-
-        #if len(self.ecc_constraints) == 1:
-        #    with open("new_state.pkl", "wb") as f:
-        #        pickle.dump(unscale_sdp_state(self.sdp_state), f)
-        #    exit()
         
         unscaled_state = unscale_sdp_state(self.sdp_state)
         sdp_obj_value = float(jnp.trace(-unscaled_state.C @ unscaled_state.X))
@@ -409,8 +397,7 @@ class EccClusterer(object):
                 cpair_obj_val = obj_vals[lchild] + obj_vals[rchild]
                 if (num_ecc_sat[node] < cpair_num_ecc_sat 
                     or (num_ecc_sat[node] == cpair_num_ecc_sat
-                        and obj_vals[node] < cpair_obj_val)):
-                        ## ^^^ this line might need to be <= instead of <
+                        and obj_vals[node] <= cpair_obj_val)):
                     num_ecc_sat[node] = cpair_num_ecc_sat
                     obj_vals[node] = cpair_obj_val
                     lchild_start = membership_indptr[lchild]
