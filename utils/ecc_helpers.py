@@ -405,38 +405,66 @@ def embed_match_add_constraint(
 
     m = b.shape[0]
 
-    equality_columns = [v for l in sum_gt_one_constraints for pairs in l for v in pairs if len(l) == 1]
-    equality_columns = jnp.array(list(set(equality_columns)))
-    equality_columns = equality_columns[equality_columns < old_n]
+    #equality_columns = [v for l in sum_gt_one_constraints for pairs in l for v in pairs if len(l) == 1]
+    #equality_columns = jnp.array(list(set(equality_columns)))
+    #equality_columns = equality_columns[equality_columns < old_n]
 
-    # TODO: fix this?
-    if equality_columns.size == 0:
-        assert False
+    ## TODO: fix this?
+    #if equality_columns.size == 0:
+    #    assert False
 
     #columns_to_drop = [v for v, _ in ortho_indices]
-    columns_to_drop = []
-    columns_to_drop = jnp.array(list(set(columns_to_drop)))
+    #columns_to_drop = jnp.array(list(set(columns_to_drop)))
 
-    #num_pred_clusters = int(jnp.unique(prev_pred_clusters).shape[0])
-    num_pred_clusters = n
+    pos_columns = [v for l in sum_gt_one_constraints for pairs in l for v in pairs]
+    pos_columns = jnp.array(list(set(pos_columns)))
+    pos_columns = pos_columns[pos_columns < old_n]
+
+    if len(ortho_indices) > 0:
+        neg_columns = [v for v, _ in ortho_indices]
+        neg_columns = jnp.array(list(set(neg_columns)))
+        neg_columns = neg_columns[neg_columns < old_n]
+
+    ecc_cluster_points = np.where(np.isin(prev_pred_clusters, prev_pred_clusters[pos_columns]))[0]
+    if len(ortho_indices) > 0:
+        pos_cluster_points = ecc_cluster_points[~np.isin(ecc_cluster_points, neg_columns)]
+    else:
+        pos_cluster_points = ecc_cluster_points
+
+    num_pred_clusters = int(jnp.unique(prev_pred_clusters).shape[0])
 
     X = old_sdp_state.X
     Omega = old_sdp_state.Omega
     P = old_sdp_state.P
     if old_sdp_state.X is not None:
-        # compute rank-`num_pred_clusters` approximation of X
         eigvals, eigvecs = jnp.linalg.eigh(old_sdp_state.X)
-        avg_embed = jnp.mean(eigvecs[equality_columns], axis=0)
-        eigvecs = eigvecs.at[equality_columns].set(avg_embed)
-        eigvecs = jnp.concatenate([eigvecs, avg_embed[None, :]], axis=0)
-        X_trunc = ((eigvecs[:,-num_pred_clusters:]
-                    * eigvals[None, -num_pred_clusters:])
-                   @ eigvecs[:, -num_pred_clusters:].T)
-        X = BCOO.fromdense(X_trunc)
-        drop_mask = jnp.isin(X.indices, columns_to_drop)
-        drop_mask = (drop_mask[:, 0] | drop_mask[:, 1])
-        X = BCOO((X.data[~drop_mask], X.indices[~drop_mask]), shape=(n, n)).todense()
-        #X = BCOO((X.data, X.indices), shape=(n, n)).todense()
+        column_embeds = eigvecs[:, -num_pred_clusters:] * np.sqrt(eigvals[None, -num_pred_clusters:])
+        column_embeds = column_embeds / np.linalg.norm(column_embeds, axis=1)[:, None]
+
+        avg_pos_embed = jnp.mean(column_embeds[pos_columns], axis=0)
+        avg_pos_embed = avg_pos_embed / np.linalg.norm(avg_pos_embed)
+        column_embeds = column_embeds.at[pos_columns, :].set(avg_pos_embed)
+
+        if len(ortho_indices) > 0:
+            neg_col_embeds = column_embeds[neg_columns]
+            neg_col_embeds = neg_col_embeds / np.linalg.norm(neg_col_embeds, axis=1)[:, None]
+            neg_col_projs = np.dot(neg_col_embeds, avg_pos_embed)
+            neg_col_projs = neg_col_projs / (np.linalg.norm(neg_col_embeds, axis=1) ** 2)
+            neg_col_projs = neg_col_projs[:, None] * avg_pos_embed
+            neg_col_embeds = neg_col_embeds - neg_col_projs
+            neg_col_embeds = neg_col_embeds / np.linalg.norm(neg_col_embeds, axis=1)[:, None]
+
+        column_embeds = column_embeds.at[pos_cluster_points, :].set(
+            column_embeds[pos_cluster_points] + avg_pos_embed[None, :])
+        column_embeds = column_embeds / np.linalg.norm(column_embeds, axis=1)[:, None]
+
+        if len(ortho_indices) > 0:
+            column_embeds = column_embeds.at[neg_columns, :].set(neg_col_embeds)
+
+        # add the embed for the new ecc constraint
+        column_embeds = jnp.concatenate([column_embeds, avg_pos_embed[None, :]], axis=0)
+
+        X = column_embeds @ column_embeds.T
         z = apply_A_operator_mx(n, m, A_data, A_indices, X) 
     if old_sdp_state.P is not None:
         assert False
