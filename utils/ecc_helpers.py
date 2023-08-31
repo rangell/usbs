@@ -472,7 +472,8 @@ def embed_match_add_constraint(
     if old_sdp_state.P is not None:
         assert False
 
-    y = jnp.zeros((m,)).at[jnp.arange(old_sdp_state.b.shape[0])].set(old_sdp_state.y)
+    #y = jnp.zeros((m,)).at[jnp.arange(old_sdp_state.b.shape[0])].set(old_sdp_state.y)
+    y = jnp.zeros((m,))
 
     tr_X = jnp.trace(X)
     primal_obj = jnp.trace(C @ X)
