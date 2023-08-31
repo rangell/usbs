@@ -52,6 +52,7 @@ class EccClusterer(object):
         self.incompat_mx = None
 
         C = BCOO.from_scipy_sparse(self.sparse_laplacian).astype(float)
+        #C = BCOO.from_scipy_sparse(-self.edge_weights).astype(float)
         self.sdp_state = initialize_state(C=C, sketch_dim=hparams.sketch_dim)
 
     def create_sparse_laplacian(self, eps: float):
@@ -191,7 +192,7 @@ class EccClusterer(object):
             if i == self.n - 1:
                 sum_gt_one_constraints.append([(i,j) for j in j_s])
         
-        if self.hparams.warm_start_strategy == "none":
+        if self.hparams.warm_start_strategy == "none" or len(self.ecc_constraints) < 5:
             self.sdp_state = cold_start_add_constraint(
                 old_sdp_state=self.sdp_state,
                 ortho_indices=ortho_indices,
@@ -303,7 +304,7 @@ class EccClusterer(object):
             callback_fn=None,
             callback_static_args=None,
             callback_nonstatic_args=None)
-
+        
     def build_and_solve_sdp(self):
 
         self._call_sdp_solver()
@@ -793,6 +794,20 @@ def gen_ecc_constraint(point_feats: csr_matrix,
     new_ecc = coo_matrix((new_ecc_data, (new_ecc_row, new_ecc_col)),
                          shape=src_feats.shape, dtype=np.int64).tocsr()
 
+    # for debugging
+    constraint_str = ', '.join(
+            [('+f' if d > 0 else '-f') + str(int(c))
+                for c, d in zip(new_ecc_col, new_ecc_data)]
+    )
+    logging.info(f'Constraint generated: [{constraint_str}]')
+
+    logging.info('Nodes with features: {')
+    for feat_id in new_ecc_col:
+        nodes_with_feat = point_feats.T[int(feat_id)].tocoo().col
+        nodes_with_feat = [f'n{i}' for i in nodes_with_feat]
+        logging.info(f'\tf{int(feat_id)}: {", ".join(nodes_with_feat)}')
+    logging.info('}')
+
     # generate "equivalent" pairwise point constraints
     overlap_feats = set(sampled_overlap_feats)
     pos_feats = set(sampled_pos_feats)
@@ -835,6 +850,16 @@ def simulate(edge_weights: csr_matrix,
              point_features: csr_matrix,
              gold_clustering: np.ndarray,
              hparams: argparse.Namespace):
+
+    ## create column weights
+    # for now just do some uniform feature sampling
+    feat_freq = np.array(point_features.sum(axis=0))
+    #overlap_col_wt = np.ones((point_features.shape[1],))
+    #pos_col_wt = np.ones((point_features.shape[1],))
+    #neg_col_wt = np.ones((point_features.shape[1],))
+    overlap_col_wt = feat_freq**10
+    pos_col_wt = feat_freq**10
+    neg_col_wt = feat_freq**10
 
     gold_cluster_feats = sp_vstack([
         get_cluster_feats(point_features[gold_clustering == i])
@@ -908,6 +933,20 @@ def simulate(edge_weights: csr_matrix,
 
         # generate a new constraint
         while True:
+            #ecc_constraint, pairwise_constraints = gen_ecc_constraint(
+            #        point_features,
+            #        gold_clustering,
+            #        pred_clustering,
+            #        gold_cluster_feats,
+            #        pred_cluster_feats,
+            #        matching_mx,
+            #        hparams.max_overlap_feats,
+            #        max_pos_feats=3,
+            #        max_neg_feats=3,
+            #        overlap_col_wt=overlap_col_wt,
+            #        pos_col_wt=pos_col_wt,
+            #        neg_col_wt=neg_col_wt)
+
             ecc_constraint, pairwise_constraints = gen_forced_ecc_constraint(
                     point_features,
                     gold_clustering,
@@ -917,6 +956,7 @@ def simulate(edge_weights: csr_matrix,
                     matching_mx,
                     hparams.max_overlap_feats
             )
+
             already_exists = any([
                 (ecc_constraint != x).nnz == 0
                     for x in clusterer.ecc_constraints

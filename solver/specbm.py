@@ -469,19 +469,22 @@ def specbm(
          "bar_primal_obj",
          "pen_dual_obj",
          "lb_spec_est",
-         "neg_obj_lb"])
+         "neg_obj_lb",
+         "y_changed"])
 
     @jax.jit
     def cond_func(state: StateStruct) -> Array:
         # NOTE: bounded_while_loop takes care of max_iters
         return jnp.logical_or(
-            state.t == 0,
-            jnp.logical_and(
-                state.curr_time - state.start_time < max_time,
-                jnp.logical_or(
-                    state.obj_gap > obj_gap_eps,
-                    jnp.logical_or(state.infeas_gap > infeas_gap_eps,
-                                   state.max_infeas > max_infeas_eps))))
+            jnp.logical_not(state.y_changed),
+            jnp.logical_or(
+                state.t == 0,
+                jnp.logical_and(
+                    state.curr_time - state.start_time < max_time,
+                    jnp.logical_or(
+                        state.obj_gap > obj_gap_eps,
+                        jnp.logical_or(state.infeas_gap > infeas_gap_eps,
+                                    state.max_infeas > max_infeas_eps)))))
 
     @jax.jit
     def body_func(state: StateStruct) -> StateStruct:
@@ -567,6 +570,8 @@ def specbm(
             lambda _: (state.y, state.pen_dual_obj),
             None)
 
+        y_changed = jnp.logical_or(pen_dual_obj_next == cand_pen_dual_obj, state.y_changed)
+
         curr_VSV_T_factor = (state.V @ S_eigvecs[:, :k_curr]) * jnp.sqrt(S_eigvals[:k_curr]).reshape(1, -1)
         if state.Omega is None:
             X_bar_next = eta * state.X_bar + curr_VSV_T_factor @ curr_VSV_T_factor.T
@@ -648,7 +653,8 @@ def specbm(
             bar_primal_obj=bar_primal_obj_next,
             pen_dual_obj=pen_dual_obj_next,
             lb_spec_est=lb_spec_est,
-            neg_obj_lb=neg_obj_lb)
+            neg_obj_lb=neg_obj_lb,
+            y_changed=y_changed)
 
 
     q0 = jax.random.normal(jax.random.PRNGKey(0), shape=(n,))
@@ -700,7 +706,8 @@ def specbm(
         bar_primal_obj=sdp_state.primal_obj,
         pen_dual_obj=init_pen_dual_obj,
         lb_spec_est=jnp.array(0.0),
-        neg_obj_lb=jnp.inf)
+        neg_obj_lb=jnp.inf,
+        y_changed=jnp.array(False))
 
     final_state = bounded_while_loop(cond_func, body_func, init_state, max_steps=max_iters)
 

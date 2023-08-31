@@ -439,7 +439,6 @@ def embed_match_add_constraint(
     if old_sdp_state.X is not None:
         eigvals, eigvecs = jnp.linalg.eigh(old_sdp_state.X)
         column_embeds = eigvecs[:, -num_pred_clusters:] * np.sqrt(eigvals[None, -num_pred_clusters:])
-        column_embeds = column_embeds / np.linalg.norm(column_embeds, axis=1)[:, None]
 
         avg_pos_embed = jnp.mean(column_embeds[pos_columns], axis=0)
         avg_pos_embed = avg_pos_embed / np.linalg.norm(avg_pos_embed)
