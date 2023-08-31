@@ -442,7 +442,8 @@ def embed_match_add_constraint(
 
         avg_pos_embed = jnp.mean(column_embeds[pos_columns], axis=0)
         avg_pos_embed = avg_pos_embed / np.linalg.norm(avg_pos_embed)
-        column_embeds = column_embeds.at[pos_columns, :].set(jnp.zeros_like(avg_pos_embed))
+        #column_embeds = column_embeds.at[pos_columns, :].set(jnp.zeros_like(avg_pos_embed))
+        column_embeds = column_embeds.at[pos_columns, :].set(avg_pos_embed)
 
         if len(ortho_indices) > 0:
             neg_col_embeds = column_embeds[neg_columns]
