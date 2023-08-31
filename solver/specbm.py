@@ -707,7 +707,7 @@ def specbm(
         pen_dual_obj=init_pen_dual_obj,
         lb_spec_est=jnp.array(0.0),
         neg_obj_lb=jnp.inf,
-        y_changed=jnp.array(False))
+        y_changed=jnp.array(True))
 
     final_state = bounded_while_loop(cond_func, body_func, init_state, max_steps=max_iters)
 
