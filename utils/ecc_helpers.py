@@ -442,7 +442,7 @@ def embed_match_add_constraint(
 
         avg_pos_embed = jnp.mean(column_embeds[pos_columns], axis=0)
         avg_pos_embed = avg_pos_embed / np.linalg.norm(avg_pos_embed)
-        column_embeds = column_embeds.at[pos_columns, :].set(avg_pos_embed)
+        column_embeds = column_embeds.at[pos_columns, :].set(jnp.zeros_like(avg_pos_embed))
 
         if len(ortho_indices) > 0:
             neg_col_embeds = column_embeds[neg_columns]
@@ -453,9 +453,10 @@ def embed_match_add_constraint(
             neg_col_embeds = neg_col_embeds - neg_col_projs
             neg_col_embeds = neg_col_embeds / np.linalg.norm(neg_col_embeds, axis=1)[:, None]
 
-        column_embeds = column_embeds.at[pos_cluster_points, :].set(
-            column_embeds[pos_cluster_points] + avg_pos_embed[None, :])
-        column_embeds = column_embeds / np.linalg.norm(column_embeds, axis=1)[:, None]
+        #column_embeds = column_embeds.at[pos_cluster_points, :].set(
+        #    column_embeds[pos_cluster_points] + avg_pos_embed[None, :])
+        #column_embeds = column_embeds / np.linalg.norm(column_embeds, axis=1)[:, None]
+        column_embeds = column_embeds.at[pos_cluster_points, :].set(jnp.zeros_like(avg_pos_embed[None, :]))
 
         if len(ortho_indices) > 0:
             column_embeds = column_embeds.at[neg_columns, :].set(neg_col_embeds)
