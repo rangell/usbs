@@ -192,7 +192,7 @@ class EccClusterer(object):
             if i == self.n - 1:
                 sum_gt_one_constraints.append([(i,j) for j in j_s])
         
-        if self.hparams.warm_start_strategy == "none" or len(self.ecc_constraints) < 6:
+        if self.hparams.warm_start_strategy == "none":
             self.sdp_state = cold_start_add_constraint(
                 old_sdp_state=self.sdp_state,
                 ortho_indices=ortho_indices,
@@ -282,12 +282,14 @@ class EccClusterer(object):
                     * float(self.sdp_state.C.shape[0])
                     * self.sdp_state.SCALE_X)
 
+        pre_sdp_state = copy.deepcopy(self.sdp_state)
+
         self.sdp_state = specbm(
             sdp_state=self.sdp_state,
             n=self.sdp_state.C.shape[0],
             m=self.sdp_state.b.shape[0],
             trace_ub=trace_ub,
-            trace_factor=hparams.trace_factor,
+            trace_factor=self.hparams.trace_factor,
             rho=hparams.rho,
             beta=hparams.beta,
             k_curr=self.hparams.k_curr,
@@ -300,10 +302,19 @@ class EccClusterer(object):
             lanczos_inner_iterations=min(self.sdp_state.C.shape[0], 32),
             lanczos_max_restarts=self.hparams.lanczos_max_restarts,
             subprob_eps=self.hparams.subprob_eps,
-            subprob_max_iters=hparams.subprob_max_iters,
+            subprob_max_iters=self.hparams.subprob_max_iters,
             callback_fn=None,
             callback_static_args=None,
             callback_nonstatic_args=None)
+
+        round = len(self.ecc_constraints) 
+        dump_fname = "{}_{}_state.pkl".format(self.hparams.warm_start_strategy, round)
+        with open(dump_fname, "wb") as f:
+            pickle.dump(
+                {"round": round,
+                 "pre_sdp_state": pre_sdp_state,
+                 "post_sdp_state": copy.deepcopy(self.sdp_state)},
+                f)
         
     def build_and_solve_sdp(self):
 
