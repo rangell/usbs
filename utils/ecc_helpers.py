@@ -456,7 +456,7 @@ def embed_match_add_constraint(
         #column_embeds = column_embeds.at[pos_cluster_points, :].set(
         #    column_embeds[pos_cluster_points] + avg_pos_embed[None, :])
         #column_embeds = column_embeds / np.linalg.norm(column_embeds, axis=1)[:, None]
-        column_embeds = column_embeds.at[pos_cluster_points, :].set(jnp.zeros_like(avg_pos_embed[None, :]))
+        #column_embeds = column_embeds.at[pos_cluster_points, :].set(jnp.zeros_like(avg_pos_embed[None, :]))
 
         if len(ortho_indices) > 0:
             column_embeds = column_embeds.at[neg_columns, :].set(neg_col_embeds)
