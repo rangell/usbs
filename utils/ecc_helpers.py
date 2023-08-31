@@ -454,7 +454,7 @@ def embed_match_add_constraint(
             #neg_col_projs = neg_col_projs[:, None] * avg_pos_embed
             #neg_col_embeds = neg_col_embeds - neg_col_projs
             #neg_col_embeds = neg_col_embeds / np.linalg.norm(neg_col_embeds, axis=1)[:, None]
-            column_embeds = column_embeds.at[neg_columns, :].set(jnp.zeros_like(neg_columns[0:1, :]))
+            column_embeds = column_embeds.at[neg_columns, :].set(jnp.zeros_like(column_embeds[0:1, :]))
 
         #column_embeds = column_embeds.at[pos_cluster_points, :].set(
         #    column_embeds[pos_cluster_points] + avg_pos_embed[None, :])
