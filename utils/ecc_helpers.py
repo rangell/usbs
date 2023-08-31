@@ -461,7 +461,7 @@ def embed_match_add_constraint(
         #    column_embeds = column_embeds.at[neg_columns, :].set(neg_col_embeds)
 
         ## add the embed for the new ecc constraint
-        #column_embeds = jnp.concatenate([column_embeds, avg_pos_embed[None, :]], axis=0)
+        column_embeds = jnp.concatenate([column_embeds, jnp.zeros_like(column_embeds[0:1, :])], axis=0)
 
         X = column_embeds @ column_embeds.T
         z = apply_A_operator_mx(n, m, A_data, A_indices, X) 
