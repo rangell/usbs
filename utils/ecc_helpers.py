@@ -121,23 +121,23 @@ def cold_start_add_constraint(
     b = jnp.concatenate([old_sdp_state.b, jnp.array([1.0])], axis=0)
     b_ineq_mask = jnp.concatenate([old_sdp_state.b_ineq_mask, jnp.array([0.0])], axis=0)
 
-    # singleton expansion: if a satisfying hyperplane can only be satisfied by one
-    #   point, then that means the representation for the ecc and the point must
-    #   be exactly the same. To make optimization easier we add extra hyperplanes,
-    #   replacing the ecc index with the singleton index. We add similar constraints
-    #   for orthogonal indices.
-    supp_constraints = []
-    supp_ortho_indices = []
-    for hyperplane in [h for h in sum_gt_one_constraints if len(h) == 1]:
-        _, point_idx = hyperplane[0]
-        for other_hyperplane in sum_gt_one_constraints:
-            if other_hyperplane != hyperplane:
-                supp_constraints.append([(point_idx, v) for _, v in other_hyperplane])
-        for u, v in ortho_indices:
-            assert v == old_n
-            supp_ortho_indices.append((u, point_idx))
-    sum_gt_one_constraints += supp_constraints
-    ortho_indices += supp_ortho_indices
+    ## singleton expansion: if a satisfying hyperplane can only be satisfied by one
+    ##   point, then that means the representation for the ecc and the point must
+    ##   be exactly the same. To make optimization easier we add extra hyperplanes,
+    ##   replacing the ecc index with the singleton index. We add similar constraints
+    ##   for orthogonal indices.
+    #supp_constraints = []
+    #supp_ortho_indices = []
+    #for hyperplane in [h for h in sum_gt_one_constraints if len(h) == 1]:
+    #    _, point_idx = hyperplane[0]
+    #    for other_hyperplane in sum_gt_one_constraints:
+    #        if other_hyperplane != hyperplane:
+    #            supp_constraints.append([(point_idx, v) for _, v in other_hyperplane])
+    #    for u, v in ortho_indices:
+    #        assert v == old_n
+    #        supp_ortho_indices.append((u, point_idx))
+    #sum_gt_one_constraints += supp_constraints
+    #ortho_indices += supp_ortho_indices
 
     # add ortho indices constraints
     if len(ortho_indices) > 0:
@@ -235,23 +235,23 @@ def column_drop_add_constraint(
     b = jnp.concatenate([old_sdp_state.b, jnp.array([1.0])], axis=0)
     b_ineq_mask = jnp.concatenate([old_sdp_state.b_ineq_mask, jnp.array([0.0])], axis=0)
 
-    # singleton expansion: if a satisfying hyperplane can only be satisfied by one
-    #   point, then that means the representation for the ecc and the point must
-    #   be exactly the same. To make optimization easier we add extra hyperplanes,
-    #   replacing the ecc index with the singleton index. We add similar constraints
-    #   for orthogonal indices.
-    supp_constraints = []
-    supp_ortho_indices = []
-    for hyperplane in [h for h in sum_gt_one_constraints if len(h) == 1]:
-        _, point_idx = hyperplane[0]
-        for other_hyperplane in sum_gt_one_constraints:
-            if other_hyperplane != hyperplane:
-                supp_constraints.append([(point_idx, v) for _, v in other_hyperplane])
-        for u, v in ortho_indices:
-            assert v == old_n
-            supp_ortho_indices.append((u, point_idx))
-    sum_gt_one_constraints += supp_constraints
-    ortho_indices += supp_ortho_indices
+    ## singleton expansion: if a satisfying hyperplane can only be satisfied by one
+    ##   point, then that means the representation for the ecc and the point must
+    ##   be exactly the same. To make optimization easier we add extra hyperplanes,
+    ##   replacing the ecc index with the singleton index. We add similar constraints
+    ##   for orthogonal indices.
+    #supp_constraints = []
+    #supp_ortho_indices = []
+    #for hyperplane in [h for h in sum_gt_one_constraints if len(h) == 1]:
+    #    _, point_idx = hyperplane[0]
+    #    for other_hyperplane in sum_gt_one_constraints:
+    #        if other_hyperplane != hyperplane:
+    #            supp_constraints.append([(point_idx, v) for _, v in other_hyperplane])
+    #    for u, v in ortho_indices:
+    #        assert v == old_n
+    #        supp_ortho_indices.append((u, point_idx))
+    #sum_gt_one_constraints += supp_constraints
+    #ortho_indices += supp_ortho_indices
 
     # add ortho indices constraints
     if len(ortho_indices) > 0:
@@ -361,23 +361,23 @@ def embed_match_add_constraint(
     b = jnp.concatenate([old_sdp_state.b, jnp.array([1.0])], axis=0)
     b_ineq_mask = jnp.concatenate([old_sdp_state.b_ineq_mask, jnp.array([0.0])], axis=0)
 
-    # singleton expansion: if a satisfying hyperplane can only be satisfied by one
-    #   point, then that means the representation for the ecc and the point must
-    #   be exactly the same. To make optimization easier we add extra hyperplanes,
-    #   replacing the ecc index with the singleton index. We add similar constraints
-    #   for orthogonal indices.
-    supp_constraints = []
-    supp_ortho_indices = []
-    for hyperplane in [h for h in sum_gt_one_constraints if len(h) == 1]:
-        _, point_idx = hyperplane[0]
-        for other_hyperplane in sum_gt_one_constraints:
-            if other_hyperplane != hyperplane:
-                supp_constraints.append([(point_idx, v) for _, v in other_hyperplane])
-        for u, v in ortho_indices:
-            assert v == old_n
-            supp_ortho_indices.append((u, point_idx))
-    sum_gt_one_constraints += supp_constraints
-    ortho_indices += supp_ortho_indices
+    ## singleton expansion: if a satisfying hyperplane can only be satisfied by one
+    ##   point, then that means the representation for the ecc and the point must
+    ##   be exactly the same. To make optimization easier we add extra hyperplanes,
+    ##   replacing the ecc index with the singleton index. We add similar constraints
+    ##   for orthogonal indices.
+    #supp_constraints = []
+    #supp_ortho_indices = []
+    #for hyperplane in [h for h in sum_gt_one_constraints if len(h) == 1]:
+    #    _, point_idx = hyperplane[0]
+    #    for other_hyperplane in sum_gt_one_constraints:
+    #        if other_hyperplane != hyperplane:
+    #            supp_constraints.append([(point_idx, v) for _, v in other_hyperplane])
+    #    for u, v in ortho_indices:
+    #        assert v == old_n
+    #        supp_ortho_indices.append((u, point_idx))
+    #sum_gt_one_constraints += supp_constraints
+    #ortho_indices += supp_ortho_indices
 
     # add ortho indices constraints
     if len(ortho_indices) > 0:
