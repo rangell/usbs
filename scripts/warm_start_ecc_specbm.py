@@ -410,7 +410,7 @@ class EccClusterer(object):
                 cpair_obj_val = obj_vals[lchild] + obj_vals[rchild]
                 if (num_ecc_sat[node] < cpair_num_ecc_sat 
                     or (num_ecc_sat[node] == cpair_num_ecc_sat
-                        and obj_vals[node] < cpair_obj_val)):
+                        and obj_vals[node] <= cpair_obj_val)):
                     num_ecc_sat[node] = cpair_num_ecc_sat
                     obj_vals[node] = cpair_obj_val
                     lchild_start = membership_indptr[lchild]
