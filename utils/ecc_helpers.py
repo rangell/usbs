@@ -473,11 +473,18 @@ def column_drop_add_constraint(
     columns_to_drop = [v for l in sum_gt_one_constraints for pairs in l for v in pairs if len(l) <= 2]
     equality_columns = [v for l in sum_gt_one_constraints for pairs in l for v in pairs if len(l) == 1]
 
+    ecc_points_and_counts = [(pairs[1], len(l)) for l in sum_gt_one_constraints for pairs in l if len(l) < 3]
+    ecc_points_and_counts = jnp.array(list(set(ecc_points_and_counts)))
+    ecc_points = ecc_points_and_counts[:, 0]
+    ecc_counts = ecc_points_and_counts[:, 1]
+
     columns_to_drop = jnp.array(list(set(columns_to_drop)))
     equality_columns = jnp.array(list(set(equality_columns)))
     equality_columns = equality_columns[equality_columns < old_n]
 
     num_pred_clusters = jnp.unique(prev_pred_clusters).shape[0]
+
+    nbr_ecc_points = np.where(np.isin(prev_pred_clusters, prev_pred_clusters[ecc_points]))[0]
 
     X = old_sdp_state.X
     Omega = old_sdp_state.Omega
@@ -485,31 +492,30 @@ def column_drop_add_constraint(
     if old_sdp_state.X is not None:
         # compute rank-`num_pred_clusters` approximation of X
         eigvals, eigvecs = jnp.linalg.eigh(old_sdp_state.X)
-        avg_embed = jnp.mean(eigvecs[equality_columns], axis=0)
-        eigvecs = eigvecs.at[equality_columns].set(avg_embed)
-        eigvecs = jnp.concatenate([eigvecs, avg_embed[None, :]], axis=0)
-        X_trunc = ((eigvecs[:,-num_pred_clusters:]
-                    * eigvals[None, -num_pred_clusters:])
-                   @ eigvecs[:, -num_pred_clusters:].T)
-        X = BCOO.fromdense(X_trunc)
+        point_embeds = (eigvecs[:,-num_pred_clusters:] * jnp.sqrt(eigvals[None, -num_pred_clusters:]))
+
+        avg_embed = jnp.mean(point_embeds[ecc_points] / ecc_counts[:, None], axis=0)
+        avg_embed = avg_embed / jnp.linalg.norm(avg_embed)
+
+        #point_embeds = point_embeds.at[nbr_ecc_points].set(avg_embed[None, :])
+        point_embeds = point_embeds.at[ecc_points].set(avg_embed[None, :])
+        point_embeds = jnp.concatenate([point_embeds, avg_embed[None, :]], axis=0)
+
+        #point_embeds = point_embeds / jnp.linalg.norm(point_embeds, axis=1)[:, None]
+
+        X = point_embeds @ point_embeds.T
+
+        #X = BCOO.fromdense(X_trunc)
+        #X = BCOO((X.data, X.indices), shape=(n, n)).todense()
         #X = BCOO.fromdense(X)
         #drop_mask = jnp.isin(X.indices, columns_to_drop)
         #drop_mask = (drop_mask[:, 0] | drop_mask[:, 1])
         #X = BCOO((X.data[~drop_mask], X.indices[~drop_mask]), shape=(n, n)).todense()
-        X = BCOO((X.data, X.indices), shape=(n, n)).todense()
+
         z = apply_A_operator_mx(n, m, A_data, A_indices, X) 
     if old_sdp_state.P is not None:
         assert False
 
-    y = jnp.zeros((m,)).at[jnp.arange(old_sdp_state.b.shape[0])].set(old_sdp_state.y)
-
-    # TODO: change this to be rho instead of 0.05
-    #y = y - (0.1 * (z - b - b_ineq_mask * jnp.clip(b - z, a_min=0.0)))
-
-    # drop relevant entries in y
-    #reset_constraint_mask = (jnp.isin(A_indices[:, 1], columns_to_drop)
-    #                         & jnp.isin(A_indices[:, 2], columns_to_drop))
-    #y = y.at[jnp.unique(A_indices[reset_constraint_mask, 0])].set(0.0)
 
     tr_X = jnp.trace(X)
     primal_obj = jnp.trace(C @ X)
@@ -525,6 +531,21 @@ def column_drop_add_constraint(
     #SCALE_A /= norm_A
 
     SCALE_A = jnp.ones_like(b)
+
+    #y = jnp.zeros((m,)).at[jnp.arange(old_sdp_state.b.shape[0])].set(old_sdp_state.y)
+    
+    y = jnp.full((m,), jnp.mean(old_sdp_state.y)).at[jnp.arange(old_sdp_state.b.shape[0])].set(old_sdp_state.y)
+    y = y * (SCALE_X / old_sdp_state.SCALE_X)
+
+    print("y fill value: ", jnp.mean(old_sdp_state.y))
+
+    # TODO: change this to be rho instead of 0.05
+    #y = y - (0.1 * (z - b - b_ineq_mask * jnp.clip(b - z, a_min=0.0)))
+
+    # drop relevant entries in y
+    #reset_constraint_mask = (jnp.isin(A_indices[:, 1], columns_to_drop)
+    #                         & jnp.isin(A_indices[:, 2], columns_to_drop))
+    #y = y.at[jnp.unique(A_indices[reset_constraint_mask, 0])].set(0.0)
 
     sdp_state = SDPState(
         C=C,
