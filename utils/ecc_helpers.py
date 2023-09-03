@@ -541,20 +541,21 @@ def column_drop_add_constraint(
     old_equality_mask = jnp.isin(old_diag_indices, jnp.where(1 - old_sdp_state.b_ineq_mask)[0])
     old_diag_indices = old_diag_indices[old_equality_mask]
 
-    mean_equality_dual = jnp.mean(old_sdp_state.y[old_diag_indices])
-    mean_inequality_dual = jnp.mean(
-        old_sdp_state.y[~jnp.isin(jnp.arange(old_sdp_state.b.shape[0]), old_diag_indices)])
+    #mean_equality_dual = jnp.mean(old_sdp_state.y[old_diag_indices])
+    #mean_inequality_dual = jnp.mean(
+    #    old_sdp_state.y[~jnp.isin(jnp.arange(old_sdp_state.b.shape[0]), old_diag_indices)])
+    mean_inequality_dual = jnp.mean(old_sdp_state.y)
 
     diag_indices = A_indices[A_indices[:,1] == A_indices[:,2]][:,0]
     equality_mask = jnp.isin(diag_indices, jnp.where(1 - b_ineq_mask)[0])
     diag_indices = diag_indices[equality_mask]
 
     # TODO: see if we want to increase dual variable for pos ecc point diag equalities 
-    y = jnp.full((m,), mean_inequality_dual).at[diag_indices].set(mean_inequality_dual)
+    y = jnp.full((m,), mean_inequality_dual).at[diag_indices].set(5.0 * mean_inequality_dual)
     y = y.at[jnp.arange(old_sdp_state.b.shape[0])].set(old_sdp_state.y)
     y = y * (SCALE_X / old_sdp_state.SCALE_X)
 
-    print("y mean equality value: ", mean_equality_dual)
+    #print("y mean equality value: ", mean_equality_dual)
     print("y mean inequality value: ", mean_inequality_dual)
 
     # TODO: change this to be rho instead of 0.05
