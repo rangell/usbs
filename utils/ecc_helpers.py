@@ -490,28 +490,28 @@ def column_drop_add_constraint(
     Omega = old_sdp_state.Omega
     P = old_sdp_state.P
     if old_sdp_state.X is not None:
-        ## compute rank-`num_pred_clusters` approximation of X
-        #eigvals, eigvecs = jnp.linalg.eigh(old_sdp_state.X)
-        #point_embeds = (eigvecs[:,-num_pred_clusters:] * jnp.sqrt(eigvals[None, -num_pred_clusters:]))
+        # compute rank-`num_pred_clusters` approximation of X
+        eigvals, eigvecs = jnp.linalg.eigh(old_sdp_state.X)
+        point_embeds = (eigvecs[:,-num_pred_clusters:] * jnp.sqrt(eigvals[None, -num_pred_clusters:]))
 
-        #avg_embed = jnp.mean(point_embeds[ecc_points] / ecc_counts[:, None], axis=0)
-        #avg_embed = avg_embed / jnp.linalg.norm(avg_embed)
+        avg_embed = jnp.mean(point_embeds[ecc_points] / ecc_counts[:, None], axis=0)
+        avg_embed = avg_embed / jnp.linalg.norm(avg_embed)
 
-        ##point_embeds = point_embeds.at[nbr_ecc_points].set(avg_embed[None, :])
-        #point_embeds = point_embeds.at[ecc_points].set(avg_embed[None, :])
-        #point_embeds = jnp.concatenate([point_embeds, avg_embed[None, :]], axis=0)
+        #point_embeds = point_embeds.at[nbr_ecc_points].set(avg_embed[None, :])
+        point_embeds = point_embeds.at[ecc_points].set(avg_embed[None, :])
+        point_embeds = jnp.concatenate([point_embeds, avg_embed[None, :]], axis=0)
 
-        ##point_embeds = point_embeds / jnp.linalg.norm(point_embeds, axis=1)[:, None]
+        #point_embeds = point_embeds / jnp.linalg.norm(point_embeds, axis=1)[:, None]
 
-        #X = point_embeds @ point_embeds.T
+        X = point_embeds @ point_embeds.T
 
         #X = BCOO.fromdense(X_trunc)
         #X = BCOO((X.data, X.indices), shape=(n, n)).todense()
-        X = BCOO.fromdense(X)
-        #drop_mask = jnp.isin(X.indices, columns_to_drop)
-        drop_mask = jnp.isin(X.indices, nbr_ecc_points)
-        drop_mask = (drop_mask[:, 0] | drop_mask[:, 1])
-        X = BCOO((X.data[~drop_mask], X.indices[~drop_mask]), shape=(n, n)).todense()
+        #X = BCOO.fromdense(X)
+        ##drop_mask = jnp.isin(X.indices, columns_to_drop)
+        #drop_mask = jnp.isin(X.indices, nbr_ecc_points)
+        #drop_mask = (drop_mask[:, 0] | drop_mask[:, 1])
+        #X = BCOO((X.data[~drop_mask], X.indices[~drop_mask]), shape=(n, n)).todense()
 
         z = apply_A_operator_mx(n, m, A_data, A_indices, X) 
     if old_sdp_state.P is not None:
@@ -550,7 +550,7 @@ def column_drop_add_constraint(
     diag_indices = diag_indices[equality_mask]
 
     # TODO: see if we want to increase dual variable for pos ecc point diag equalities 
-    y = jnp.full((m,), mean_inequality_dual).at[diag_indices].set(2.0 * mean_equality_dual)
+    y = jnp.full((m,), mean_inequality_dual).at[diag_indices].set(2.0 * mean_inequality_dual)
     y = y.at[jnp.arange(old_sdp_state.b.shape[0])].set(old_sdp_state.y)
     y = y * (SCALE_X / old_sdp_state.SCALE_X)
 
