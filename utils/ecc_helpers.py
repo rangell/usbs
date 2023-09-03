@@ -501,7 +501,7 @@ def column_drop_add_constraint(
         point_embeds = point_embeds.at[ecc_points].set(avg_embed[None, :])
         point_embeds = jnp.concatenate([point_embeds, avg_embed[None, :]], axis=0)
 
-        #point_embeds = point_embeds / jnp.linalg.norm(point_embeds, axis=1)[:, None]
+        point_embeds = point_embeds / jnp.linalg.norm(point_embeds, axis=1)[:, None]
 
         X = point_embeds @ point_embeds.T
 
