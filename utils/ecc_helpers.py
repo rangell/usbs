@@ -508,7 +508,8 @@ def column_drop_add_constraint(
         #X = BCOO.fromdense(X_trunc)
         #X = BCOO((X.data, X.indices), shape=(n, n)).todense()
         X = BCOO.fromdense(X)
-        drop_mask = jnp.isin(X.indices, columns_to_drop)
+        #drop_mask = jnp.isin(X.indices, columns_to_drop)
+        drop_mask = jnp.isin(X.indices, nbr_ecc_points)
         drop_mask = (drop_mask[:, 0] | drop_mask[:, 1])
         X = BCOO((X.data[~drop_mask], X.indices[~drop_mask]), shape=(n, n)).todense()
 
