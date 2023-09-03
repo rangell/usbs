@@ -497,8 +497,8 @@ def column_drop_add_constraint(
         avg_embed = jnp.mean(point_embeds[ecc_points] / ecc_counts[:, None], axis=0)
         avg_embed = avg_embed / jnp.linalg.norm(avg_embed)
 
-        #point_embeds = point_embeds.at[nbr_ecc_points].set(avg_embed[None, :])
-        point_embeds = point_embeds.at[ecc_points].set(avg_embed[None, :])
+        point_embeds = point_embeds.at[nbr_ecc_points].set(avg_embed[None, :])
+        #point_embeds = point_embeds.at[ecc_points].set(avg_embed[None, :])
         point_embeds = jnp.concatenate([point_embeds, avg_embed[None, :]], axis=0)
 
         #point_embeds = point_embeds / jnp.linalg.norm(point_embeds, axis=1)[:, None]
@@ -550,7 +550,7 @@ def column_drop_add_constraint(
     diag_indices = diag_indices[equality_mask]
 
     # TODO: see if we want to increase dual variable for pos ecc point diag equalities 
-    y = jnp.full((m,), mean_inequality_dual).at[diag_indices].set(5.0 * mean_inequality_dual)
+    y = jnp.full((m,), mean_inequality_dual).at[diag_indices].set(10.0 * mean_inequality_dual)
     y = y.at[jnp.arange(old_sdp_state.b.shape[0])].set(old_sdp_state.y)
     y = y * (SCALE_X / old_sdp_state.SCALE_X)
 
