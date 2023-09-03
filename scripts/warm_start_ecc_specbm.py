@@ -190,7 +190,7 @@ class EccClusterer(object):
             if i == self.n - 1:
                 sum_gt_one_constraints.append([(i,j) for j in j_s])
         
-        if self.hparams.warm_start_strategy == "none" or len(self.ecc_constraints) < 10:
+        if self.hparams.warm_start_strategy == "none":
             self.sdp_state = cold_start_add_constraint(
                 old_sdp_state=self.sdp_state,
                 ortho_indices=ortho_indices,
@@ -307,10 +307,6 @@ class EccClusterer(object):
             callback_fn=None,
             callback_static_args=None,
             callback_nonstatic_args=None)
-
-        if len(self.ecc_constraints) == 2:
-            embed()
-            exit()
 
     def build_and_solve_sdp(self):
 
