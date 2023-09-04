@@ -308,7 +308,7 @@ class EccClusterer(object):
             callback_static_args=None,
             callback_nonstatic_args=None)
 
-        if len(self.ecc_constraints) == 2:
+        if len(self.ecc_constraints) == 3:
             embed()
             exit()
 
