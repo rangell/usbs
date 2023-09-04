@@ -498,9 +498,9 @@ def column_drop_add_constraint(
         avg_embed = jnp.mean(point_embeds[ecc_points] / ecc_counts[:, None], axis=0)
         avg_embed = avg_embed / jnp.linalg.norm(avg_embed)
 
-        #point_embeds = point_embeds.at[nbr_ecc_points].set(
-        #    point_embeds[nbr_ecc_points] + avg_embed[None, :])
-        point_embeds = point_embeds.at[ecc_points].set(avg_embed[None, :])
+        point_embeds = point_embeds.at[nbr_ecc_points].set(
+            point_embeds[nbr_ecc_points] + avg_embed[None, :])
+        #point_embeds = point_embeds.at[ecc_points].set(avg_embed[None, :])
         #point_embeds = point_embeds.at[nbr_ecc_points].set(avg_embed[None, :])
         point_embeds = jnp.concatenate([point_embeds, avg_embed[None, :]], axis=0)
 
