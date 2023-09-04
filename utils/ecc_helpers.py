@@ -500,7 +500,7 @@ def column_drop_add_constraint(
 
         point_embeds = point_embeds.at[nbr_ecc_points].set(
             point_embeds[nbr_ecc_points] + avg_embed[None, :])
-        #point_embeds = point_embeds.at[ecc_points].set(avg_embed[None, :])
+        point_embeds = point_embeds.at[ecc_points].set(avg_embed[None, :])
         #point_embeds = point_embeds.at[nbr_ecc_points].set(avg_embed[None, :])
         point_embeds = jnp.concatenate([point_embeds, avg_embed[None, :]], axis=0)
 
@@ -539,8 +539,8 @@ def column_drop_add_constraint(
 
     #y = jnp.zeros((m,)).at[jnp.arange(old_sdp_state.b.shape[0])].set(
     #    old_sdp_state.y / old_sdp_state.SCALE_A)
-    y = jnp.full((m,), -50.0 * SCALE_X).at[jnp.arange(old_sdp_state.b.shape[0])].set(
-        old_sdp_state.y / old_sdp_state.SCALE_A)
+    #y = jnp.full((m,), -50.0 * SCALE_X).at[jnp.arange(old_sdp_state.b.shape[0])].set(
+    #    old_sdp_state.y / old_sdp_state.SCALE_A)
     y = y * (SCALE_X / old_sdp_state.SCALE_X) * SCALE_A
 
     ## set the dual variable
