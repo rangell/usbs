@@ -1046,9 +1046,9 @@ if __name__ == '__main__':
     num_blocks = len(blocks_preprocessed)
 
     sub_blocks_preprocessed = {}
-    sub_blocks_preprocessed['a moore'] = blocks_preprocessed['a moore']
+    #sub_blocks_preprocessed['a moore'] = blocks_preprocessed['a moore']
     #sub_blocks_preprocessed['j taylor'] = blocks_preprocessed['j taylor']
-    #sub_blocks_preprocessed['s patel'] = blocks_preprocessed['s patel']
+    sub_blocks_preprocessed['s patel'] = blocks_preprocessed['s patel']
     #sub_blocks_preprocessed['h evans'] = blocks_preprocessed['h evans']
     #sub_blocks_preprocessed['j kaiser'] = blocks_preprocessed['j kaiser']
     #sub_blocks_preprocessed = blocks_preprocessed
