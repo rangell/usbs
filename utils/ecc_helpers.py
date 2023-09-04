@@ -522,7 +522,6 @@ def column_drop_add_constraint(
     if old_sdp_state.P is not None:
         assert False
 
-
     tr_X = jnp.trace(X)
     primal_obj = jnp.trace(C @ X)
 
