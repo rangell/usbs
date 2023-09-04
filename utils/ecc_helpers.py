@@ -498,9 +498,9 @@ def column_drop_add_constraint(
         avg_embed = jnp.mean(point_embeds[ecc_points] / ecc_counts[:, None], axis=0)
         avg_embed = avg_embed / jnp.linalg.norm(avg_embed)
 
-        #point_embeds = point_embeds.at[nbr_ecc_points].set(point_embeds[nbr_ecc_points] + avg_embed[None, :])
+        point_embeds = point_embeds.at[nbr_ecc_points].set(point_embeds[nbr_ecc_points] + avg_embed[None, :])
         #point_embeds = point_embeds.at[ecc_points].set(avg_embed[None, :])
-        point_embeds = point_embeds.at[nbr_ecc_points].set(avg_embed[None, :])
+        #point_embeds = point_embeds.at[nbr_ecc_points].set(avg_embed[None, :])
         point_embeds = jnp.concatenate([point_embeds, avg_embed[None, :]], axis=0)
 
         point_embeds = point_embeds / jnp.linalg.norm(point_embeds, axis=1)[:, None]
@@ -548,7 +548,7 @@ def column_drop_add_constraint(
     #mean_equality_dual = jnp.mean(old_sdp_state.y[old_diag_indices])
     #mean_inequality_dual = jnp.mean(
     #    old_sdp_state.y[~jnp.isin(jnp.arange(old_sdp_state.b.shape[0]), old_diag_indices)])
-    mean_inequality_dual = jnp.mean(old_sdp_state.y)
+    mean_inequality_dual = jnp.mean(old_sdp_state.y / SCALE_A)
 
     diag_indices = A_indices[A_indices[:,1] == A_indices[:,2]][:,0]
     equality_mask = jnp.isin(diag_indices, jnp.where(1 - b_ineq_mask)[0])
