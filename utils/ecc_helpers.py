@@ -539,7 +539,7 @@ def column_drop_add_constraint(
 
     #y = jnp.zeros((m,)).at[jnp.arange(old_sdp_state.b.shape[0])].set(
     #    old_sdp_state.y / old_sdp_state.SCALE_A)
-    y = jnp.full((m,), SCALE_X).at[jnp.arange(old_sdp_state.b.shape[0])].set(
+    y = jnp.full((m,), -SCALE_X).at[jnp.arange(old_sdp_state.b.shape[0])].set(
         old_sdp_state.y / old_sdp_state.SCALE_A)
     y = y * (SCALE_X / old_sdp_state.SCALE_X) * SCALE_A
 
