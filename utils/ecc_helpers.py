@@ -554,8 +554,8 @@ def column_drop_add_constraint(
 
     # TODO: see if we want to increase dual variable for pos ecc point diag equalities 
     y = jnp.full((m,), mean_inequality_dual).at[diag_indices].set(mean_inequality_dual)
-    y = y.at[jnp.arange(old_sdp_state.b.shape[0])].set(old_sdp_state.y)
-    y = y * (SCALE_X / old_sdp_state.SCALE_X) * (SCALE_A / old_sdp_state.SCALE_A)
+    y = y.at[jnp.arange(old_sdp_state.b.shape[0])].set(old_sdp_state.y / old_sdp_state.SCALE_A)
+    y = y * (SCALE_X / old_sdp_state.SCALE_X) * SCALE_A
 
     #print("y mean equality value: ", mean_equality_dual)
     print("y mean inequality value: ", mean_inequality_dual)
