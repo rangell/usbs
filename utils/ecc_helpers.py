@@ -54,15 +54,15 @@ def initialize_state(C: BCOO, sketch_dim: int) -> SDPState:
 
     SCALE_X = 1.0 / float(n)
     SCALE_C = 1.0 / jnp.linalg.norm(C.data)  # equivalent to frobenius norm
-    SCALE_A = 1.0 / jnp.sqrt(jnp.zeros((m,)).at[A_indices[:,0]].add(A_data**2))
-    A_tensor = BCOO((A_data, A_indices), shape=(m, n, n))
-    A_matrix = SCALE_A[:, None] * A_tensor.reshape(m, n**2)
-    A_matrix = coo_matrix(
-        (A_matrix.data, (A_matrix.indices[:,0], A_matrix.indices[:,1])), shape=A_matrix.shape)
-    norm_A = jnp.sqrt(eigsh(A_matrix @ A_matrix.T, k=1, which="LM", return_eigenvectors=False)[0])
-    SCALE_A /= norm_A
+    #SCALE_A = 1.0 / jnp.sqrt(jnp.zeros((m,)).at[A_indices[:,0]].add(A_data**2))
+    #A_tensor = BCOO((A_data, A_indices), shape=(m, n, n))
+    #A_matrix = SCALE_A[:, None] * A_tensor.reshape(m, n**2)
+    #A_matrix = coo_matrix(
+    #    (A_matrix.data, (A_matrix.indices[:,0], A_matrix.indices[:,1])), shape=A_matrix.shape)
+    #norm_A = jnp.sqrt(eigsh(A_matrix @ A_matrix.T, k=1, which="LM", return_eigenvectors=False)[0])
+    #SCALE_A /= norm_A
 
-    #SCALE_A = jnp.ones_like(b)
+    SCALE_A = jnp.ones_like(b)
 
     if sketch_dim == -1:
         X = jnp.zeros((n, n))
@@ -132,17 +132,17 @@ def cold_start_add_constraint(
         b = jnp.concatenate([b, jnp.full((num_ortho_indices,), 0.0)], axis=0)
         b_ineq_mask = jnp.concatenate([b_ineq_mask, jnp.full((num_ortho_indices,), 1.0)], axis=0)
 
-    # singleton expansion: if a satisfying hyperplane can only be satisfied by one
-    #   point, then that means the representation for the ecc and the point must
-    #   be exactly the same. To make optimization easier we add extra hyperplanes,
-    #   replacing the ecc index with the singleton index
-    supp_constraints = []
-    for hyperplane in [h for h in sum_gt_one_constraints if len(h) == 1]:
-        _, point_idx = hyperplane[0]
-        for other_hyperplane in sum_gt_one_constraints:
-            if other_hyperplane != hyperplane:
-                supp_constraints.append([(point_idx, v) for _, v in other_hyperplane])
-    sum_gt_one_constraints += supp_constraints
+    ## singleton expansion: if a satisfying hyperplane can only be satisfied by one
+    ##   point, then that means the representation for the ecc and the point must
+    ##   be exactly the same. To make optimization easier we add extra hyperplanes,
+    ##   replacing the ecc index with the singleton index
+    #supp_constraints = []
+    #for hyperplane in [h for h in sum_gt_one_constraints if len(h) == 1]:
+    #    _, point_idx = hyperplane[0]
+    #    for other_hyperplane in sum_gt_one_constraints:
+    #        if other_hyperplane != hyperplane:
+    #            supp_constraints.append([(point_idx, v) for _, v in other_hyperplane])
+    #sum_gt_one_constraints += supp_constraints
 
     # add sum greater than one (feature satisfying hyperplanes) constraints
     num_hyperplanes = len(sum_gt_one_constraints)
@@ -176,15 +176,15 @@ def cold_start_add_constraint(
 
     SCALE_X = 1.0 / float(n)
     SCALE_C = 1.0 / jnp.linalg.norm(C.data)  # equivalent to frobenius norm
-    SCALE_A = 1.0 / jnp.sqrt(jnp.zeros((m,)).at[A_indices[:,0]].add(A_data**2))
-    A_tensor = BCOO((A_data, A_indices), shape=(m, n, n))
-    A_matrix = SCALE_A[:, None] * A_tensor.reshape(m, n**2)
-    A_matrix = coo_matrix(
-        (A_matrix.data, (A_matrix.indices[:,0], A_matrix.indices[:,1])), shape=A_matrix.shape)
-    norm_A = jnp.sqrt(eigsh(A_matrix @ A_matrix.T, k=1, which="LM", return_eigenvectors=False)[0])
-    SCALE_A /= norm_A
+    #SCALE_A = 1.0 / jnp.sqrt(jnp.zeros((m,)).at[A_indices[:,0]].add(A_data**2))
+    #A_tensor = BCOO((A_data, A_indices), shape=(m, n, n))
+    #A_matrix = SCALE_A[:, None] * A_tensor.reshape(m, n**2)
+    #A_matrix = coo_matrix(
+    #    (A_matrix.data, (A_matrix.indices[:,0], A_matrix.indices[:,1])), shape=A_matrix.shape)
+    #norm_A = jnp.sqrt(eigsh(A_matrix @ A_matrix.T, k=1, which="LM", return_eigenvectors=False)[0])
+    #SCALE_A /= norm_A
 
-    #SCALE_A = jnp.ones_like(b)
+    SCALE_A = jnp.ones_like(b)
 
     sdp_state = SDPState(
         C=C,
