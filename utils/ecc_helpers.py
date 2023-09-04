@@ -507,7 +507,7 @@ def column_drop_add_constraint(
 
         X = point_embeds @ point_embeds.T
 
-        X = jnp.zeros_like(X)
+        #X = jnp.zeros_like(X)
 
         #X = BCOO.fromdense(X_trunc)
         #X = BCOO((X.data, X.indices), shape=(n, n)).todense()
