@@ -132,17 +132,17 @@ def cold_start_add_constraint(
         b = jnp.concatenate([b, jnp.full((num_ortho_indices,), 0.0)], axis=0)
         b_ineq_mask = jnp.concatenate([b_ineq_mask, jnp.full((num_ortho_indices,), 1.0)], axis=0)
 
-    # singleton expansion: if a satisfying hyperplane can only be satisfied by one
-    #   point, then that means the representation for the ecc and the point must
-    #   be exactly the same. To make optimization easier we add extra hyperplanes,
-    #   replacing the ecc index with the singleton index
-    supp_constraints = []
-    for hyperplane in [h for h in sum_gt_one_constraints if len(h) == 1]:
-        _, point_idx = hyperplane[0]
-        for other_hyperplane in sum_gt_one_constraints:
-            if other_hyperplane != hyperplane:
-                supp_constraints.append([(point_idx, v) for _, v in other_hyperplane])
-    sum_gt_one_constraints += supp_constraints
+    ## singleton expansion: if a satisfying hyperplane can only be satisfied by one
+    ##   point, then that means the representation for the ecc and the point must
+    ##   be exactly the same. To make optimization easier we add extra hyperplanes,
+    ##   replacing the ecc index with the singleton index
+    #supp_constraints = []
+    #for hyperplane in [h for h in sum_gt_one_constraints if len(h) == 1]:
+    #    _, point_idx = hyperplane[0]
+    #    for other_hyperplane in sum_gt_one_constraints:
+    #        if other_hyperplane != hyperplane:
+    #            supp_constraints.append([(point_idx, v) for _, v in other_hyperplane])
+    #sum_gt_one_constraints += supp_constraints
 
     # add sum greater than one (feature satisfying hyperplanes) constraints
     num_hyperplanes = len(sum_gt_one_constraints)
