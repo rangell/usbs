@@ -308,23 +308,10 @@ class EccClusterer(object):
             callback_static_args=None,
             callback_nonstatic_args=None)
 
-        if len(self.ecc_constraints) == 12:
-            embed()
-            exit()
-
     def build_and_solve_sdp(self):
-
-        #if len(self.ecc_constraints) == 1:
-        #    with open("old_state.pkl", "wb") as f:
-        #        pickle.dump(unscale_sdp_state(self.sdp_state), f)
 
         self._call_sdp_solver()
 
-        #if len(self.ecc_constraints) == 1:
-        #    with open("new_state.pkl", "wb") as f:
-        #        pickle.dump(unscale_sdp_state(self.sdp_state), f)
-        #    exit()
-        
         unscaled_state = unscale_sdp_state(self.sdp_state)
         sdp_obj_value = float(jnp.trace(-unscaled_state.C @ unscaled_state.X))
         pw_probs = np.array(jnp.clip(unscaled_state.X, a_min=0.0, a_max=1.0))
@@ -1061,8 +1048,9 @@ if __name__ == '__main__':
     sub_blocks_preprocessed = {}
     #sub_blocks_preprocessed['a moore'] = blocks_preprocessed['a moore']
     #sub_blocks_preprocessed['j taylor'] = blocks_preprocessed['j taylor']
-    #sub_blocks_preprocessed['s patel'] = blocks_preprocessed['s patel']
-    sub_blocks_preprocessed = blocks_preprocessed
+    sub_blocks_preprocessed['s patel'] = blocks_preprocessed['s patel']
+    #sub_blocks_preprocessed['h evans'] = blocks_preprocessed['h evans']
+    #sub_blocks_preprocessed = blocks_preprocessed
 
     for i, (block_name, block_data) in enumerate(sub_blocks_preprocessed.items()):
         edge_weights = block_data['edge_weights']

@@ -54,15 +54,15 @@ def initialize_state(C: BCOO, sketch_dim: int) -> SDPState:
 
     SCALE_X = 1.0 / float(n)
     SCALE_C = 1.0 / jnp.linalg.norm(C.data)  # equivalent to frobenius norm
-    #SCALE_A = 1.0 / jnp.sqrt(jnp.zeros((m,)).at[A_indices[:,0]].add(A_data**2))
-    #A_tensor = BCOO((A_data, A_indices), shape=(m, n, n))
-    #A_matrix = SCALE_A[:, None] * A_tensor.reshape(m, n**2)
-    #A_matrix = coo_matrix(
-    #    (A_matrix.data, (A_matrix.indices[:,0], A_matrix.indices[:,1])), shape=A_matrix.shape)
-    #norm_A = jnp.sqrt(eigsh(A_matrix @ A_matrix.T, k=1, which="LM", return_eigenvectors=False)[0])
-    #SCALE_A /= norm_A
+    SCALE_A = 1.0 / jnp.sqrt(jnp.zeros((m,)).at[A_indices[:,0]].add(A_data**2))
+    A_tensor = BCOO((A_data, A_indices), shape=(m, n, n))
+    A_matrix = SCALE_A[:, None] * A_tensor.reshape(m, n**2)
+    A_matrix = coo_matrix(
+        (A_matrix.data, (A_matrix.indices[:,0], A_matrix.indices[:,1])), shape=A_matrix.shape)
+    norm_A = jnp.sqrt(eigsh(A_matrix @ A_matrix.T, k=1, which="LM", return_eigenvectors=False)[0])
+    SCALE_A /= norm_A
 
-    SCALE_A = jnp.ones_like(b)
+    #SCALE_A = jnp.ones_like(b)
 
     if sketch_dim == -1:
         X = jnp.zeros((n, n))
@@ -176,15 +176,15 @@ def cold_start_add_constraint(
 
     SCALE_X = 1.0 / float(n)
     SCALE_C = 1.0 / jnp.linalg.norm(C.data)  # equivalent to frobenius norm
-    #SCALE_A = 1.0 / jnp.sqrt(jnp.zeros((m,)).at[A_indices[:,0]].add(A_data**2))
-    #A_tensor = BCOO((A_data, A_indices), shape=(m, n, n))
-    #A_matrix = SCALE_A[:, None] * A_tensor.reshape(m, n**2)
-    #A_matrix = coo_matrix(
-    #    (A_matrix.data, (A_matrix.indices[:,0], A_matrix.indices[:,1])), shape=A_matrix.shape)
-    #norm_A = jnp.sqrt(eigsh(A_matrix @ A_matrix.T, k=1, which="LM", return_eigenvectors=False)[0])
-    #SCALE_A /= norm_A
+    SCALE_A = 1.0 / jnp.sqrt(jnp.zeros((m,)).at[A_indices[:,0]].add(A_data**2))
+    A_tensor = BCOO((A_data, A_indices), shape=(m, n, n))
+    A_matrix = SCALE_A[:, None] * A_tensor.reshape(m, n**2)
+    A_matrix = coo_matrix(
+        (A_matrix.data, (A_matrix.indices[:,0], A_matrix.indices[:,1])), shape=A_matrix.shape)
+    norm_A = jnp.sqrt(eigsh(A_matrix @ A_matrix.T, k=1, which="LM", return_eigenvectors=False)[0])
+    SCALE_A /= norm_A
 
-    SCALE_A = jnp.ones_like(b)
+    #SCALE_A = jnp.ones_like(b)
 
     sdp_state = SDPState(
         C=C,
@@ -444,17 +444,17 @@ def column_drop_add_constraint(
         b = jnp.concatenate([b, jnp.full((num_ortho_indices,), 0.0)], axis=0)
         b_ineq_mask = jnp.concatenate([b_ineq_mask, jnp.full((num_ortho_indices,), 1.0)], axis=0)
 
-    # singleton expansion: if a satisfying hyperplane can only be satisfied by one
-    #   point, then that means the representation for the ecc and the point must
-    #   be exactly the same. To make optimization easier we add extra hyperplanes,
-    #   replacing the ecc index with the singleton index
-    supp_constraints = []
-    for hyperplane in [h for h in sum_gt_one_constraints if len(h) == 1]:
-        _, point_idx = hyperplane[0]
-        for other_hyperplane in sum_gt_one_constraints:
-            if other_hyperplane != hyperplane:
-                supp_constraints.append([(point_idx, v) for _, v in other_hyperplane])
-    sum_gt_one_constraints += supp_constraints
+    ## singleton expansion: if a satisfying hyperplane can only be satisfied by one
+    ##   point, then that means the representation for the ecc and the point must
+    ##   be exactly the same. To make optimization easier we add extra hyperplanes,
+    ##   replacing the ecc index with the singleton index
+    #supp_constraints = []
+    #for hyperplane in [h for h in sum_gt_one_constraints if len(h) == 1]:
+    #    _, point_idx = hyperplane[0]
+    #    for other_hyperplane in sum_gt_one_constraints:
+    #        if other_hyperplane != hyperplane:
+    #            supp_constraints.append([(point_idx, v) for _, v in other_hyperplane])
+    #sum_gt_one_constraints += supp_constraints
 
     # add sum greater than one (feature satisfying hyperplanes) constraints
     num_hyperplanes = len(sum_gt_one_constraints)
@@ -493,12 +493,14 @@ def column_drop_add_constraint(
         # compute rank-`num_pred_clusters` approximation of X
         eigvals, eigvecs = jnp.linalg.eigh(old_sdp_state.X)
         point_embeds = (eigvecs[:,-num_pred_clusters:] * jnp.sqrt(eigvals[None, -num_pred_clusters:]))
+        point_embeds = point_embeds / jnp.linalg.norm(point_embeds, axis=1)[:, None]
 
         avg_embed = jnp.mean(point_embeds[ecc_points] / ecc_counts[:, None], axis=0)
         avg_embed = avg_embed / jnp.linalg.norm(avg_embed)
 
-        point_embeds = point_embeds.at[nbr_ecc_points].set(point_embeds[nbr_ecc_points] + avg_embed[None, :])
+        #point_embeds = point_embeds.at[nbr_ecc_points].set(point_embeds[nbr_ecc_points] + avg_embed[None, :])
         #point_embeds = point_embeds.at[ecc_points].set(avg_embed[None, :])
+        point_embeds = point_embeds.at[nbr_ecc_points].set(avg_embed[None, :])
         point_embeds = jnp.concatenate([point_embeds, avg_embed[None, :]], axis=0)
 
         point_embeds = point_embeds / jnp.linalg.norm(point_embeds, axis=1)[:, None]
@@ -551,7 +553,7 @@ def column_drop_add_constraint(
     diag_indices = diag_indices[equality_mask]
 
     # TODO: see if we want to increase dual variable for pos ecc point diag equalities 
-    y = jnp.full((m,), mean_inequality_dual).at[diag_indices].set(2.0 * mean_inequality_dual)
+    y = jnp.full((m,), mean_inequality_dual).at[diag_indices].set(mean_inequality_dual)
     y = y.at[jnp.arange(old_sdp_state.b.shape[0])].set(old_sdp_state.y)
     y = y * (SCALE_X / old_sdp_state.SCALE_X)
 
