@@ -308,10 +308,6 @@ class EccClusterer(object):
             callback_static_args=None,
             callback_nonstatic_args=None)
 
-        if len(self.ecc_constraints) == 3:
-            embed()
-            exit()
-
     def build_and_solve_sdp(self):
 
         self._call_sdp_solver()
