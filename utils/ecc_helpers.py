@@ -548,7 +548,7 @@ def column_drop_add_constraint(
     #mean_equality_dual = jnp.mean(old_sdp_state.y[old_diag_indices])
     #mean_inequality_dual = jnp.mean(
     #    old_sdp_state.y[~jnp.isin(jnp.arange(old_sdp_state.b.shape[0]), old_diag_indices)])
-    mean_inequality_dual = jnp.mean(old_sdp_state.y / SCALE_A)
+    mean_inequality_dual = jnp.mean(old_sdp_state.y / old_sdp_state.SCALE_A)
 
     diag_indices = A_indices[A_indices[:,1] == A_indices[:,2]][:,0]
     equality_mask = jnp.isin(diag_indices, jnp.where(1 - b_ineq_mask)[0])
