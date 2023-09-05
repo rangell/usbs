@@ -508,7 +508,7 @@ def column_drop_add_constraint(
 
         X = point_embeds @ point_embeds.T
 
-        #X = jnp.zeros_like(X)
+        X = jnp.zeros_like(X)
 
         #X = BCOO.fromdense(X_trunc)
         #X = BCOO((X.data, X.indices), shape=(n, n)).todense()
@@ -525,8 +525,8 @@ def column_drop_add_constraint(
     tr_X = jnp.trace(X)
     primal_obj = jnp.trace(C @ X)
 
-    #SCALE_X = 1.0 / float(n)
-    #SCALE_C = 1.0 / jnp.linalg.norm(C.data)  # equivalent to frobenius norm
+    SCALE_X = 1.0 / float(n)
+    SCALE_C = 1.0 / jnp.linalg.norm(C.data)  # equivalent to frobenius norm
     #SCALE_A = 1.0 / jnp.sqrt(jnp.zeros((m,)).at[A_indices[:,0]].add(A_data**2))
     #A_tensor = BCOO((A_data, A_indices), shape=(m, n, n))
     #A_matrix = SCALE_A[:, None] * A_tensor.reshape(m, n**2)
