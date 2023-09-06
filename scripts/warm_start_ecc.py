@@ -265,7 +265,6 @@ class EccClusterer(object):
 
 
     def _call_sdp_solver(self, sdp_state: SDPState, solver_name: str) -> None:
-        # modifies `self.sdp_state`
         trace_ub = (self.hparams.trace_factor
                     * float(sdp_state.C.shape[0])
                     * sdp_state.SCALE_X)
@@ -1037,9 +1036,9 @@ if __name__ == '__main__':
     #sub_blocks_preprocessed['a moore'] = blocks_preprocessed['a moore']
     #sub_blocks_preprocessed['j taylor'] = blocks_preprocessed['j taylor']
     #sub_blocks_preprocessed['s patel'] = blocks_preprocessed['s patel']
-    sub_blocks_preprocessed['h evans'] = blocks_preprocessed['h evans']
+    #sub_blocks_preprocessed['h evans'] = blocks_preprocessed['h evans']
     #sub_blocks_preprocessed['j kaiser'] = blocks_preprocessed['j kaiser']
-    #sub_blocks_preprocessed = blocks_preprocessed
+    sub_blocks_preprocessed = blocks_preprocessed
 
     for i, (block_name, block_data) in enumerate(sub_blocks_preprocessed.items()):
         edge_weights = block_data['edge_weights']
