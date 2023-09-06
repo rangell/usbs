@@ -278,7 +278,7 @@ class EccClusterer(object):
             trace_factor=hparams.trace_factor,
             rho=self.hparams.rho,
             beta=self.hparams.beta,
-            k_curr=self.hparams.k_curr,
+            k_curr=min(self.hparams.k_curr, sdp_state.C.shape[0]),
             k_past=self.hparams.k_past,
             max_iters=self.hparams.max_iters,
             max_time=self.hparams.max_time,
@@ -300,8 +300,11 @@ class EccClusterer(object):
     def build_and_solve_sdp(self):
 
         self.cold_start_sdp_state = self._call_sdp_solver(self.cold_start_sdp_state, "specbm/cold")
-        if len(self.ecc_constraints) > 0:
-            _ = self._call_sdp_solver(self.warm_start_sdp_state, "specbm/warm")
+        warm_start_out = self._call_sdp_solver(self.warm_start_sdp_state, "specbm/warm")
+
+        #if len(self.ecc_constraints) > 0:
+        #    embed()
+        #    exit()
 
         unscaled_state = unscale_sdp_state(self.cold_start_sdp_state)
         sdp_obj_value = float(jnp.trace(-unscaled_state.C @ unscaled_state.X))
@@ -1032,12 +1035,15 @@ if __name__ == '__main__':
     pred_clusterings = {}
     num_blocks = len(blocks_preprocessed)
 
+    # problematic canopies
+    # - "d schmidt"
+    # - "h ishikawa"
+    # - "k chen"
+    # - "p wu"
+    # - "s mueller"
+
     sub_blocks_preprocessed = {}
-    #sub_blocks_preprocessed['a moore'] = blocks_preprocessed['a moore']
-    #sub_blocks_preprocessed['j taylor'] = blocks_preprocessed['j taylor']
-    #sub_blocks_preprocessed['s patel'] = blocks_preprocessed['s patel']
-    #sub_blocks_preprocessed['h evans'] = blocks_preprocessed['h evans']
-    #sub_blocks_preprocessed['j kaiser'] = blocks_preprocessed['j kaiser']
+    #sub_blocks_preprocessed['d schmidt'] = blocks_preprocessed['d schmidt']
     sub_blocks_preprocessed = blocks_preprocessed
 
     for i, (block_name, block_data) in enumerate(sub_blocks_preprocessed.items()):

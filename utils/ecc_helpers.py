@@ -278,9 +278,14 @@ def warm_start_add_constraint(
     equality_columns = jnp.array(list(set(equality_columns)))
     equality_columns = equality_columns[equality_columns < old_n]
 
-    num_pred_clusters = jnp.unique(prev_pred_clusters).shape[0]
+    neg_points = jnp.array([v for v, _ in ortho_indices])
+
+    num_pred_clusters = max(jnp.unique(prev_pred_clusters).shape[0], 2)
 
     nbr_ecc_points = np.where(np.isin(prev_pred_clusters, prev_pred_clusters[ecc_points]))[0]
+
+    if len(ortho_indices) > 0:
+        nbr_ecc_points = nbr_ecc_points[~np.isin(nbr_ecc_points, neg_points)]
 
     X = old_sdp_state.X
     Omega = old_sdp_state.Omega
@@ -291,7 +296,7 @@ def warm_start_add_constraint(
         point_embeds = (eigvecs[:,-num_pred_clusters:] * jnp.sqrt(eigvals[None, -num_pred_clusters:]))
         point_embeds = point_embeds / jnp.linalg.norm(point_embeds, axis=1)[:, None]
 
-        avg_embed = jnp.mean(point_embeds[ecc_points] / ecc_counts[:, None], axis=0)
+        avg_embed = jnp.sum(point_embeds[ecc_points] / ecc_counts[:, None], axis=0)
         avg_embed = avg_embed / jnp.linalg.norm(avg_embed)
 
         point_embeds = point_embeds.at[nbr_ecc_points].set(
@@ -300,7 +305,18 @@ def warm_start_add_constraint(
         #point_embeds = point_embeds.at[nbr_ecc_points].set(avg_embed[None, :])
         point_embeds = jnp.concatenate([point_embeds, avg_embed[None, :]], axis=0)
 
+        #if len(ortho_indices) > 0:
+        #    neg_point_embeds = point_embeds[neg_points]
+        #    neg_point_embeds = neg_point_embeds / np.linalg.norm(neg_point_embeds, axis=1)[:, None]
+        #    neg_point_projs = np.dot(neg_point_embeds, avg_embed)
+        #    neg_point_projs = neg_point_projs / (np.linalg.norm(neg_point_embeds, axis=1) ** 2)
+        #    neg_point_projs = neg_point_projs[:, None] * avg_embed
+        #    neg_point_embeds = neg_point_embeds - neg_point_projs
+        #    point_embeds = point_embeds.at[neg_points, :].set(neg_point_embeds)
+
         point_embeds = point_embeds / jnp.linalg.norm(point_embeds, axis=1)[:, None]
+
+        #point_embeds = point_embeds.at[neg_points].set(jnp.zeros_like(point_embeds[neg_points]))
 
         X = point_embeds @ point_embeds.T
 
@@ -335,6 +351,12 @@ def warm_start_add_constraint(
 
     y = jnp.zeros((m,)).at[jnp.arange(old_sdp_state.b.shape[0])].set(
         old_sdp_state.y / old_sdp_state.SCALE_A)
+
+    y = y + (SCALE_X * jnp.clip(b - z, a_max=0.0))
+
+    #y = y.at[neg_points].set(jnp.zeros_like(y[neg_points]))
+
+    #y = y.at[ecc_points].set(jnp.zeros_like(y[ecc_points]))
     #y = jnp.full((m,), -.0 * SCALE_X).at[jnp.arange(old_sdp_state.b.shape[0])].set(
     #    old_sdp_state.y / old_sdp_state.SCALE_A)
     y = y * (SCALE_X / old_sdp_state.SCALE_X) * SCALE_A
@@ -363,7 +385,6 @@ def warm_start_add_constraint(
     #print("y mean inequality value: ", mean_inequality_dual)
 
     # TODO: change this to be rho instead of 0.05
-    #y = y - (0.1 * (z - b - b_ineq_mask * jnp.clip(b - z, a_min=0.0)))
 
     # drop relevant entries in y
     #reset_constraint_mask = (jnp.isin(A_indices[:, 1], columns_to_drop)
