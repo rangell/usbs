@@ -299,9 +299,12 @@ def warm_start_add_constraint(
         avg_embed = jnp.sum(point_embeds[ecc_points] / ecc_counts[:, None], axis=0)
         avg_embed = avg_embed / jnp.linalg.norm(avg_embed)
 
-        point_embeds = point_embeds.at[nbr_ecc_points].set(
-            point_embeds[nbr_ecc_points] + avg_embed[None, :])
-        #point_embeds = point_embeds.at[ecc_points].set(avg_embed[None, :])
+        #point_embeds = point_embeds.at[nbr_ecc_points].set(
+        #    point_embeds[nbr_ecc_points] + avg_embed[None, :])
+        #point_embeds = point_embeds.at[ecc_points].set(
+        #    point_embeds[ecc_points] + avg_embed[None, :])
+
+        point_embeds = point_embeds.at[ecc_points].set(avg_embed[None, :])
         #point_embeds = point_embeds.at[nbr_ecc_points].set(avg_embed[None, :])
         point_embeds = jnp.concatenate([point_embeds, avg_embed[None, :]], axis=0)
 
@@ -351,15 +354,15 @@ def warm_start_add_constraint(
 
     y = jnp.zeros((m,)).at[jnp.arange(old_sdp_state.b.shape[0])].set(
         old_sdp_state.y / old_sdp_state.SCALE_A)
+    y = y * (SCALE_X / old_sdp_state.SCALE_X) * SCALE_A
 
-    y = y + (SCALE_X * jnp.clip(b - z, a_max=0.0))
+    y = y + (0.05 / (2 * SCALE_X) * jnp.clip(b - z, a_max=0.0))
 
     #y = y.at[neg_points].set(jnp.zeros_like(y[neg_points]))
 
     #y = y.at[ecc_points].set(jnp.zeros_like(y[ecc_points]))
     #y = jnp.full((m,), -.0 * SCALE_X).at[jnp.arange(old_sdp_state.b.shape[0])].set(
     #    old_sdp_state.y / old_sdp_state.SCALE_A)
-    y = y * (SCALE_X / old_sdp_state.SCALE_X) * SCALE_A
 
     ## set the dual variable
     #old_diag_indices = old_sdp_state.A_indices[

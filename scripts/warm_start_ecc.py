@@ -302,10 +302,6 @@ class EccClusterer(object):
         self.cold_start_sdp_state = self._call_sdp_solver(self.cold_start_sdp_state, "specbm/cold")
         warm_start_out = self._call_sdp_solver(self.warm_start_sdp_state, "specbm/warm")
 
-        #if len(self.ecc_constraints) > 0:
-        #    embed()
-        #    exit()
-
         unscaled_state = unscale_sdp_state(self.cold_start_sdp_state)
         sdp_obj_value = float(jnp.trace(-unscaled_state.C @ unscaled_state.X))
         pw_probs = np.array(jnp.clip(unscaled_state.X, a_min=0.0, a_max=1.0))
@@ -1036,15 +1032,18 @@ if __name__ == '__main__':
     num_blocks = len(blocks_preprocessed)
 
     # problematic canopies
-    # - "d schmidt"
-    # - "h ishikawa"
-    # - "k chen"
+    # x "d schmidt"
+    # x "h ishikawa"
+    # x "k chen"
     # - "p wu"
     # - "s mueller"
 
     sub_blocks_preprocessed = {}
     #sub_blocks_preprocessed['d schmidt'] = blocks_preprocessed['d schmidt']
-    sub_blocks_preprocessed = blocks_preprocessed
+    #sub_blocks_preprocessed['h ishikawa'] = blocks_preprocessed['h ishikawa']
+    #sub_blocks_preprocessed['k chen'] = blocks_preprocessed['k chen']
+    sub_blocks_preprocessed['p wu'] = blocks_preprocessed['p wu']
+    #sub_blocks_preprocessed = blocks_preprocessed
 
     for i, (block_name, block_data) in enumerate(sub_blocks_preprocessed.items()):
         edge_weights = block_data['edge_weights']
