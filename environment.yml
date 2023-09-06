@@ -2,6 +2,8 @@ name: specbm
 channels:
   - defaults
 dependencies:
+  - python=3.9.17=h5ee71fb_0
+  - pip=23.1.2=py39hecd8cb5_0
   - pip:
       - aiohttp==3.8.5
       - aiosignal==1.3.1
@@ -90,8 +92,6 @@ dependencies:
       - libffi=3.4.4=hecd8cb5_0
       - ncurses=6.4=hcec6c5f_0
       - openssl=3.0.9=hca72f7f_0
-      - pip=23.1.2=py39hecd8cb5_0
-      - python=3.9.17=h5ee71fb_0
       - readline=8.2=hca72f7f_0
       - setuptools=67.8.0=py39hecd8cb5_0
       - sqlite=3.41.2=h6c40b1e_0
