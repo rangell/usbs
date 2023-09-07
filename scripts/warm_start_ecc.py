@@ -1031,19 +1031,13 @@ if __name__ == '__main__':
     pred_clusterings = {}
     num_blocks = len(blocks_preprocessed)
 
-    # problematic canopies
-    # x "d schmidt"
-    # x "h ishikawa"
-    # x "k chen"
-    # - "p wu"
-    # - "s mueller"
 
     sub_blocks_preprocessed = {}
     #sub_blocks_preprocessed['d schmidt'] = blocks_preprocessed['d schmidt']
     #sub_blocks_preprocessed['h ishikawa'] = blocks_preprocessed['h ishikawa']
     #sub_blocks_preprocessed['k chen'] = blocks_preprocessed['k chen']
-    sub_blocks_preprocessed['p wu'] = blocks_preprocessed['p wu']
-    #sub_blocks_preprocessed = blocks_preprocessed
+    #sub_blocks_preprocessed['p wu'] = blocks_preprocessed['p wu']
+    sub_blocks_preprocessed = blocks_preprocessed
 
     for i, (block_name, block_data) in enumerate(sub_blocks_preprocessed.items()):
         edge_weights = block_data['edge_weights']
