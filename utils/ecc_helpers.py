@@ -355,7 +355,8 @@ def warm_start_add_constraint(
     y = jnp.zeros((m,)).at[jnp.arange(old_sdp_state.b.shape[0])].set(
         old_sdp_state.y / old_sdp_state.SCALE_A)
     y = y * (SCALE_X / old_sdp_state.SCALE_X) * SCALE_A
-    y = y + (2.0 * SCALE_X * jnp.clip(b - z, a_max=0.0))
+    #y = y + (2.0 * SCALE_X * jnp.clip(b - z, a_max=0.0))
+    y = y + (SCALE_X * jnp.clip(b - z, a_max=0.0))
 
     #y = y.at[neg_points].set(jnp.zeros_like(y[neg_points]))
 
