@@ -1039,10 +1039,10 @@ if __name__ == '__main__':
     # - "s mueller"
 
     sub_blocks_preprocessed = {}
-    #sub_blocks_preprocessed['d schmidt'] = blocks_preprocessed['d schmidt']
+    sub_blocks_preprocessed['d schmidt'] = blocks_preprocessed['d schmidt']
     #sub_blocks_preprocessed['h ishikawa'] = blocks_preprocessed['h ishikawa']
     #sub_blocks_preprocessed['k chen'] = blocks_preprocessed['k chen']
-    sub_blocks_preprocessed['p wu'] = blocks_preprocessed['p wu']
+    #sub_blocks_preprocessed['p wu'] = blocks_preprocessed['p wu']
     #sub_blocks_preprocessed = blocks_preprocessed
 
     for i, (block_name, block_data) in enumerate(sub_blocks_preprocessed.items()):
