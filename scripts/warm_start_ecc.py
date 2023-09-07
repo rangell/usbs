@@ -1031,6 +1031,12 @@ if __name__ == '__main__':
     pred_clusterings = {}
     num_blocks = len(blocks_preprocessed)
 
+    # problematic canopies
+    # x "d schmidt"
+    # x "h ishikawa"
+    # x "k chen"
+    # - "p wu"
+    # - "s mueller"
 
     sub_blocks_preprocessed = {}
     #sub_blocks_preprocessed['d schmidt'] = blocks_preprocessed['d schmidt']
