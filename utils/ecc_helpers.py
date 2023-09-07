@@ -304,9 +304,6 @@ def warm_start_add_constraint(
         #point_embeds = point_embeds.at[ecc_points].set(
         #    point_embeds[ecc_points] + avg_embed[None, :])
 
-        embed()
-        exit()
-
         point_embeds = point_embeds.at[ecc_points].set(avg_embed[None, :])
         #point_embeds = point_embeds.at[nbr_ecc_points].set(avg_embed[None, :])
         point_embeds = jnp.concatenate([point_embeds, avg_embed[None, :]], axis=0)
