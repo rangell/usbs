@@ -304,18 +304,21 @@ def warm_start_add_constraint(
         #point_embeds = point_embeds.at[ecc_points].set(
         #    point_embeds[ecc_points] + avg_embed[None, :])
 
+        embed()
+        exit()
+
         point_embeds = point_embeds.at[ecc_points].set(avg_embed[None, :])
         #point_embeds = point_embeds.at[nbr_ecc_points].set(avg_embed[None, :])
         point_embeds = jnp.concatenate([point_embeds, avg_embed[None, :]], axis=0)
 
-        if len(ortho_indices) > 0:
-            neg_point_embeds = point_embeds[neg_points]
-            neg_point_embeds = neg_point_embeds / np.linalg.norm(neg_point_embeds, axis=1)[:, None]
-            neg_point_projs = np.dot(neg_point_embeds, avg_embed)
-            neg_point_projs = neg_point_projs / (np.linalg.norm(neg_point_embeds, axis=1) ** 2)
-            neg_point_projs = neg_point_projs[:, None] * avg_embed
-            neg_point_embeds = neg_point_embeds - neg_point_projs
-            point_embeds = point_embeds.at[neg_points, :].set(neg_point_embeds)
+        #if len(ortho_indices) > 0:
+        #    neg_point_embeds = point_embeds[neg_points]
+        #    neg_point_embeds = neg_point_embeds / np.linalg.norm(neg_point_embeds, axis=1)[:, None]
+        #    neg_point_projs = np.dot(neg_point_embeds, avg_embed)
+        #    neg_point_projs = neg_point_projs / (np.linalg.norm(neg_point_embeds, axis=1) ** 2)
+        #    neg_point_projs = neg_point_projs[:, None] * avg_embed
+        #    neg_point_embeds = neg_point_embeds - neg_point_projs
+        #    point_embeds = point_embeds.at[neg_points, :].set(neg_point_embeds)
 
         point_embeds = point_embeds / jnp.linalg.norm(point_embeds, axis=1)[:, None]
 
