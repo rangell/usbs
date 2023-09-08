@@ -7,7 +7,7 @@ from IPython import embed
 
 
 if __name__ == "__main__":
-    log_fname = "analysis/pubmed.out"
+    log_fname = "pubmed2.out"
 
     start_time = None
     solve_time = None
@@ -59,8 +59,8 @@ if __name__ == "__main__":
     plt.title("Pubmed")
     plt.xlabel("# of $\exists$-constraints")
     plt.ylabel("cumulative time (sec)")
-    #plt.show()
+    plt.show()
 
-    plt.savefig("pubmed.png")
+    #plt.savefig("qian.png")
 
 
