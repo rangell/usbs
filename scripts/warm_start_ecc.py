@@ -141,7 +141,8 @@ class EccClusterer(object):
         else:
             sampled_neg_laplacian = neg_laplacian_mx
 
-        self.sparse_laplacian = sampled_pos_laplacian - sampled_neg_laplacian
+        #self.sparse_laplacian = sampled_pos_laplacian - sampled_neg_laplacian
+        self.sparse_laplacian = pos_laplacian_mx - neg_laplacian_mx
 
 
     def add_constraint(self, ecc_constraint: csr_matrix):
