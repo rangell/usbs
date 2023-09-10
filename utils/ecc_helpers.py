@@ -54,14 +54,6 @@ def initialize_state(C: BCOO, sketch_dim: int) -> SDPState:
 
     SCALE_X = 1.0 / float(n)
     SCALE_C = 1.0 / jnp.linalg.norm(C.data)  # equivalent to frobenius norm
-    #SCALE_A = 1.0 / jnp.sqrt(jnp.zeros((m,)).at[A_indices[:,0]].add(A_data**2))
-    #A_tensor = BCOO((A_data, A_indices), shape=(m, n, n))
-    #A_matrix = SCALE_A[:, None] * A_tensor.reshape(m, n**2)
-    #A_matrix = coo_matrix(
-    #    (A_matrix.data, (A_matrix.indices[:,0], A_matrix.indices[:,1])), shape=A_matrix.shape)
-    #norm_A = jnp.sqrt(eigsh(A_matrix @ A_matrix.T, k=1, which="LM", return_eigenvectors=False)[0])
-    #SCALE_A /= norm_A
-
     SCALE_A = jnp.ones_like(b)
 
     if sketch_dim == -1:
@@ -132,18 +124,6 @@ def cold_start_add_constraint(
         b = jnp.concatenate([b, jnp.full((num_ortho_indices,), 0.0)], axis=0)
         b_ineq_mask = jnp.concatenate([b_ineq_mask, jnp.full((num_ortho_indices,), 1.0)], axis=0)
 
-    ## singleton expansion: if a satisfying hyperplane can only be satisfied by one
-    ##   point, then that means the representation for the ecc and the point must
-    ##   be exactly the same. To make optimization easier we add extra hyperplanes,
-    ##   replacing the ecc index with the singleton index
-    #supp_constraints = []
-    #for hyperplane in [h for h in sum_gt_one_constraints if len(h) == 1]:
-    #    _, point_idx = hyperplane[0]
-    #    for other_hyperplane in sum_gt_one_constraints:
-    #        if other_hyperplane != hyperplane:
-    #            supp_constraints.append([(point_idx, v) for _, v in other_hyperplane])
-    #sum_gt_one_constraints += supp_constraints
-
     # add sum greater than one (feature satisfying hyperplanes) constraints
     num_hyperplanes = len(sum_gt_one_constraints)
     constraint_triples = jnp.array([(b.shape[0] + i, u, v)
@@ -176,14 +156,6 @@ def cold_start_add_constraint(
 
     SCALE_X = 1.0 / float(n)
     SCALE_C = 1.0 / jnp.linalg.norm(C.data)  # equivalent to frobenius norm
-    #SCALE_A = 1.0 / jnp.sqrt(jnp.zeros((m,)).at[A_indices[:,0]].add(A_data**2))
-    #A_tensor = BCOO((A_data, A_indices), shape=(m, n, n))
-    #A_matrix = SCALE_A[:, None] * A_tensor.reshape(m, n**2)
-    #A_matrix = coo_matrix(
-    #    (A_matrix.data, (A_matrix.indices[:,0], A_matrix.indices[:,1])), shape=A_matrix.shape)
-    #norm_A = jnp.sqrt(eigsh(A_matrix @ A_matrix.T, k=1, which="LM", return_eigenvectors=False)[0])
-    #SCALE_A /= norm_A
-
     SCALE_A = jnp.ones_like(b)
 
     sdp_state = SDPState(
@@ -240,18 +212,6 @@ def warm_start_add_constraint(
         b = jnp.concatenate([b, jnp.full((num_ortho_indices,), 0.0)], axis=0)
         b_ineq_mask = jnp.concatenate([b_ineq_mask, jnp.full((num_ortho_indices,), 1.0)], axis=0)
 
-    ## singleton expansion: if a satisfying hyperplane can only be satisfied by one
-    ##   point, then that means the representation for the ecc and the point must
-    ##   be exactly the same. To make optimization easier we add extra hyperplanes,
-    ##   replacing the ecc index with the singleton index
-    #supp_constraints = []
-    #for hyperplane in [h for h in sum_gt_one_constraints if len(h) == 1]:
-    #    _, point_idx = hyperplane[0]
-    #    for other_hyperplane in sum_gt_one_constraints:
-    #        if other_hyperplane != hyperplane:
-    #            supp_constraints.append([(point_idx, v) for _, v in other_hyperplane])
-    #sum_gt_one_constraints += supp_constraints
-
     # add sum greater than one (feature satisfying hyperplanes) constraints
     num_hyperplanes = len(sum_gt_one_constraints)
     constraint_triples = jnp.array([(b.shape[0] + i, u, v)
@@ -295,44 +255,12 @@ def warm_start_add_constraint(
         eigvals, eigvecs = jnp.linalg.eigh(old_sdp_state.X)
         point_embeds = (eigvecs[:,-num_pred_clusters:] * jnp.sqrt(eigvals[None, -num_pred_clusters:]))
         point_embeds = point_embeds / jnp.linalg.norm(point_embeds, axis=1)[:, None]
-
         avg_embed = jnp.sum(point_embeds[ecc_points] / ecc_counts[:, None], axis=0)
         avg_embed = avg_embed / jnp.linalg.norm(avg_embed)
-
-        #point_embeds = point_embeds.at[nbr_ecc_points].set(
-        #    point_embeds[nbr_ecc_points] + avg_embed[None, :])
-        #point_embeds = point_embeds.at[ecc_points].set(
-        #    point_embeds[ecc_points] + avg_embed[None, :])
-
         point_embeds = point_embeds.at[ecc_points].set(avg_embed[None, :])
-        #point_embeds = point_embeds.at[nbr_ecc_points].set(avg_embed[None, :])
         point_embeds = jnp.concatenate([point_embeds, avg_embed[None, :]], axis=0)
-
-        #if len(ortho_indices) > 0:
-        #    neg_point_embeds = point_embeds[neg_points]
-        #    neg_point_embeds = neg_point_embeds / np.linalg.norm(neg_point_embeds, axis=1)[:, None]
-        #    neg_point_projs = np.dot(neg_point_embeds, avg_embed)
-        #    neg_point_projs = neg_point_projs / (np.linalg.norm(neg_point_embeds, axis=1) ** 2)
-        #    neg_point_projs = neg_point_projs[:, None] * avg_embed
-        #    neg_point_embeds = neg_point_embeds - neg_point_projs
-        #    point_embeds = point_embeds.at[neg_points, :].set(neg_point_embeds)
-
         point_embeds = point_embeds / jnp.linalg.norm(point_embeds, axis=1)[:, None]
-
-        #point_embeds = point_embeds.at[neg_points].set(jnp.zeros_like(point_embeds[neg_points]))
-
         X = point_embeds @ point_embeds.T
-
-        #X = jnp.zeros_like(X)
-
-        #X = BCOO.fromdense(X_trunc)
-        #X = BCOO((X.data, X.indices), shape=(n, n)).todense()
-        #X = BCOO.fromdense(X)
-        ##drop_mask = jnp.isin(X.indices, columns_to_drop)
-        #drop_mask = jnp.isin(X.indices, nbr_ecc_points)
-        #drop_mask = (drop_mask[:, 0] | drop_mask[:, 1])
-        #X = BCOO((X.data[~drop_mask], X.indices[~drop_mask]), shape=(n, n)).todense()
-
         z = apply_A_operator_mx(n, m, A_data, A_indices, X) 
     if old_sdp_state.P is not None:
         assert False
@@ -342,14 +270,6 @@ def warm_start_add_constraint(
 
     SCALE_X = 1.0 / float(n)
     SCALE_C = 1.0 / jnp.linalg.norm(C.data)  # equivalent to frobenius norm
-    #SCALE_A = 1.0 / jnp.sqrt(jnp.zeros((m,)).at[A_indices[:,0]].add(A_data**2))
-    #A_tensor = BCOO((A_data, A_indices), shape=(m, n, n))
-    #A_matrix = SCALE_A[:, None] * A_tensor.reshape(m, n**2)
-    #A_matrix = coo_matrix(
-    #    (A_matrix.data, (A_matrix.indices[:,0], A_matrix.indices[:,1])), shape=A_matrix.shape)
-    #norm_A = jnp.sqrt(eigsh(A_matrix @ A_matrix.T, k=1, which="LM", return_eigenvectors=False)[0])
-    #SCALE_A /= norm_A
-
     SCALE_A = jnp.ones_like(b)
 
     y = jnp.zeros((m,)).at[jnp.arange(old_sdp_state.b.shape[0])].set(
@@ -358,42 +278,6 @@ def warm_start_add_constraint(
 
     # NOTE: this is proximal step: (1 / rho)*(AX - b)
     y = y + (20.0 * SCALE_X * jnp.clip(b - z, a_max=0.0))
-
-    #y = y.at[neg_points].set(jnp.zeros_like(y[neg_points]))
-
-    #y = y.at[ecc_points].set(jnp.zeros_like(y[ecc_points]))
-    #y = jnp.full((m,), -.0 * SCALE_X).at[jnp.arange(old_sdp_state.b.shape[0])].set(
-    #    old_sdp_state.y / old_sdp_state.SCALE_A)
-
-    ## set the dual variable
-    #old_diag_indices = old_sdp_state.A_indices[
-    #    old_sdp_state.A_indices[:,1] ==old_sdp_state. A_indices[:,2]][:,0]
-    #old_equality_mask = jnp.isin(old_diag_indices, jnp.where(1 - old_sdp_state.b_ineq_mask)[0])
-    #old_diag_indices = old_diag_indices[old_equality_mask]
-
-    ##mean_equality_dual = jnp.mean(old_sdp_state.y[old_diag_indices])
-    ##mean_inequality_dual = jnp.mean(
-    ##    old_sdp_state.y[~jnp.isin(jnp.arange(old_sdp_state.b.shape[0]), old_diag_indices)])
-    #mean_inequality_dual = jnp.mean(old_sdp_state.y / old_sdp_state.SCALE_A)
-
-    #diag_indices = A_indices[A_indices[:,1] == A_indices[:,2]][:,0]
-    #equality_mask = jnp.isin(diag_indices, jnp.where(1 - b_ineq_mask)[0])
-    #diag_indices = diag_indices[equality_mask]
-
-    ## TODO: see if we want to increase dual variable for pos ecc point diag equalities 
-    #mean_inequality_dual = 0.0
-    #y = jnp.full((m,), 5.0 * mean_inequality_dual).at[diag_indices].set(5.0 * mean_inequality_dual)
-    #y = y.at[jnp.arange(old_sdp_state.b.shape[0])].set(old_sdp_state.y / old_sdp_state.SCALE_A)
-
-    ##print("y mean equality value: ", mean_equality_dual)
-    #print("y mean inequality value: ", mean_inequality_dual)
-
-    # TODO: change this to be rho instead of 0.05
-
-    # drop relevant entries in y
-    #reset_constraint_mask = (jnp.isin(A_indices[:, 1], columns_to_drop)
-    #                         & jnp.isin(A_indices[:, 2], columns_to_drop))
-    #y = y.at[jnp.unique(A_indices[reset_constraint_mask, 0])].set(0.0)
 
     sdp_state = SDPState(
         C=C,
