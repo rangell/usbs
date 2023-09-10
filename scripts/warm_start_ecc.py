@@ -24,7 +24,8 @@ from solver.specbm import specbm
 from utils.common import unscale_sdp_state, SDPState
 from utils.ecc_helpers import (initialize_state,
                                cold_start_add_constraint,
-                               warm_start_add_constraint)
+                               warm_start_add_constraint,
+                               create_sparse_laplacian)
 from utils.trellis import Trellis
 
 from IPython import embed
@@ -38,9 +39,8 @@ class EccClusterer(object):
                  hparams: argparse.Namespace):
 
         self.hparams = hparams
-
         self.edge_weights = edge_weights
-        self.create_sparse_laplacian(eps=0.5)
+        self.sparse_laplacian = create_sparse_laplacian(edge_weights=edge_weights, eps=0.5)
 
         self.features = features
         self.n = self.features.shape[0]
@@ -51,97 +51,6 @@ class EccClusterer(object):
         C = BCOO.from_scipy_sparse(self.sparse_laplacian).astype(float)
         self.cold_start_sdp_state = initialize_state(C=C, sketch_dim=hparams.sketch_dim)
         self.warm_start_sdp_state = copy.deepcopy(self.cold_start_sdp_state)
-
-    def create_sparse_laplacian(self, eps: float):
-        pos_mask = (self.edge_weights.data > 0)
-        pos_graph = coo_matrix(
-            (self.edge_weights.data[pos_mask],
-             (self.edge_weights.row[pos_mask], self.edge_weights.col[pos_mask])),
-            shape=self.edge_weights.shape)
-        neg_graph = coo_matrix(
-            (-self.edge_weights.data[~pos_mask],
-             (self.edge_weights.row[~pos_mask], self.edge_weights.col[~pos_mask])),
-            shape=self.edge_weights.shape)
-
-        pos_n, pos_m = pos_graph.shape[0], pos_graph.data.shape[0]
-        neg_n, neg_m = neg_graph.shape[0], neg_graph.data.shape[0]
-
-        pos_k = np.ceil(np.log(pos_n) / eps**2).astype(int)
-        neg_k = np.ceil(np.log(neg_n) / eps**2).astype(int)
-
-        pos_diag_edge_mx = coo_matrix(
-            (pos_graph.data, (np.arange(pos_m), np.arange(pos_m))), shape=(pos_m, pos_m))
-        neg_diag_edge_mx = coo_matrix(
-            (neg_graph.data, (np.arange(neg_m), np.arange(neg_m))), shape=(neg_m, neg_m))
-
-        pos_incidence_mx = coo_matrix(
-            (np.concatenate([np.ones((pos_m,)), np.full((pos_m,), -1.0)]),
-             (np.concatenate([np.arange(pos_m), np.arange(pos_m)]),
-              np.concatenate([pos_graph.row, pos_graph.col]))),
-            shape=(pos_m, pos_n))
-        neg_incidence_mx = coo_matrix(
-            (np.concatenate([np.ones((neg_m,)), np.full((neg_m,), -1.0)]),
-             (np.concatenate([np.arange(neg_m), np.arange(neg_m)]),
-              np.concatenate([neg_graph.row, neg_graph.col]))),
-            shape=(neg_m, neg_n))
-
-        pos_laplacian_mx = pos_incidence_mx.T @ pos_diag_edge_mx @ pos_incidence_mx 
-        neg_laplacian_mx = neg_incidence_mx.T @ neg_diag_edge_mx @ neg_incidence_mx 
-
-        pos_rand_proj = np.random.binomial(n=1, p=0.5, size=(pos_m, pos_k))
-        pos_rand_proj = (1 / np.sqrt(pos_k)) * (2 * pos_rand_proj - 1)
-        neg_rand_proj = np.random.binomial(n=1, p=0.5, size=(neg_m, neg_k))
-        neg_rand_proj = (1 / np.sqrt(neg_k)) * (2 * neg_rand_proj - 1)
-
-        pos_resistance_embeds = (pos_rand_proj.T
-                                 @ np.sqrt(pos_diag_edge_mx)
-                                 @ pos_incidence_mx
-                                 @ np.linalg.pinv(pos_laplacian_mx.todense())).T 
-        neg_resistance_embeds = (neg_rand_proj.T
-                                 @ np.sqrt(neg_diag_edge_mx)
-                                 @ neg_incidence_mx
-                                 @ np.linalg.pinv(neg_laplacian_mx.todense())).T 
-
-        pos_resistances = np.linalg.norm(pos_incidence_mx @ pos_resistance_embeds, axis=1)**2
-        neg_resistances = np.linalg.norm(neg_incidence_mx @ neg_resistance_embeds, axis=1)**2
-
-        pos_energies = pos_diag_edge_mx @ pos_resistances
-        neg_energies = neg_diag_edge_mx @ neg_resistances
-
-        pos_probs = pos_energies / np.sum(pos_energies)
-        neg_probs = neg_energies / np.sum(neg_energies)
-
-        num_sample_edges = np.ceil(pos_n * np.log(pos_n) / (2 * eps ** 2)).astype(int)
-
-        if num_sample_edges < pos_m:
-            sampled_edges = np.random.multinomial(num_sample_edges, pos_probs, size=1)
-            sampled_edge_weights = (sampled_edges @ pos_diag_edge_mx) / (num_sample_edges * pos_probs)
-            sampled_edge_weights = sampled_edge_weights.squeeze()
-            sampled_edge_mask = sampled_edge_weights != 0.0
-            sampled_pos_graph = coo_matrix(
-                (pos_graph.data[sampled_edge_mask],
-                (pos_graph.row[sampled_edge_mask], pos_graph.col[sampled_edge_mask])),
-                shape=pos_graph.shape)
-            sampled_pos_graph = sampled_pos_graph + sampled_pos_graph.T
-            sampled_pos_laplacian = laplacian(sampled_pos_graph)
-        else:
-            sampled_pos_laplacian = pos_laplacian_mx
-
-        if num_sample_edges < neg_m:
-            sampled_edges = np.random.multinomial(num_sample_edges, neg_probs, size=1)
-            sampled_edge_weights = (sampled_edges @ neg_diag_edge_mx) / (num_sample_edges * neg_probs)
-            sampled_edge_weights = sampled_edge_weights.squeeze()
-            sampled_edge_mask = sampled_edge_weights != 0.0
-            sampled_neg_graph = coo_matrix(
-                (neg_graph.data[sampled_edge_mask],
-                (neg_graph.row[sampled_edge_mask], neg_graph.col[sampled_edge_mask])),
-                shape=neg_graph.shape)
-            sampled_neg_graph = sampled_neg_graph + sampled_neg_graph.T
-            sampled_neg_laplacian = laplacian(sampled_neg_graph)
-        else:
-            sampled_neg_laplacian = neg_laplacian_mx
-
-        self.sparse_laplacian = sampled_pos_laplacian - sampled_neg_laplacian
 
 
     def add_constraint(self, ecc_constraint: csr_matrix):
@@ -300,7 +209,7 @@ class EccClusterer(object):
     def build_and_solve_sdp(self):
 
         self.cold_start_sdp_state = self._call_sdp_solver(self.cold_start_sdp_state, "specbm/cold")
-        warm_start_out = self._call_sdp_solver(self.warm_start_sdp_state, "specbm/warm")
+        _ = self._call_sdp_solver(self.warm_start_sdp_state, "specbm/warm")
 
         unscaled_state = unscale_sdp_state(self.cold_start_sdp_state)
         sdp_obj_value = float(jnp.trace(-unscaled_state.C @ unscaled_state.X))
