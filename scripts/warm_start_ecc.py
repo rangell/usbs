@@ -20,6 +20,7 @@ from sklearn import random_projection
 from sklearn.metrics import adjusted_rand_score as rand_idx
 from sklearn.metrics import homogeneity_completeness_v_measure as cluster_f1
 
+from solver.cgal import cgal
 from solver.specbm import specbm
 from utils.common import unscale_sdp_state, SDPState
 from utils.ecc_helpers import (initialize_state,
@@ -179,28 +180,49 @@ class EccClusterer(object):
                     * sdp_state.SCALE_X)
 
         print(">>>>> START: ", solver_name)
-        out_sdp_state = specbm(
-            sdp_state=sdp_state,
-            n=sdp_state.C.shape[0],
-            m=sdp_state.b.shape[0],
-            trace_ub=trace_ub,
-            trace_factor=hparams.trace_factor,
-            rho=self.hparams.rho,
-            beta=self.hparams.beta,
-            k_curr=min(self.hparams.k_curr, sdp_state.C.shape[0]),
-            k_past=self.hparams.k_past,
-            max_iters=self.hparams.max_iters,
-            max_time=self.hparams.max_time,
-            obj_gap_eps=self.hparams.obj_gap_eps,
-            infeas_gap_eps=self.hparams.infeas_gap_eps,
-            max_infeas_eps=self.hparams.max_infeas_eps,
-            lanczos_inner_iterations=min(sdp_state.C.shape[0], 32),
-            lanczos_max_restarts=self.hparams.lanczos_max_restarts,
-            subprob_eps=self.hparams.subprob_eps,
-            subprob_max_iters=hparams.subprob_max_iters,
-            callback_fn=None,
-            callback_static_args=None,
-            callback_nonstatic_args=None)
+        if "specbm" in solver_name:
+            out_sdp_state = specbm(
+                sdp_state=sdp_state,
+                n=sdp_state.C.shape[0],
+                m=sdp_state.b.shape[0],
+                trace_ub=trace_ub,
+                trace_factor=self.hparams.trace_factor,
+                rho=self.hparams.rho,
+                beta=self.hparams.beta,
+                k_curr=min(self.hparams.k_curr, sdp_state.C.shape[0]),
+                k_past=self.hparams.k_past,
+                max_iters=self.hparams.max_iters,
+                max_time=self.hparams.max_time,
+                obj_gap_eps=self.hparams.obj_gap_eps,
+                infeas_gap_eps=self.hparams.infeas_gap_eps,
+                max_infeas_eps=self.hparams.max_infeas_eps,
+                lanczos_inner_iterations=min(sdp_state.C.shape[0], 32),
+                lanczos_max_restarts=self.hparams.lanczos_max_restarts,
+                subprob_eps=self.hparams.subprob_eps,
+                subprob_max_iters=hparams.subprob_max_iters,
+                callback_fn=None,
+                callback_static_args=None,
+                callback_nonstatic_args=None)
+        elif "cgal" in solver_name:
+            out_sdp_state = cgal(
+                sdp_state=sdp_state,
+                n=sdp_state.C.shape[0],
+                m=sdp_state.b.shape[0],
+                trace_ub=trace_ub,
+                beta0=1.0,
+                max_iters=self.hparams.max_iters,
+                max_time=self.hparams.max_time,
+                obj_gap_eps=self.hparams.obj_gap_eps,
+                infeas_gap_eps=self.hparams.infeas_gap_eps,
+                max_infeas_eps=self.hparams.max_infeas_eps,
+                lanczos_inner_iterations=min(sdp_state.C.shape[0], 32),
+                lanczos_max_restarts=self.hparams.lanczos_max_restarts,
+                subprob_eps=self.hparams.subprob_eps,
+                callback_fn=None,
+                callback_static_args=None,
+                callback_nonstatic_args=None)
+        else:
+            raise ValueError("Unknown solver name.")
         print("<<<<< END: ", solver_name)
 
         return out_sdp_state
@@ -208,6 +230,8 @@ class EccClusterer(object):
 
     def build_and_solve_sdp(self):
 
+        _ = self._call_sdp_solver(self.cold_start_sdp_state, "cgal/cold")
+        _ = self._call_sdp_solver(self.warm_start_sdp_state, "cgal/warm")
         self.cold_start_sdp_state = self._call_sdp_solver(self.cold_start_sdp_state, "specbm/cold")
         _ = self._call_sdp_solver(self.warm_start_sdp_state, "specbm/warm")
 
