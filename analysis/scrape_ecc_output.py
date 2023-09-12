@@ -7,7 +7,7 @@ from IPython import embed
 
 
 if __name__ == "__main__":
-    log_fname = "pubmed2.out"
+    log_fname = "arnetminer.out"
 
     start_time = None
     solve_time = None
@@ -52,11 +52,12 @@ if __name__ == "__main__":
     df = pd.DataFrame(columns=tuple(solve_times.keys()))
     for name, vals in solve_times.items():
         df[name] = [0] + vals
+    
     df = df.cumsum()
     df = df.reindex(range(1, len(vals)+1))
 
     sns.lineplot(df)
-    plt.title("Pubmed")
+    #plt.title("Pubmed")
     plt.xlabel("# of $\exists$-constraints")
     plt.ylabel("cumulative time (sec)")
     plt.show()
