@@ -14,19 +14,19 @@ import numba as nb
 from numba.typed import List
 import numpy as np
 from scipy.sparse import csr_matrix, coo_matrix, dok_matrix
-from scipy.sparse import triu as sp_triu
 from scipy.sparse import vstack as sp_vstack
 from scipy.sparse.csgraph import laplacian
 from sklearn import random_projection
 from sklearn.metrics import adjusted_rand_score as rand_idx
 from sklearn.metrics import homogeneity_completeness_v_measure as cluster_f1
 
+from solver.cgal import cgal
 from solver.specbm import specbm
-from utils.common import unscale_sdp_state
+from utils.common import unscale_sdp_state, SDPState
 from utils.ecc_helpers import (initialize_state,
                                cold_start_add_constraint,
-                               column_drop_add_constraint,
-                               embed_match_add_constraint)
+                               warm_start_add_constraint,
+                               create_sparse_laplacian)
 from utils.trellis import Trellis
 
 from IPython import embed
@@ -40,10 +40,8 @@ class EccClusterer(object):
                  hparams: argparse.Namespace):
 
         self.hparams = hparams
-
         self.edge_weights = edge_weights
-        self.create_sparse_laplacian(eps=0.5)
-        self.edge_weights = -sp_triu(self.sparse_laplacian, k=1)
+        self.sparse_laplacian = create_sparse_laplacian(edge_weights=edge_weights, eps=0.5)
 
         self.features = features
         self.n = self.features.shape[0]
@@ -52,99 +50,8 @@ class EccClusterer(object):
         self.incompat_mx = None
 
         C = BCOO.from_scipy_sparse(self.sparse_laplacian).astype(float)
-        #C = BCOO.from_scipy_sparse(-self.edge_weights).astype(float)
-        self.sdp_state = initialize_state(C=C, sketch_dim=hparams.sketch_dim)
-
-    def create_sparse_laplacian(self, eps: float):
-        pos_mask = (self.edge_weights.data > 0)
-        pos_graph = coo_matrix(
-            (self.edge_weights.data[pos_mask],
-             (self.edge_weights.row[pos_mask], self.edge_weights.col[pos_mask])),
-            shape=self.edge_weights.shape)
-        neg_graph = coo_matrix(
-            (-self.edge_weights.data[~pos_mask],
-             (self.edge_weights.row[~pos_mask], self.edge_weights.col[~pos_mask])),
-            shape=self.edge_weights.shape)
-
-        pos_n, pos_m = pos_graph.shape[0], pos_graph.data.shape[0]
-        neg_n, neg_m = neg_graph.shape[0], neg_graph.data.shape[0]
-
-        pos_k = np.ceil(np.log(pos_n) / eps**2).astype(int)
-        neg_k = np.ceil(np.log(neg_n) / eps**2).astype(int)
-
-        pos_diag_edge_mx = coo_matrix(
-            (pos_graph.data, (np.arange(pos_m), np.arange(pos_m))), shape=(pos_m, pos_m))
-        neg_diag_edge_mx = coo_matrix(
-            (neg_graph.data, (np.arange(neg_m), np.arange(neg_m))), shape=(neg_m, neg_m))
-
-        pos_incidence_mx = coo_matrix(
-            (np.concatenate([np.ones((pos_m,)), np.full((pos_m,), -1.0)]),
-             (np.concatenate([np.arange(pos_m), np.arange(pos_m)]),
-              np.concatenate([pos_graph.row, pos_graph.col]))),
-            shape=(pos_m, pos_n))
-        neg_incidence_mx = coo_matrix(
-            (np.concatenate([np.ones((neg_m,)), np.full((neg_m,), -1.0)]),
-             (np.concatenate([np.arange(neg_m), np.arange(neg_m)]),
-              np.concatenate([neg_graph.row, neg_graph.col]))),
-            shape=(neg_m, neg_n))
-
-        pos_laplacian_mx = pos_incidence_mx.T @ pos_diag_edge_mx @ pos_incidence_mx 
-        neg_laplacian_mx = neg_incidence_mx.T @ neg_diag_edge_mx @ neg_incidence_mx 
-
-        pos_rand_proj = np.random.binomial(n=1, p=0.5, size=(pos_m, pos_k))
-        pos_rand_proj = (1 / np.sqrt(pos_k)) * (2 * pos_rand_proj - 1)
-        neg_rand_proj = np.random.binomial(n=1, p=0.5, size=(neg_m, neg_k))
-        neg_rand_proj = (1 / np.sqrt(neg_k)) * (2 * neg_rand_proj - 1)
-
-        pos_resistance_embeds = (pos_rand_proj.T
-                                 @ np.sqrt(pos_diag_edge_mx)
-                                 @ pos_incidence_mx
-                                 @ np.linalg.pinv(pos_laplacian_mx.todense())).T 
-        neg_resistance_embeds = (neg_rand_proj.T
-                                 @ np.sqrt(neg_diag_edge_mx)
-                                 @ neg_incidence_mx
-                                 @ np.linalg.pinv(neg_laplacian_mx.todense())).T 
-
-        pos_resistances = np.linalg.norm(pos_incidence_mx @ pos_resistance_embeds, axis=1)**2
-        neg_resistances = np.linalg.norm(neg_incidence_mx @ neg_resistance_embeds, axis=1)**2
-
-        pos_energies = pos_diag_edge_mx @ pos_resistances
-        neg_energies = neg_diag_edge_mx @ neg_resistances
-
-        pos_probs = pos_energies / np.sum(pos_energies)
-        neg_probs = neg_energies / np.sum(neg_energies)
-
-        num_sample_edges = np.ceil(pos_n * np.log(pos_n) / (2 * eps ** 2)).astype(int)
-
-        if num_sample_edges < pos_m:
-            sampled_edges = np.random.multinomial(num_sample_edges, pos_probs, size=1)
-            sampled_edge_weights = (sampled_edges @ pos_diag_edge_mx) / (num_sample_edges * pos_probs)
-            sampled_edge_weights = sampled_edge_weights.squeeze()
-            sampled_edge_mask = sampled_edge_weights != 0.0
-            sampled_pos_graph = coo_matrix(
-                (pos_graph.data[sampled_edge_mask],
-                (pos_graph.row[sampled_edge_mask], pos_graph.col[sampled_edge_mask])),
-                shape=pos_graph.shape)
-            sampled_pos_graph = sampled_pos_graph + sampled_pos_graph.T
-            sampled_pos_laplacian = laplacian(sampled_pos_graph)
-        else:
-            sampled_pos_laplacian = pos_laplacian_mx
-
-        if num_sample_edges < neg_m:
-            sampled_edges = np.random.multinomial(num_sample_edges, neg_probs, size=1)
-            sampled_edge_weights = (sampled_edges @ neg_diag_edge_mx) / (num_sample_edges * neg_probs)
-            sampled_edge_weights = sampled_edge_weights.squeeze()
-            sampled_edge_mask = sampled_edge_weights != 0.0
-            sampled_neg_graph = coo_matrix(
-                (neg_graph.data[sampled_edge_mask],
-                (neg_graph.row[sampled_edge_mask], neg_graph.col[sampled_edge_mask])),
-                shape=neg_graph.shape)
-            sampled_neg_graph = sampled_neg_graph + sampled_neg_graph.T
-            sampled_neg_laplacian = laplacian(sampled_neg_graph)
-        else:
-            sampled_neg_laplacian = neg_laplacian_mx
-
-        self.sparse_laplacian = sampled_pos_laplacian - sampled_neg_laplacian
+        self.cold_start_sdp_state = initialize_state(C=C, sketch_dim=hparams.sketch_dim)
+        self.warm_start_sdp_state = copy.deepcopy(self.cold_start_sdp_state)
 
 
     def add_constraint(self, ecc_constraint: csr_matrix):
@@ -191,29 +98,19 @@ class EccClusterer(object):
             j_s = points_indices[points_indptr[idx]: points_indptr[idx+1]]
             if i == self.n - 1:
                 sum_gt_one_constraints.append([(i,j) for j in j_s])
-        
-        if self.hparams.warm_start_strategy == "none":
-            self.sdp_state = cold_start_add_constraint(
-                old_sdp_state=self.sdp_state,
-                ortho_indices=ortho_indices,
-                sum_gt_one_constraints=sum_gt_one_constraints,
-                sketch_dim=-1)
-        elif self.hparams.warm_start_strategy == "column_drop":
-            self.sdp_state = column_drop_add_constraint(
-                old_sdp_state=self.sdp_state,
-                ortho_indices=ortho_indices,
-                sum_gt_one_constraints=sum_gt_one_constraints,
-                prev_pred_clusters=jnp.array(self.prev_pred_clusters),
-                sketch_dim=-1)
-        elif self.hparams.warm_start_strategy == "embed_match":
-            self.sdp_state = embed_match_add_constraint(
-                old_sdp_state=self.sdp_state,
-                ortho_indices=ortho_indices,
-                sum_gt_one_constraints=sum_gt_one_constraints,
-                prev_pred_clusters=jnp.array(self.prev_pred_clusters),
-                sketch_dim=-1)
-        else:
-            raise NotImplementedError()
+
+        self.warm_start_sdp_state = warm_start_add_constraint(
+            old_sdp_state=self.cold_start_sdp_state,
+            ortho_indices=ortho_indices,
+            sum_gt_one_constraints=sum_gt_one_constraints,
+            prev_pred_clusters=jnp.array(self.prev_pred_clusters),
+            sketch_dim=-1)
+        self.cold_start_sdp_state = cold_start_add_constraint(
+            old_sdp_state=self.cold_start_sdp_state,
+            ortho_indices=ortho_indices,
+            sum_gt_one_constraints=sum_gt_one_constraints,
+            sketch_dim=-1)
+
 
     @staticmethod
     @nb.njit(parallel=True)
@@ -276,51 +173,69 @@ class EccClusterer(object):
 
         return (ecc_indices, points_indptr, points_indices)
 
-    def _call_sdp_solver(self) -> None:
-        # modifies `self.sdp_state`
+
+    def _call_sdp_solver(self, sdp_state: SDPState, solver_name: str) -> None:
         trace_ub = (self.hparams.trace_factor
-                    * float(self.sdp_state.C.shape[0])
-                    * self.sdp_state.SCALE_X)
+                    * float(sdp_state.C.shape[0])
+                    * sdp_state.SCALE_X)
 
-        pre_sdp_state = copy.deepcopy(self.sdp_state)
+        print(">>>>> START: ", solver_name)
+        if "specbm" in solver_name:
+            out_sdp_state = specbm(
+                sdp_state=sdp_state,
+                n=sdp_state.C.shape[0],
+                m=sdp_state.b.shape[0],
+                trace_ub=trace_ub,
+                trace_factor=self.hparams.trace_factor,
+                rho=self.hparams.rho,
+                beta=self.hparams.beta,
+                k_curr=min(self.hparams.k_curr, sdp_state.C.shape[0]),
+                k_past=self.hparams.k_past,
+                max_iters=self.hparams.max_iters,
+                max_time=self.hparams.max_time,
+                obj_gap_eps=self.hparams.obj_gap_eps,
+                infeas_gap_eps=self.hparams.infeas_gap_eps,
+                max_infeas_eps=self.hparams.max_infeas_eps,
+                lanczos_inner_iterations=min(sdp_state.C.shape[0], 32),
+                lanczos_max_restarts=self.hparams.lanczos_max_restarts,
+                subprob_eps=self.hparams.subprob_eps,
+                subprob_max_iters=hparams.subprob_max_iters,
+                callback_fn=None,
+                callback_static_args=None,
+                callback_nonstatic_args=None)
+        elif "cgal" in solver_name:
+            out_sdp_state = cgal(
+                sdp_state=sdp_state,
+                n=sdp_state.C.shape[0],
+                m=sdp_state.b.shape[0],
+                trace_ub=trace_ub,
+                beta0=1.0,
+                max_iters=self.hparams.max_iters,
+                max_time=self.hparams.max_time,
+                obj_gap_eps=self.hparams.obj_gap_eps,
+                infeas_gap_eps=self.hparams.infeas_gap_eps,
+                max_infeas_eps=self.hparams.max_infeas_eps,
+                lanczos_inner_iterations=min(sdp_state.C.shape[0], 32),
+                lanczos_max_restarts=self.hparams.lanczos_max_restarts,
+                subprob_eps=self.hparams.subprob_eps,
+                callback_fn=None,
+                callback_static_args=None,
+                callback_nonstatic_args=None)
+        else:
+            raise ValueError("Unknown solver name.")
+        print("<<<<< END: ", solver_name)
 
-        self.sdp_state = specbm(
-            sdp_state=self.sdp_state,
-            n=self.sdp_state.C.shape[0],
-            m=self.sdp_state.b.shape[0],
-            trace_ub=trace_ub,
-            trace_factor=self.hparams.trace_factor,
-            rho=hparams.rho,
-            beta=hparams.beta,
-            k_curr=self.hparams.k_curr,
-            k_past=self.hparams.k_past,
-            max_iters=self.hparams.max_iters,
-            max_time=self.hparams.max_time,
-            obj_gap_eps=self.hparams.obj_gap_eps,
-            infeas_gap_eps=self.hparams.infeas_gap_eps,
-            max_infeas_eps=self.hparams.max_infeas_eps,
-            lanczos_inner_iterations=min(self.sdp_state.C.shape[0], 32),
-            lanczos_max_restarts=self.hparams.lanczos_max_restarts,
-            subprob_eps=self.hparams.subprob_eps,
-            subprob_max_iters=self.hparams.subprob_max_iters,
-            callback_fn=None,
-            callback_static_args=None,
-            callback_nonstatic_args=None)
+        return out_sdp_state
 
-        round = len(self.ecc_constraints) 
-        dump_fname = "{}_{}_state.pkl".format(self.hparams.warm_start_strategy, round)
-        with open(dump_fname, "wb") as f:
-            pickle.dump(
-                {"round": round,
-                 "pre_sdp_state": pre_sdp_state,
-                 "post_sdp_state": copy.deepcopy(self.sdp_state)},
-                f)
-        
+
     def build_and_solve_sdp(self):
 
-        self._call_sdp_solver()
-        
-        unscaled_state = unscale_sdp_state(self.sdp_state)
+        _ = self._call_sdp_solver(self.cold_start_sdp_state, "cgal/cold")
+        _ = self._call_sdp_solver(self.warm_start_sdp_state, "cgal/warm")
+        self.cold_start_sdp_state = self._call_sdp_solver(self.cold_start_sdp_state, "specbm/cold")
+        _ = self._call_sdp_solver(self.warm_start_sdp_state, "specbm/warm")
+
+        unscaled_state = unscale_sdp_state(self.cold_start_sdp_state)
         sdp_obj_value = float(jnp.trace(-unscaled_state.C @ unscaled_state.X))
         pw_probs = np.array(jnp.clip(unscaled_state.X, a_min=0.0, a_max=1.0))
         
@@ -805,20 +720,6 @@ def gen_ecc_constraint(point_feats: csr_matrix,
     new_ecc = coo_matrix((new_ecc_data, (new_ecc_row, new_ecc_col)),
                          shape=src_feats.shape, dtype=np.int64).tocsr()
 
-    # for debugging
-    constraint_str = ', '.join(
-            [('+f' if d > 0 else '-f') + str(int(c))
-                for c, d in zip(new_ecc_col, new_ecc_data)]
-    )
-    logging.info(f'Constraint generated: [{constraint_str}]')
-
-    logging.info('Nodes with features: {')
-    for feat_id in new_ecc_col:
-        nodes_with_feat = point_feats.T[int(feat_id)].tocoo().col
-        nodes_with_feat = [f'n{i}' for i in nodes_with_feat]
-        logging.info(f'\tf{int(feat_id)}: {", ".join(nodes_with_feat)}')
-    logging.info('}')
-
     # generate "equivalent" pairwise point constraints
     overlap_feats = set(sampled_overlap_feats)
     pos_feats = set(sampled_pos_feats)
@@ -861,16 +762,6 @@ def simulate(edge_weights: csr_matrix,
              point_features: csr_matrix,
              gold_clustering: np.ndarray,
              hparams: argparse.Namespace):
-
-    ## create column weights
-    # for now just do some uniform feature sampling
-    feat_freq = np.array(point_features.sum(axis=0))
-    #overlap_col_wt = np.ones((point_features.shape[1],))
-    #pos_col_wt = np.ones((point_features.shape[1],))
-    #neg_col_wt = np.ones((point_features.shape[1],))
-    overlap_col_wt = feat_freq**10
-    pos_col_wt = feat_freq**10
-    neg_col_wt = feat_freq**10
 
     gold_cluster_feats = sp_vstack([
         get_cluster_feats(point_features[gold_clustering == i])
@@ -944,20 +835,6 @@ def simulate(edge_weights: csr_matrix,
 
         # generate a new constraint
         while True:
-            #ecc_constraint, pairwise_constraints = gen_ecc_constraint(
-            #        point_features,
-            #        gold_clustering,
-            #        pred_clustering,
-            #        gold_cluster_feats,
-            #        pred_cluster_feats,
-            #        matching_mx,
-            #        hparams.max_overlap_feats,
-            #        max_pos_feats=3,
-            #        max_neg_feats=3,
-            #        overlap_col_wt=overlap_col_wt,
-            #        pos_col_wt=pos_col_wt,
-            #        neg_col_wt=neg_col_wt)
-
             ecc_constraint, pairwise_constraints = gen_forced_ecc_constraint(
                     point_features,
                     gold_clustering,
@@ -967,7 +844,6 @@ def simulate(edge_weights: csr_matrix,
                     matching_mx,
                     hparams.max_overlap_feats
             )
-
             already_exists = any([
                 (ecc_constraint != x).nnz == 0
                     for x in clusterer.ecc_constraints
@@ -1035,9 +911,6 @@ def get_hparams() -> argparse.Namespace:
                         help="sufficient decrease parameter")
     parser.add_argument("--sketch_dim", type=int, default=0,
                         help="dimension of Nystrom sketch")
-    parser.add_argument("--warm_start_strategy", type=str,
-                        choices=["none", "column_drop", "embed_match"],
-                        required=True, help="warm-start strategy to use")
 
     # for constraint generation
     parser.add_argument('--max_rounds', type=int, default=100,
@@ -1091,16 +964,30 @@ if __name__ == '__main__':
     pred_clusterings = {}
     num_blocks = len(blocks_preprocessed)
 
+    # problematic canopies
+    # x "d schmidt"
+    # x "h ishikawa"
+    # x "k chen"
+    # - "p wu"
+    # - "s mueller"
+
     sub_blocks_preprocessed = {}
-    #sub_blocks_preprocessed['a moore'] = blocks_preprocessed['a moore']
-    #sub_blocks_preprocessed['j taylor'] = blocks_preprocessed['j taylor']
-    #sub_blocks_preprocessed['s patel'] = blocks_preprocessed['s patel']
+    #sub_blocks_preprocessed['d schmidt'] = blocks_preprocessed['d schmidt']
+    #sub_blocks_preprocessed['h ishikawa'] = blocks_preprocessed['h ishikawa']
+    #sub_blocks_preprocessed['k chen'] = blocks_preprocessed['k chen']
+    #sub_blocks_preprocessed['p wu'] = blocks_preprocessed['p wu']
+
+    #sub_blocks_preprocessed['v tarasov'] = blocks_preprocessed['v tarasov']
     sub_blocks_preprocessed = blocks_preprocessed
 
     for i, (block_name, block_data) in enumerate(sub_blocks_preprocessed.items()):
         edge_weights = block_data['edge_weights']
         point_features = block_data['point_features'].tocsr()
         gold_clustering = block_data['labels']
+
+        # skip small blocks
+        if edge_weights.shape[0] < 20:
+            continue
 
         assert edge_weights.shape[0] == point_features.shape[0]
         num_clusters = np.unique(gold_clustering).size
