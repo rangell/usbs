@@ -871,8 +871,8 @@ def simulate(edge_weights: csr_matrix,
                     pred_cluster_feats,
                     matching_mx,
                     hparams.max_overlap_feats,
-                    2,  # max_pos_feats
-                    2,  # max_neg_feats
+                    1,  # max_pos_feats
+                    1,  # max_neg_feats
                     overlap_col_wt,
                     pos_col_wt,
                     neg_col_wt
