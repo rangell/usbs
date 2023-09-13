@@ -885,8 +885,8 @@ def simulate(edge_weights: csr_matrix,
                     pred_cluster_feats,
                     matching_mx,
                     hparams.max_overlap_feats,
-                    1,  # max_pos_feats
-                    1,  # max_neg_feats
+                    2,  # max_pos_feats
+                    2,  # max_neg_feats
                     overlap_col_wt,
                     pos_col_wt,
                     neg_col_wt
@@ -961,7 +961,7 @@ def get_hparams() -> argparse.Namespace:
     # for constraint generation
     parser.add_argument('--max_rounds', type=int, default=100,
                         help="number of rounds to generate feedback for")
-    parser.add_argument('--max_overlap_feats', type=int, default=1,
+    parser.add_argument('--max_overlap_feats', type=int, default=2,
                         help="max num overlap features to sample.")
     hparams = parser.parse_args()
     return hparams
