@@ -835,48 +835,48 @@ def simulate(edge_weights: csr_matrix,
 
         # generate a new constraint
         while True:
-            ecc_constraint, pairwise_constraints = gen_forced_ecc_constraint(
-                    point_features,
-                    gold_clustering,
-                    pred_clustering,
-                    gold_cluster_feats,
-                    pred_cluster_feats,
-                    matching_mx,
-                    hparams.max_overlap_feats
-            )
-
-            #overlap_col_wt = np.ones((point_features.shape[1],))
-            #pos_col_wt = np.ones((point_features.shape[1],))
-            #neg_col_wt = np.ones((point_features.shape[1],))
-            ##ecc_constraint, pairwise_constraints = gen_ecc_constraint(
-            ##        point_feats=point_features,
-            ##        gold_clustering=gold_clustering,
-            ##        pred_clustering=pred_clustering,
-            ##        gold_cluster_feats=gold_cluster_feats,
-            ##        pred_cluster_feats=pred_cluster_feats,
-            ##        matching_mx=matching_mx,
-            ##        max_over_lap_feats=hparams.max_overlap_feats,
-            ##        max_pos_feats=2,
-            ##        max_neg_feats=2,
-            ##        overlap_col_wt=overlap_col_wt,
-            ##        pos_col_wt=pos_col_wt,
-            ##        neg_col_wt=neg_col_wt
-            ##)
-
-            #ecc_constraint, pairwise_constraints = gen_ecc_constraint(
+            #ecc_constraint, pairwise_constraints = gen_forced_ecc_constraint(
             #        point_features,
             #        gold_clustering,
             #        pred_clustering,
             #        gold_cluster_feats,
             #        pred_cluster_feats,
             #        matching_mx,
-            #        hparams.max_overlap_feats,
-            #        1,  # max_pos_feats
-            #        1,  # max_neg_feats
-            #        overlap_col_wt,
-            #        pos_col_wt,
-            #        neg_col_wt
+            #        hparams.max_overlap_feats
             #)
+
+            overlap_col_wt = np.ones((point_features.shape[1],))
+            pos_col_wt = np.ones((point_features.shape[1],))
+            neg_col_wt = np.ones((point_features.shape[1],))
+            #ecc_constraint, pairwise_constraints = gen_ecc_constraint(
+            #        point_feats=point_features,
+            #        gold_clustering=gold_clustering,
+            #        pred_clustering=pred_clustering,
+            #        gold_cluster_feats=gold_cluster_feats,
+            #        pred_cluster_feats=pred_cluster_feats,
+            #        matching_mx=matching_mx,
+            #        max_over_lap_feats=hparams.max_overlap_feats,
+            #        max_pos_feats=2,
+            #        max_neg_feats=2,
+            #        overlap_col_wt=overlap_col_wt,
+            #        pos_col_wt=pos_col_wt,
+            #        neg_col_wt=neg_col_wt
+            #)
+
+            ecc_constraint, pairwise_constraints = gen_ecc_constraint(
+                    point_features,
+                    gold_clustering,
+                    pred_clustering,
+                    gold_cluster_feats,
+                    pred_cluster_feats,
+                    matching_mx,
+                    hparams.max_overlap_feats,
+                    1,  # max_pos_feats
+                    1,  # max_neg_feats
+                    overlap_col_wt,
+                    pos_col_wt,
+                    neg_col_wt
+            )
             already_exists = any([
                 (ecc_constraint != x).nnz == 0
                     for x in clusterer.ecc_constraints
