@@ -175,12 +175,12 @@ class EccClusterer(object):
 
 
     def _call_sdp_solver(self, sdp_state: SDPState, solver_name: str) -> None:
+        trace_ub = (self.hparams.trace_factor
+                    * float(sdp_state.C.shape[0])
+                    * sdp_state.SCALE_X)
 
         print(">>>>> START: ", solver_name)
         if "specbm" in solver_name:
-            trace_ub = (self.hparams.trace_factor
-                        * float(sdp_state.C.shape[0])
-                        * sdp_state.SCALE_X)
             out_sdp_state = specbm(
                 sdp_state=sdp_state,
                 n=sdp_state.C.shape[0],
@@ -204,7 +204,6 @@ class EccClusterer(object):
                 callback_static_args=None,
                 callback_nonstatic_args=None)
         elif "cgal" in solver_name:
-            trace_ub = float(sdp_state.C.shape[0]) * sdp_state.SCALE_X
             out_sdp_state = cgal(
                 sdp_state=sdp_state,
                 n=sdp_state.C.shape[0],
