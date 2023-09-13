@@ -720,6 +720,20 @@ def gen_ecc_constraint(point_feats: csr_matrix,
     new_ecc = coo_matrix((new_ecc_data, (new_ecc_row, new_ecc_col)),
                          shape=src_feats.shape, dtype=np.int64).tocsr()
 
+    # for debugging
+    constraint_str = ', '.join(
+            [('+f' if d > 0 else '-f') + str(int(c))
+                for c, d in zip(new_ecc_col, new_ecc_data)]
+    )
+    logging.info(f'Constraint generated: [{constraint_str}]')
+
+    logging.info('Nodes with features: {')
+    for feat_id in new_ecc_col:
+        nodes_with_feat = point_feats.T[int(feat_id)].tocoo().col
+        nodes_with_feat = [f'n{i}' for i in nodes_with_feat]
+        logging.info(f'\tf{int(feat_id)}: {", ".join(nodes_with_feat)}')
+    logging.info('}')
+
     # generate "equivalent" pairwise point constraints
     overlap_feats = set(sampled_overlap_feats)
     pos_feats = set(sampled_pos_feats)
