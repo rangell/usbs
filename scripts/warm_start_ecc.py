@@ -230,8 +230,8 @@ class EccClusterer(object):
 
     def build_and_solve_sdp(self):
 
-        _ = self._call_sdp_solver(self.cold_start_sdp_state, "cgal/cold")
-        _ = self._call_sdp_solver(self.warm_start_sdp_state, "cgal/warm")
+        #_ = self._call_sdp_solver(self.cold_start_sdp_state, "cgal/cold")
+        #_ = self._call_sdp_solver(self.warm_start_sdp_state, "cgal/warm")
         self.cold_start_sdp_state = self._call_sdp_solver(self.cold_start_sdp_state, "specbm/cold")
         _ = self._call_sdp_solver(self.warm_start_sdp_state, "specbm/warm")
 
@@ -1024,7 +1024,7 @@ if __name__ == '__main__':
     #sub_blocks_preprocessed['k chen'] = blocks_preprocessed['k chen']
     #sub_blocks_preprocessed['p wu'] = blocks_preprocessed['p wu']
 
-    #sub_blocks_preprocessed['v tarasov'] = blocks_preprocessed['v tarasov']
+    #sub_blocks_preprocessed['s patel'] = blocks_preprocessed['s patel']
     sub_blocks_preprocessed = blocks_preprocessed
 
     for i, (block_name, block_data) in enumerate(sub_blocks_preprocessed.items()):
