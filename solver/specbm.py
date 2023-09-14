@@ -1,5 +1,4 @@
 from collections import namedtuple
-import cvxpy as cp
 from equinox.internal._loop.bounded import bounded_while_loop # type: ignore
 from functools import partial
 import jax
