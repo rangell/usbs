@@ -232,9 +232,10 @@ def warm_start_add_constraint(
     equality_columns = [v for l in sum_gt_one_constraints for pairs in l for v in pairs if len(l) == 1]
 
     ecc_points_and_counts = [(pairs[1], len(l)) for l in sum_gt_one_constraints for pairs in l if len(l) < 4]
-    ecc_points_and_counts = jnp.array(list(set(ecc_points_and_counts)))
-    ecc_points = ecc_points_and_counts[:, 0]
-    ecc_counts = ecc_points_and_counts[:, 1]
+    if len(ecc_points_and_counts) > 0:
+        ecc_points_and_counts = jnp.array(list(set(ecc_points_and_counts)))
+        ecc_points = ecc_points_and_counts[:, 0]
+        ecc_counts = ecc_points_and_counts[:, 1]
 
     columns_to_drop = jnp.array(list(set(columns_to_drop)))
     equality_columns = jnp.array(list(set(equality_columns)))
@@ -257,11 +258,12 @@ def warm_start_add_constraint(
         eigvals, eigvecs = jnp.linalg.eigh(old_sdp_state.X)
         point_embeds = (eigvecs[:,-num_pred_clusters:] * jnp.sqrt(eigvals[None, -num_pred_clusters:]))
         point_embeds = point_embeds / jnp.linalg.norm(point_embeds, axis=1)[:, None]
-        avg_embed = jnp.sum(point_embeds[ecc_points] / ecc_counts[:, None], axis=0)
-        avg_embed = avg_embed / jnp.linalg.norm(avg_embed)
-        point_embeds = point_embeds.at[ecc_points].set(avg_embed[None, :])
-        point_embeds = jnp.concatenate([point_embeds, avg_embed[None, :]], axis=0)
-        point_embeds = point_embeds / jnp.linalg.norm(point_embeds, axis=1)[:, None]
+        if len(ecc_points_and_counts) > 0:
+            avg_embed = jnp.sum(point_embeds[ecc_points] / ecc_counts[:, None], axis=0)
+            avg_embed = avg_embed / jnp.linalg.norm(avg_embed)
+            point_embeds = point_embeds.at[ecc_points].set(avg_embed[None, :])
+            point_embeds = jnp.concatenate([point_embeds, avg_embed[None, :]], axis=0)
+            point_embeds = point_embeds / jnp.linalg.norm(point_embeds, axis=1)[:, None]
         X = point_embeds @ point_embeds.T
         z = apply_A_operator_mx(n, m, A_data, A_indices, X) 
     if old_sdp_state.P is not None:
