@@ -245,10 +245,10 @@ def warm_start_add_constraint(
 
     num_pred_clusters = max(jnp.unique(prev_pred_clusters).shape[0], 2)
 
-    nbr_ecc_points = np.where(np.isin(prev_pred_clusters, prev_pred_clusters[ecc_points]))[0]
+    #nbr_ecc_points = np.where(np.isin(prev_pred_clusters, prev_pred_clusters[ecc_points]))[0]
 
-    if len(ortho_indices) > 0:
-        nbr_ecc_points = nbr_ecc_points[~np.isin(nbr_ecc_points, neg_points)]
+    #if len(ortho_indices) > 0:
+    #    nbr_ecc_points = nbr_ecc_points[~np.isin(nbr_ecc_points, neg_points)]
 
     X = old_sdp_state.X
     Omega = old_sdp_state.Omega
