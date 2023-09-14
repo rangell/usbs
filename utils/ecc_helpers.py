@@ -265,7 +265,7 @@ def warm_start_add_constraint(
             point_embeds = jnp.concatenate([point_embeds, avg_embed[None, :]], axis=0)
             point_embeds = point_embeds / jnp.linalg.norm(point_embeds, axis=1)[:, None]
         else:
-            point_embeds = jnp.concatenate([point_embeds, jnp.zeros_like(point_embeds[0])], axis=0)
+            point_embeds = jnp.concatenate([point_embeds, jnp.zeros_like(point_embeds[0:1,:])], axis=0)
         X = point_embeds @ point_embeds.T
         z = apply_A_operator_mx(n, m, A_data, A_indices, X) 
     if old_sdp_state.P is not None:
