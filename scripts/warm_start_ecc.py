@@ -860,9 +860,9 @@ def simulate(edge_weights: csr_matrix,
             #)
 
             feature_counts = point_features.sum(axis=0)
-            overlap_col_wt = feature_counts
-            pos_col_wt = feature_counts
-            neg_col_wt = feature_counts
+            overlap_col_wt = 1.0 / feature_counts
+            pos_col_wt = 1.0 / feature_counts
+            neg_col_wt = 1.0 / feature_counts
             #ecc_constraint, pairwise_constraints = gen_ecc_constraint(
             #        point_feats=point_features,
             #        gold_clustering=gold_clustering,
