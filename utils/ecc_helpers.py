@@ -232,10 +232,9 @@ def warm_start_add_constraint(
     equality_columns = [v for l in sum_gt_one_constraints for pairs in l for v in pairs if len(l) == 1]
 
     ecc_points_and_counts = [(pairs[1], len(l)) for l in sum_gt_one_constraints for pairs in l if len(l) < 3]
-    if len(ecc_points_and_counts) > 0:
-        ecc_points_and_counts = jnp.array(list(set(ecc_points_and_counts)))
-        ecc_points = ecc_points_and_counts[:, 0]
-        ecc_counts = ecc_points_and_counts[:, 1]
+    ecc_points_and_counts = jnp.array(list(set(ecc_points_and_counts)))
+    ecc_points = ecc_points_and_counts[:, 0]
+    ecc_counts = ecc_points_and_counts[:, 1]
 
     columns_to_drop = jnp.array(list(set(columns_to_drop)))
     equality_columns = jnp.array(list(set(equality_columns)))
@@ -245,10 +244,10 @@ def warm_start_add_constraint(
 
     num_pred_clusters = max(jnp.unique(prev_pred_clusters).shape[0], 2)
 
-    #nbr_ecc_points = np.where(np.isin(prev_pred_clusters, prev_pred_clusters[ecc_points]))[0]
+    nbr_ecc_points = np.where(np.isin(prev_pred_clusters, prev_pred_clusters[ecc_points]))[0]
 
-    #if len(ortho_indices) > 0:
-    #    nbr_ecc_points = nbr_ecc_points[~np.isin(nbr_ecc_points, neg_points)]
+    if len(ortho_indices) > 0:
+        nbr_ecc_points = nbr_ecc_points[~np.isin(nbr_ecc_points, neg_points)]
 
     X = old_sdp_state.X
     Omega = old_sdp_state.Omega
@@ -258,14 +257,12 @@ def warm_start_add_constraint(
         eigvals, eigvecs = jnp.linalg.eigh(old_sdp_state.X)
         point_embeds = (eigvecs[:,-num_pred_clusters:] * jnp.sqrt(eigvals[None, -num_pred_clusters:]))
         point_embeds = point_embeds / jnp.linalg.norm(point_embeds, axis=1)[:, None]
-        if len(ecc_points_and_counts) > 0:
-            avg_embed = jnp.sum(point_embeds[ecc_points] / ecc_counts[:, None], axis=0)
-            avg_embed = avg_embed / jnp.linalg.norm(avg_embed)
-            point_embeds = point_embeds.at[ecc_points].set(avg_embed[None, :])
-            point_embeds = jnp.concatenate([point_embeds, avg_embed[None, :]], axis=0)
-            point_embeds = point_embeds / jnp.linalg.norm(point_embeds, axis=1)[:, None]
-        else:
-            point_embeds = jnp.concatenate([point_embeds, jnp.zeros_like(point_embeds[0:1, :])], axis=0)
+        avg_embed = jnp.sum(point_embeds[ecc_points] / ecc_counts[:, None], axis=0)
+        avg_embed = avg_embed / jnp.linalg.norm(avg_embed)
+        point_embeds = point_embeds.at[ecc_points].set(avg_embed[None, :])
+        point_embeds = point_embeds.at[nbr_ecc_points].set(point_embeds[nbr_ecc_points] + avg_embed[None, :])
+        point_embeds = jnp.concatenate([point_embeds, avg_embed[None, :]], axis=0)
+        point_embeds = point_embeds / jnp.linalg.norm(point_embeds, axis=1)[:, None]
         X = point_embeds @ point_embeds.T
         z = apply_A_operator_mx(n, m, A_data, A_indices, X) 
     if old_sdp_state.P is not None:
