@@ -1,10 +1,12 @@
 import argparse
 import copy
+import git
 from itertools import product
 import json
 import logging
 import os
 import pickle
+import sys
 import time
 
 import jax
@@ -849,55 +851,56 @@ def simulate(edge_weights: csr_matrix,
 
         # generate a new constraint
         while True:
-            #ecc_constraint, pairwise_constraints = gen_forced_ecc_constraint(
-            #        point_features,
-            #        gold_clustering,
-            #        pred_clustering,
-            #        gold_cluster_feats,
-            #        pred_cluster_feats,
-            #        matching_mx,
-            #        hparams.max_overlap_feats
-            #)
-
-            feature_counts = point_features.sum(axis=0)
-            overlap_col_wt = 1.0 / feature_counts
-            pos_col_wt = 1.0 / feature_counts
-            neg_col_wt = feature_counts
-            #ecc_constraint, pairwise_constraints = gen_ecc_constraint(
-            #        point_feats=point_features,
-            #        gold_clustering=gold_clustering,
-            #        pred_clustering=pred_clustering,
-            #        gold_cluster_feats=gold_cluster_feats,
-            #        pred_cluster_feats=pred_cluster_feats,
-            #        matching_mx=matching_mx,
-            #        max_over_lap_feats=hparams.max_overlap_feats,
-            #        max_pos_feats=2,
-            #        max_neg_feats=2,
-            #        overlap_col_wt=overlap_col_wt,
-            #        pos_col_wt=pos_col_wt,
-            #        neg_col_wt=neg_col_wt
-            #)
-
-            ecc_constraint, pairwise_constraints = gen_ecc_constraint(
+            ecc_constraint, pairwise_constraints = gen_forced_ecc_constraint(
                     point_features,
                     gold_clustering,
                     pred_clustering,
                     gold_cluster_feats,
                     pred_cluster_feats,
                     matching_mx,
-                    hparams.max_overlap_feats,
-                    3,  # max_pos_feats
-                    1,  # max_neg_feats
-                    overlap_col_wt,
-                    pos_col_wt,
-                    neg_col_wt
+                    hparams.max_overlap_feats
             )
+
+            #feature_counts = point_features.sum(axis=0)
+            #overlap_col_wt = 1.0 / feature_counts
+            #pos_col_wt = 1.0 / feature_counts
+            #neg_col_wt = feature_counts
+            ##ecc_constraint, pairwise_constraints = gen_ecc_constraint(
+            ##        point_feats=point_features,
+            ##        gold_clustering=gold_clustering,
+            ##        pred_clustering=pred_clustering,
+            ##        gold_cluster_feats=gold_cluster_feats,
+            ##        pred_cluster_feats=pred_cluster_feats,
+            ##        matching_mx=matching_mx,
+            ##        max_over_lap_feats=hparams.max_overlap_feats,
+            ##        max_pos_feats=2,
+            ##        max_neg_feats=2,
+            ##        overlap_col_wt=overlap_col_wt,
+            ##        pos_col_wt=pos_col_wt,
+            ##        neg_col_wt=neg_col_wt
+            ##)
+
+            #ecc_constraint, pairwise_constraints = gen_ecc_constraint(
+            #        point_features,
+            #        gold_clustering,
+            #        pred_clustering,
+            #        gold_cluster_feats,
+            #        pred_cluster_feats,
+            #        matching_mx,
+            #        hparams.max_overlap_feats,
+            #        3,  # max_pos_feats
+            #        1,  # max_neg_feats
+            #        overlap_col_wt,
+            #        pos_col_wt,
+            #        neg_col_wt
+            #)
             already_exists = any([
                 (ecc_constraint != x).nnz == 0
                     for x in clusterer.ecc_constraints
             ])
             if already_exists:
                 logging.error('Produced duplicate ecc constraint')
+                exit()
                 continue
 
             already_satisfied = (
@@ -905,6 +908,7 @@ def simulate(edge_weights: csr_matrix,
             ).todense().any()
             if already_satisfied:
                 logging.warning('Produced already satisfied ecc constraint')
+                exit()
                 continue
 
             pairwise_constraints_for_replay.append(pairwise_constraints)
@@ -999,6 +1003,8 @@ if __name__ == '__main__':
                 level=logging.INFO
         )
 
+    logging.info("cmd: ", " ".join(["python"] + sys.argv))
+    logging.info("git sha: ", git.Repo(search_parent_directories=True).head.object.hexsha)
     logging.info('Experiment args:\n{}'.format(
         json.dumps(vars(hparams), sort_keys=True, indent=4)))
 
