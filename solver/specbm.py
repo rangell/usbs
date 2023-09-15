@@ -383,7 +383,8 @@ def solve_step_subprob(
         A_operator_VSV_T = apply_A_operator_batched(m, A_data, A_indices, VSV_T_factor)
         z_next = eta_next * z_bar + A_operator_VSV_T
         upsilon_next = b_ineq_mask * jnp.clip(b - z_next + (rho * y), a_min=0.0)
-        upsilon_gap = jnp.max(jnp.abs(state.upsilon - upsilon_next))
+        #upsilon_gap = jnp.max(jnp.abs(state.upsilon - upsilon_next))
+        upsilon_gap = jnp.linalg.norm(state.upsilon - upsilon_next)
         _subprob_state = SubprobStateStruct(
             i=state.i + 1, eta=eta_next, S=S_next, upsilon=upsilon_next, upsilon_gap=upsilon_gap)
         return _subprob_state
@@ -435,6 +436,8 @@ def specbm(
     SCALE_C = sdp_state.SCALE_C 
     SCALE_X = sdp_state.SCALE_X
     SCALE_A = sdp_state.SCALE_A
+
+    subprob_eps = subprob_eps * SCALE_C * SCALE_X
 
     StateStruct = namedtuple(
         "StateStruct",

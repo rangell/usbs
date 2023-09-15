@@ -260,7 +260,7 @@ def warm_start_add_constraint(
         avg_embed = jnp.sum(point_embeds[ecc_points] / ecc_counts[:, None], axis=0)
         avg_embed = avg_embed / jnp.linalg.norm(avg_embed)
         point_embeds = point_embeds.at[ecc_points].set(avg_embed[None, :])
-        point_embeds = point_embeds.at[nbr_ecc_points].set(point_embeds[nbr_ecc_points] + avg_embed[None, :])
+        #point_embeds = point_embeds.at[nbr_ecc_points].set(point_embeds[nbr_ecc_points] + avg_embed[None, :])
         point_embeds = jnp.concatenate([point_embeds, avg_embed[None, :]], axis=0)
         point_embeds = point_embeds / jnp.linalg.norm(point_embeds, axis=1)[:, None]
         X = point_embeds @ point_embeds.T
@@ -281,8 +281,8 @@ def warm_start_add_constraint(
 
     # NOTE: this is proximal step: (1 / rho)*(AX - b)
     rho = 0.05
-    #y = y + ((1 / rho) * SCALE_X * jnp.clip(b - z, a_max=0.0))
-    y = y + ((1 / rho) * SCALE_X * b_ineq_mask * jnp.clip(b - z, a_max=0.0))
+    y = y + ((1 / rho) * SCALE_X * jnp.clip(b - z, a_max=0.0))
+    #y = y + ((1 / rho) * SCALE_X * b_ineq_mask * jnp.clip(b - z, a_max=0.0))
 
     sdp_state = SDPState(
         C=C,
