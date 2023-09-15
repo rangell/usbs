@@ -1003,8 +1003,8 @@ if __name__ == '__main__':
                 level=logging.INFO
         )
 
-    logging.info("cmd: ", " ".join(["python"] + sys.argv))
-    logging.info("git sha: ", git.Repo(search_parent_directories=True).head.object.hexsha)
+    logging.info("cmd: {}".format(" ".join(["python"] + sys.argv)))
+    logging.info("git sha: {}".format(git.Repo(search_parent_directories=True).head.object.hexsha))
     logging.info('Experiment args:\n{}'.format(
         json.dumps(vars(hparams), sort_keys=True, indent=4)))
 
