@@ -437,8 +437,6 @@ def specbm(
     SCALE_X = sdp_state.SCALE_X
     SCALE_A = sdp_state.SCALE_A
 
-    #subprob_eps = subprob_eps * SCALE_C * SCALE_X
-
     StateStruct = namedtuple(
         "StateStruct",
         ["t", 
