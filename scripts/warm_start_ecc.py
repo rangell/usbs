@@ -200,7 +200,7 @@ class EccClusterer(object):
                 max_infeas_eps=self.hparams.max_infeas_eps,
                 lanczos_inner_iterations=min(sdp_state.C.shape[0], 32),
                 lanczos_max_restarts=self.hparams.lanczos_max_restarts,
-                subprob_eps=self.hparams.subprob_eps * sdp_state.SCALE_C * sdp_state.SCALE_X,
+                subprob_eps=float(self.hparams.subprob_eps * sdp_state.SCALE_C * sdp_state.SCALE_X),
                 subprob_max_iters=hparams.subprob_max_iters,
                 callback_fn=None,
                 callback_static_args=None,
@@ -219,7 +219,7 @@ class EccClusterer(object):
                 max_infeas_eps=self.hparams.max_infeas_eps,
                 lanczos_inner_iterations=min(sdp_state.C.shape[0], 32),
                 lanczos_max_restarts=self.hparams.lanczos_max_restarts,
-                subprob_eps=self.hparams.subprob_eps * sdp_state.SCALE_C * sdp_state.SCALE_X,
+                subprob_eps=float(self.hparams.subprob_eps * sdp_state.SCALE_C * sdp_state.SCALE_X),
                 callback_fn=None,
                 callback_static_args=None,
                 callback_nonstatic_args=None)
