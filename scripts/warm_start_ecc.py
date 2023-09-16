@@ -106,6 +106,7 @@ class EccClusterer(object):
             ortho_indices=ortho_indices,
             sum_gt_one_constraints=sum_gt_one_constraints,
             prev_pred_clusters=jnp.array(self.prev_pred_clusters),
+            rho=self.hparams.rho,
             sketch_dim=-1)
         self.cold_start_sdp_state = cold_start_add_constraint(
             old_sdp_state=self.cold_start_sdp_state,
