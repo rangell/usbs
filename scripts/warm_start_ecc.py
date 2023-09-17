@@ -562,7 +562,7 @@ def gen_forced_ecc_constraint(point_feats: csr_matrix,
                 gold_not_pred_sfc
         )
         sampled_pos_feats.append(np.argmax(gold_not_pred_sfc))
-    sampled_pos_feats = np.asarray(sampled_pos_feats)
+    sampled_pos_feats = np.asarray(sampled_pos_feats)[0:1]
 
     # lastly, negative feats
     sampled_neg_feats = []
@@ -966,7 +966,7 @@ def get_hparams() -> argparse.Namespace:
     # for constraint generation
     parser.add_argument('--max_rounds', type=int, default=100,
                         help="number of rounds to generate feedback for")
-    parser.add_argument('--max_overlap_feats', type=int, default=2,
+    parser.add_argument('--max_overlap_feats', type=int, default=1,
                         help="max num overlap features to sample.")
     hparams = parser.parse_args()
     return hparams
