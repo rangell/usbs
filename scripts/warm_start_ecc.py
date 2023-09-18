@@ -326,7 +326,7 @@ class EccClusterer(object):
                 cpair_obj_val = obj_vals[lchild] + obj_vals[rchild]
                 if (num_ecc_sat[node] < cpair_num_ecc_sat 
                     or (num_ecc_sat[node] == cpair_num_ecc_sat
-                        and obj_vals[node] <= cpair_obj_val)):
+                        and obj_vals[node] < cpair_obj_val)):
                     num_ecc_sat[node] = cpair_num_ecc_sat
                     obj_vals[node] = cpair_obj_val
                     lchild_start = membership_indptr[lchild]
@@ -543,9 +543,7 @@ def gen_forced_ecc_constraint(point_feats: csr_matrix,
             np.sort(gold_and_pred),
             gold_and_pred_sfc
     )
-    sampled_overlap_feats = np.where(gold_and_pred_sfc == 1.0)[0]
-    np.random.shuffle(sampled_overlap_feats)
-    sampled_overlap_feats = sampled_overlap_feats[:max_overlap_feats]
+    sampled_overlap_feats = np.where(gold_and_pred_sfc == 1.0)[0][:max_overlap_feats]
     # NOTE: why doesn't this line below work well with the SDP?
     # i.e. why don't the most common features work best
     #sampled_overlap_feats = np.argsort(gold_and_pred_sfc)[-max_overlap_feats:]
@@ -564,7 +562,7 @@ def gen_forced_ecc_constraint(point_feats: csr_matrix,
                 gold_not_pred_sfc
         )
         sampled_pos_feats.append(np.argmax(gold_not_pred_sfc))
-    sampled_pos_feats = np.asarray(sampled_pos_feats)[0:1]
+    sampled_pos_feats = np.asarray(sampled_pos_feats)
 
     # lastly, negative feats
     sampled_neg_feats = []
@@ -968,7 +966,7 @@ def get_hparams() -> argparse.Namespace:
     # for constraint generation
     parser.add_argument('--max_rounds', type=int, default=100,
                         help="number of rounds to generate feedback for")
-    parser.add_argument('--max_overlap_feats', type=int, default=2,
+    parser.add_argument('--max_overlap_feats', type=int, default=1,
                         help="max num overlap features to sample.")
     hparams = parser.parse_args()
     return hparams
