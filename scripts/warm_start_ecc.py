@@ -548,6 +548,9 @@ def gen_forced_ecc_constraint(point_feats: csr_matrix,
     # i.e. why don't the most common features work best
     #sampled_overlap_feats = np.argsort(gold_and_pred_sfc)[-max_overlap_feats:]
 
+    embed()
+    exit()
+
     # now onto postive feats
     sampled_pos_feats = []
     gold_not_pred_lbls = np.asarray(
