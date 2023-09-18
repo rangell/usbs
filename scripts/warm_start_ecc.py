@@ -543,13 +543,12 @@ def gen_forced_ecc_constraint(point_feats: csr_matrix,
             np.sort(gold_and_pred),
             gold_and_pred_sfc
     )
-    sampled_overlap_feats = np.where(gold_and_pred_sfc == 1.0)[0][:max_overlap_feats]
+    sampled_overlap_feats = np.where(gold_and_pred_sfc == 1.0)[0]
+    np.random.shuffle(sampled_overlap_feats)
+    sampled_overlap_feats = sampled_overlap_feats[:max_overlap_feats]
     # NOTE: why doesn't this line below work well with the SDP?
     # i.e. why don't the most common features work best
     #sampled_overlap_feats = np.argsort(gold_and_pred_sfc)[-max_overlap_feats:]
-
-    embed()
-    exit()
 
     # now onto postive feats
     sampled_pos_feats = []
