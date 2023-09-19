@@ -528,6 +528,7 @@ def specbm(
         tr_X_next = eta * state.tr_X_bar + jnp.trace(S)
         z_next = eta * state.z_bar + A_operator_VSV_T
         y_cand = state.y + (1.0 / rho) * (state.b - z_next - upsilon_next)
+        y_cand = y_cand - jnp.clip(state.b_ineq_mask * y_cand, a_max=0.0)
 
         cand_eigvals, cand_eigvecs = eigsh_smallest(
             n=n,
