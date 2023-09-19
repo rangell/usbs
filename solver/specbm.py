@@ -541,10 +541,11 @@ def specbm(
             tolerance=subprob_eps)
         cand_eigvals = -cand_eigvals
         cand_pen_dual_obj = jnp.dot(-state.b, y_cand) + trace_ub*jnp.clip(cand_eigvals[0], a_min=0)
-        neg_obj_lb = jnp.clip(
-            jnp.dot(-state.b, y_cand)
-            + (trace_ub / trace_factor)*jnp.clip(cand_eigvals[0], a_min=0),
-            a_max=state.neg_obj_lb)
+        #neg_obj_lb = jnp.clip(
+        #    jnp.dot(-state.b, y_cand)
+        #    + (trace_ub / trace_factor)*jnp.clip(cand_eigvals[0], a_min=0),
+        #    a_max=state.neg_obj_lb)
+        neg_obj_lb = jnp.dot(-state.b, y_cand) + (trace_ub / trace_factor)*jnp.clip(cand_eigvals[0], a_min=0)
 
         lb_spec_est = compute_lb_spec_est_ipm(
             C=state.C,
