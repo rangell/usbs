@@ -563,7 +563,10 @@ def gen_forced_ecc_constraint(point_feats: csr_matrix,
                 np.sort(gold_not_pred[pred_cluster_mask]),
                 gold_not_pred_sfc
         )
-        sampled_pos_feats.append(np.argmax(gold_not_pred_sfc))
+
+        local_sampled_pos_feats = np.where(gold_and_pred_sfc == np.max(gold_not_pred_sfc))[0]
+        np.random.shuffle(local_sampled_pos_feats)
+        sampled_pos_feats += local_sampled_pos_feats[:2].tolist()
     sampled_pos_feats = np.asarray(sampled_pos_feats)
 
     # lastly, negative feats
