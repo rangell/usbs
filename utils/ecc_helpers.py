@@ -275,6 +275,9 @@ def warm_start_add_constraint(
     SCALE_C = 1.0 / jnp.linalg.norm(C.data)  # equivalent to frobenius norm
     SCALE_A = jnp.ones_like(b)
 
+    embed()
+    exit()
+
     y = jnp.zeros((m,)).at[jnp.arange(old_sdp_state.b.shape[0])].set(
         old_sdp_state.y / old_sdp_state.SCALE_A)
     y = y * (SCALE_X / old_sdp_state.SCALE_X) * SCALE_A
