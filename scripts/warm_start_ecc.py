@@ -570,7 +570,7 @@ def gen_forced_ecc_constraint(point_feats: csr_matrix,
     sampled_neg_feats = []
     pred_not_gold_lbls = np.asarray(
             [gold_cluster_lbls[i] for i in pred_not_gold])
-    for gold_lbl in np.unique(np.asarray(pred_not_gold_lbls)):
+    for gold_lbl in np.unique(np.asarray(pred_not_gold_lbls))[0:1]:
         pred_cluster_mask = (pred_not_gold_lbls == gold_lbl)
         pred_not_gold_sfc = np.zeros((point_feats.shape[1],))
         get_salient_feats(
@@ -625,7 +625,7 @@ def gen_forced_ecc_constraint(point_feats: csr_matrix,
 
     num_points = point_feats.shape[0]
     pairwise_constraints = dok_matrix((num_points, num_points))
-    for s, t in product(pred_cluster_points, gold_not_pred)[0:1]:
+    for s, t in product(pred_cluster_points, gold_not_pred):
         s_feats = set(point_feats[s].indices)
         t_feats = set(point_feats[t].indices)
         if not (s_feats.isdisjoint(overlap_feats) 
