@@ -201,7 +201,7 @@ class EccClusterer(object):
                 max_infeas_eps=self.hparams.max_infeas_eps,
                 lanczos_inner_iterations=min(sdp_state.C.shape[0], 32),
                 lanczos_max_restarts=self.hparams.lanczos_max_restarts,
-                subprob_eps=self.hparams.subprob_eps,
+                subprob_eps=float(self.hparams.subprob_eps * sdp_state.SCALE_C * sdp_state.SCALE_X),
                 subprob_max_iters=hparams.subprob_max_iters,
                 callback_fn=None,
                 callback_static_args=None,
@@ -220,7 +220,7 @@ class EccClusterer(object):
                 max_infeas_eps=self.hparams.max_infeas_eps,
                 lanczos_inner_iterations=min(sdp_state.C.shape[0], 32),
                 lanczos_max_restarts=self.hparams.lanczos_max_restarts,
-                subprob_eps=self.hparams.subprob_eps,
+                subprob_eps=float(self.hparams.subprob_eps * sdp_state.SCALE_C * sdp_state.SCALE_X),
                 callback_fn=None,
                 callback_static_args=None,
                 callback_nonstatic_args=None)
@@ -554,7 +554,7 @@ def gen_forced_ecc_constraint(point_feats: csr_matrix,
     sampled_pos_feats = []
     gold_not_pred_lbls = np.asarray(
             [pred_cluster_lbls[i] for i in gold_not_pred])
-    for pred_lbl in np.unique(np.asarray(gold_not_pred_lbls))[0:1]:
+    for pred_lbl in np.unique(np.asarray(gold_not_pred_lbls)):
         pred_cluster_mask = (gold_not_pred_lbls == pred_lbl)
         gold_not_pred_sfc = np.zeros((point_feats.shape[1],))
         get_salient_feats(
@@ -563,10 +563,7 @@ def gen_forced_ecc_constraint(point_feats: csr_matrix,
                 np.sort(gold_not_pred[pred_cluster_mask]),
                 gold_not_pred_sfc
         )
-
-        local_sampled_pos_feats = np.where(gold_not_pred_sfc == np.max(gold_not_pred_sfc))[0]
-        np.random.shuffle(local_sampled_pos_feats)
-        sampled_pos_feats += local_sampled_pos_feats[:2].tolist()
+        sampled_pos_feats.append(np.argmax(gold_not_pred_sfc))
     sampled_pos_feats = np.asarray(sampled_pos_feats)
 
     # lastly, negative feats
@@ -628,7 +625,7 @@ def gen_forced_ecc_constraint(point_feats: csr_matrix,
 
     num_points = point_feats.shape[0]
     pairwise_constraints = dok_matrix((num_points, num_points))
-    for s, t in product(pred_cluster_points, gold_not_pred):
+    for s, t in product(pred_cluster_points, gold_not_pred)[0:1]:
         s_feats = set(point_feats[s].indices)
         t_feats = set(point_feats[t].indices)
         if not (s_feats.isdisjoint(overlap_feats) 
@@ -971,7 +968,7 @@ def get_hparams() -> argparse.Namespace:
     # for constraint generation
     parser.add_argument('--max_rounds', type=int, default=100,
                         help="number of rounds to generate feedback for")
-    parser.add_argument('--max_overlap_feats', type=int, default=5,
+    parser.add_argument('--max_overlap_feats', type=int, default=2,
                         help="max num overlap features to sample.")
     hparams = parser.parse_args()
     return hparams
@@ -1039,7 +1036,7 @@ if __name__ == '__main__':
     #sub_blocks_preprocessed['r weiss'] = blocks_preprocessed['r weiss']
     #sub_blocks_preprocessed['m schuetzenberger'] = blocks_preprocessed['m schuetzenberger']
     #sub_blocks_preprocessed['m nagata'] = blocks_preprocessed['m nagata']
-    #sub_blocks_preprocessed['d goldberg'] = blocks_preprocessed['d goldberg']
+    #sub_blocks_preprocessed['m nagata'] = blocks_preprocessed['m nagata']
     sub_blocks_preprocessed = blocks_preprocessed
 
     for i, (block_name, block_data) in enumerate(sub_blocks_preprocessed.items()):

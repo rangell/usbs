@@ -519,16 +519,14 @@ def specbm(
         if state.Omega is None:
             X_next = eta * state.X_bar + state.V @ S @ state.V.T
             P_next = None
-            primal_obj_next = jnp.trace(state.C @ X_next)
         else:
             X_next = None
             P_next = eta * state.P_bar + VSV_T_factor @ (VSV_T_factor.T @ state.Omega)
-            primal_obj_next = eta * state.bar_primal_obj
-            primal_obj_next += jnp.trace(VSV_T_factor.T @ (state.C @ VSV_T_factor))
         tr_X_next = eta * state.tr_X_bar + jnp.trace(S)
         z_next = eta * state.z_bar + A_operator_VSV_T
         y_cand = state.y + (1.0 / rho) * (state.b - z_next - upsilon_next)
-        y_cand = y_cand - jnp.clip(state.b_ineq_mask * y_cand, a_min=0.0)
+        primal_obj_next = eta * state.bar_primal_obj
+        primal_obj_next += jnp.trace(VSV_T_factor.T @ (state.C @ VSV_T_factor))
 
         cand_eigvals, cand_eigvecs = eigsh_smallest(
             n=n,
@@ -545,7 +543,7 @@ def specbm(
         cand_pen_dual_obj = jnp.dot(-state.b, y_cand) + trace_ub*jnp.clip(cand_eigvals[0], a_min=0)
         neg_obj_lb = jnp.clip(
             jnp.dot(-state.b, y_cand)
-            + trace_ub*jnp.clip(cand_eigvals[0], a_min=0),
+            + (trace_ub / trace_factor)*jnp.clip(cand_eigvals[0], a_min=0),
             a_max=state.neg_obj_lb)
 
         lb_spec_est = compute_lb_spec_est_ipm(
@@ -577,18 +575,17 @@ def specbm(
         if state.Omega is None:
             X_bar_next = eta * state.X_bar + curr_VSV_T_factor @ curr_VSV_T_factor.T
             P_bar_next = None
-            bar_primal_obj_next = jnp.trace(state.C @ X_bar_next)
         else:
             X_bar_next = None
             P_bar_next = eta * state.P_bar + curr_VSV_T_factor @ (curr_VSV_T_factor.T @ state.Omega)
-            bar_primal_obj_next = eta * state.bar_primal_obj
-            bar_primal_obj_next += jnp.trace(curr_VSV_T_factor.T @ (state.C @ curr_VSV_T_factor))
         tr_X_bar_next = (eta * state.tr_X_bar + jnp.sum(S_eigvals[:k_curr])).squeeze()
         z_bar_next = eta * state.z_bar
         z_bar_next += apply_A_operator_batched(m, state.A_data, state.A_indices, curr_VSV_T_factor)
         V_next = jnp.concatenate([state.V @ S_eigvecs[:,k_curr:], cand_eigvecs], axis=1)
         V_next, _ = jnp.linalg.qr(
             jnp.concatenate([state.V @ S_eigvecs[:,k_curr:], cand_eigvecs], axis=1))
+        bar_primal_obj_next = eta * state.bar_primal_obj
+        bar_primal_obj_next += jnp.trace(curr_VSV_T_factor.T @ (state.C @ curr_VSV_T_factor))
         
         obj_gap = (primal_obj_next + neg_obj_lb) / (SCALE_C * SCALE_X)
         obj_gap /= 1.0 + jnp.clip(jnp.abs(primal_obj_next), a_min=jnp.abs(neg_obj_lb)) / (SCALE_C * SCALE_X)
