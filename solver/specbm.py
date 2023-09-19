@@ -519,14 +519,15 @@ def specbm(
         if state.Omega is None:
             X_next = eta * state.X_bar + state.V @ S @ state.V.T
             P_next = None
+            primal_obj_next = jnp.trace(state.C @ X_next)
         else:
             X_next = None
             P_next = eta * state.P_bar + VSV_T_factor @ (VSV_T_factor.T @ state.Omega)
+            primal_obj_next = eta * state.bar_primal_obj
+            primal_obj_next += jnp.trace(VSV_T_factor.T @ (state.C @ VSV_T_factor))
         tr_X_next = eta * state.tr_X_bar + jnp.trace(S)
         z_next = eta * state.z_bar + A_operator_VSV_T
         y_cand = state.y + (1.0 / rho) * (state.b - z_next - upsilon_next)
-        primal_obj_next = eta * state.bar_primal_obj
-        primal_obj_next += jnp.trace(VSV_T_factor.T @ (state.C @ VSV_T_factor))
 
         cand_eigvals, cand_eigvecs = eigsh_smallest(
             n=n,
