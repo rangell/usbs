@@ -588,9 +588,9 @@ def specbm(
         bar_primal_obj_next += jnp.trace(curr_VSV_T_factor.T @ (state.C @ curr_VSV_T_factor))
         
         obj_gap = jnp.abs(primal_obj_next + neg_obj_lb) / (SCALE_C * SCALE_X)
-        obj_gap /= (1.0 + jnp.clip(jnp.abs(primal_obj_next), a_min=jnp.abs(neg_obj_lb))) / (SCALE_C * SCALE_X)
+        obj_gap /= 1.0 + jnp.clip(jnp.abs(primal_obj_next), a_min=jnp.abs(neg_obj_lb)) / (SCALE_C * SCALE_X)
         infeas_gap = jnp.linalg.norm((z_next - state.b + upsilon_next) / SCALE_A) / SCALE_X
-        infeas_gap /= (1.0 + jnp.linalg.norm((state.b / SCALE_A)) / SCALE_X)
+        infeas_gap /= 1.0 + jnp.linalg.norm((state.b / SCALE_A) / SCALE_X)
         max_infeas = jnp.max(jnp.abs(z_next - state.b + upsilon_next) / SCALE_A) / SCALE_X
 
         if state.Omega is not None and callback_fn is not None:
