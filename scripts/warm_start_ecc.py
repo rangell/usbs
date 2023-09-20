@@ -237,6 +237,10 @@ class EccClusterer(object):
         self.cold_start_sdp_state = self._call_sdp_solver(self.cold_start_sdp_state, "specbm/cold")
         _warm_end_state = self._call_sdp_solver(self.warm_start_sdp_state, "specbm/warm")
 
+        if len(self.ecc_constraints) == 1:
+            embed()
+            exit()
+
         unscaled_state = unscale_sdp_state(self.cold_start_sdp_state)
         sdp_obj_value = float(jnp.trace(-unscaled_state.C @ unscaled_state.X))
         pw_probs = np.array(jnp.clip(unscaled_state.X, a_min=0.0, a_max=1.0))
