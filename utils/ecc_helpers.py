@@ -243,8 +243,8 @@ def warm_start_add_constraint(
 
     neg_points = jnp.array([v for v, _ in ortho_indices])
 
-    num_pred_clusters = max(jnp.unique(prev_pred_clusters).shape[0], 2)
-    #num_pred_clusters = old_n
+    #num_pred_clusters = max(jnp.unique(prev_pred_clusters).shape[0], 2)
+    num_pred_clusters = 0.1 * old_n
 
     nbr_ecc_points = np.where(np.isin(prev_pred_clusters, prev_pred_clusters[ecc_points]))[0]
 
@@ -268,7 +268,7 @@ def warm_start_add_constraint(
         if neg_points.size > 0:
             point_embeds = point_embeds.at[neg_points].set(jnp.zeros_like(point_embeds[0]))
         X = point_embeds @ point_embeds.T
-        X = jnp.zeros_like(X)
+        #X = jnp.zeros_like(X)
         z = apply_A_operator_mx(n, m, A_data, A_indices, X) 
     if old_sdp_state.P is not None:
         assert False
