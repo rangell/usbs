@@ -235,7 +235,7 @@ class EccClusterer(object):
         #_ = self._call_sdp_solver(self.cold_start_sdp_state, "cgal/cold")
         #_ = self._call_sdp_solver(self.warm_start_sdp_state, "cgal/warm")
         self.cold_start_sdp_state = self._call_sdp_solver(self.cold_start_sdp_state, "specbm/cold")
-        _ = self._call_sdp_solver(self.warm_start_sdp_state, "specbm/warm")
+        _warm_end_state = self._call_sdp_solver(self.warm_start_sdp_state, "specbm/warm")
 
         unscaled_state = unscale_sdp_state(self.cold_start_sdp_state)
         sdp_obj_value = float(jnp.trace(-unscaled_state.C @ unscaled_state.X))

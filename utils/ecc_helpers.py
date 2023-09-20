@@ -257,7 +257,6 @@ def warm_start_add_constraint(
     if old_sdp_state.X is not None:
         # compute rank-`num_pred_clusters` approximation of X
         eigvals, eigvecs = jnp.linalg.eigh(old_sdp_state.X)
-        num_pred_clusters = 200
         print("embed dim: ", num_pred_clusters)
         point_embeds = (eigvecs[:,-num_pred_clusters:] * jnp.sqrt(eigvals[None, -num_pred_clusters:]))
         point_embeds = point_embeds / jnp.linalg.norm(point_embeds, axis=1)[:, None]
@@ -283,7 +282,7 @@ def warm_start_add_constraint(
     y = y * (SCALE_X / old_sdp_state.SCALE_X) * SCALE_A
 
     # NOTE: this is proximal step: (1 / rho)*(AX - b)
-    y = y + ((1 / (5.0 * rho)) * SCALE_X * jnp.clip(b - z, a_max=0.0))
+    #y = y + ((1 / (5.0 * rho)) * SCALE_X * jnp.clip(b - z, a_max=0.0))
 
     sdp_state = SDPState(
         C=C,
