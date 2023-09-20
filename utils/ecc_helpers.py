@@ -277,13 +277,17 @@ def warm_start_add_constraint(
     SCALE_C = 1.0 / jnp.linalg.norm(C.data)  # equivalent to frobenius norm
     SCALE_A = jnp.ones_like(b)
 
-    y = jnp.zeros((m,)).at[jnp.arange(old_sdp_state.b.shape[0])].set(
+    old_diag_mask = ((old_sdp_state.A_indices[:, 1] == old_sdp_state.A_indices[:, 2])
+                     & (old_sdp_state.A_data == 1.0))
+    old_diag_indices = jnp.unique(old_sdp_state.A_indices[old_diag_mask][:, 0])
+    avg_old_diag_val = jnp.mean(y[old_diag_indices])
+
+    diag_mask = ((A_indices[:, 1] == A_indices[:, 2]) & (A_data == 1.0))
+    diag_indices = jnp.unique(A_indices[diag_mask][:, 0])
+    y = jnp.zeros((m,)).at[diag_indices].set(avg_old_diag_val)
+    y = y.at[jnp.arange(old_sdp_state.b.shape[0])].set(
         old_sdp_state.y / old_sdp_state.SCALE_A)
     y = y * (SCALE_X / old_sdp_state.SCALE_X) * SCALE_A
-
-    # add to diagonal dual variables
-    embed()
-    exit()
 
     # NOTE: this is proximal step: (1 / rho)*(AX - b)
     y = y + ((1 / rho) * SCALE_X * jnp.clip(b - z, a_max=0.0))
