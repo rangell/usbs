@@ -281,6 +281,10 @@ def warm_start_add_constraint(
         old_sdp_state.y / old_sdp_state.SCALE_A)
     y = y * (SCALE_X / old_sdp_state.SCALE_X) * SCALE_A
 
+    # add to diagonal dual variables
+    embed()
+    exit()
+
     # NOTE: this is proximal step: (1 / rho)*(AX - b)
     y = y + ((1 / rho) * SCALE_X * jnp.clip(b - z, a_max=0.0))
 
