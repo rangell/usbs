@@ -42,7 +42,7 @@ class EccClusterer(object):
                  hparams: argparse.Namespace):
 
         self.hparams = hparams
-        self.edge_weights = edge_weights
+        self.edge_weights = edge_weights + 0.1
         self.sparse_laplacian = create_sparse_laplacian(edge_weights=edge_weights, eps=0.5)
 
         self.features = features
