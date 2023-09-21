@@ -258,6 +258,8 @@ def warm_start_add_constraint(
         # compute rank-`num_pred_clusters` approximation of X
         eigvals, eigvecs = jnp.linalg.eigh(old_sdp_state.X)
         print("embed dim: ", num_pred_clusters)
+        embed()
+        exit()
         point_embeds = (eigvecs[:,-num_pred_clusters:] * jnp.sqrt(eigvals[None, -num_pred_clusters:]))
         point_embeds = point_embeds / jnp.linalg.norm(point_embeds, axis=1)[:, None]
         avg_embed = jnp.sum(point_embeds[ecc_points] / ecc_counts[:, None], axis=0)
