@@ -289,7 +289,8 @@ def warm_start_add_constraint(
 
     diag_mask = ((A_indices[:, 1] == A_indices[:, 2]) & (A_data == 1.0))
     diag_indices = jnp.unique(A_indices[diag_mask][:, 0])
-    y = jnp.zeros((m,)).at[diag_indices].set(avg_old_diag_val)
+    #y = jnp.zeros((m,)).at[diag_indices].set(avg_old_diag_val)
+    y = jnp.zeros((m,)).at[diag_indices].set(0.0)
     y = y.at[jnp.arange(old_sdp_state.b.shape[0])].set(
         old_sdp_state.y / old_sdp_state.SCALE_A)
     y = y * (SCALE_X / old_sdp_state.SCALE_X) * SCALE_A
