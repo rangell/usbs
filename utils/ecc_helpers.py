@@ -300,6 +300,7 @@ def warm_start_add_constraint(
     #y = jnp.zeros((m,)).at[diag_indices].set(avg_old_diag_val)
     # note: this is proximal step: (1 / rho)*(AX - b)
     #y = jnp.zeros((m,)).at[diag_indices].set(0.0)
+    y = jnp.zeros((m,))
     y = y.at[jnp.arange(old_sdp_state.b.shape[0])].set(
         old_sdp_state.y / old_sdp_state.SCALE_A)
     y = y * (SCALE_X / old_sdp_state.SCALE_X) * SCALE_A
