@@ -244,7 +244,7 @@ def warm_start_add_constraint(
     neg_points = jnp.array([v for v, _ in ortho_indices])
 
     #num_pred_clusters = max(jnp.unique(prev_pred_clusters).shape[0], 2)
-    num_pred_clusters = int(0.1 * old_n)
+    num_pred_clusters = int(0.9 * old_n)
 
     nbr_ecc_points = np.where(np.isin(prev_pred_clusters, prev_pred_clusters[ecc_points]))[0]
 
@@ -262,7 +262,7 @@ def warm_start_add_constraint(
         point_embeds = point_embeds / jnp.linalg.norm(point_embeds, axis=1)[:, None]
         avg_embed = jnp.sum(point_embeds[ecc_points] / ecc_counts[:, None], axis=0)
         avg_embed = avg_embed / jnp.linalg.norm(avg_embed)
-        point_embeds = point_embeds.at[ecc_points].set(point_embeds[ecc_points] + avg_embed[None, :])
+        point_embeds = point_embeds.at[ecc_points].set(point_embeds[ecc_points] + 2.0*avg_embed[None, :])
         point_embeds = jnp.concatenate([point_embeds, avg_embed[None, :]], axis=0)
         point_embeds = point_embeds / jnp.linalg.norm(point_embeds, axis=1)[:, None]
         if neg_points.size > 0:
