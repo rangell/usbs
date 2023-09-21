@@ -263,14 +263,14 @@ def warm_start_add_constraint(
         avg_embed = jnp.sum(point_embeds[ecc_points] / ecc_counts[:, None], axis=0)
         avg_embed = avg_embed / jnp.linalg.norm(avg_embed)
         #point_embeds = point_embeds.at[nbr_ecc_points].set(point_embeds[nbr_ecc_points] + 0.5 * avg_embed[None, :])
-        #point_embeds = point_embeds.at[ecc_points].set(point_embeds[ecc_points] + avg_embed[None, :])
+        point_embeds = point_embeds.at[ecc_points].set(point_embeds[ecc_points] + avg_embed[None, :])
         #point_embeds = point_embeds.at[ecc_points].set(avg_embed[None, :])
         point_embeds = jnp.concatenate([point_embeds, avg_embed[None, :]], axis=0)
         point_embeds = point_embeds / jnp.linalg.norm(point_embeds, axis=1)[:, None]
         if neg_points.size > 0:
             point_embeds = point_embeds.at[neg_points].set(jnp.zeros_like(point_embeds[0]))
         X = point_embeds @ point_embeds.T
-        X = jnp.zeros_like(X)
+        #X = jnp.zeros_like(X)
         z = apply_A_operator_mx(n, m, A_data, A_indices, X) 
     if old_sdp_state.P is not None:
         assert False
@@ -282,18 +282,20 @@ def warm_start_add_constraint(
     SCALE_C = 1.0 / jnp.linalg.norm(C.data)  # equivalent to frobenius norm
     SCALE_A = jnp.ones_like(b)
 
-    #old_diag_mask = ((old_sdp_state.A_indices[:, 1] == old_sdp_state.A_indices[:, 2])
-    #                 & (old_sdp_state.A_data == 1.0))
-    #old_diag_indices = jnp.unique(old_sdp_state.A_indices[old_diag_mask][:, 0])
-    #avg_old_diag_val = jnp.mean(old_sdp_state.y[old_diag_indices])
-    #diag_mask = ((A_indices[:, 1] == A_indices[:, 2]) & (A_data == 1.0))
-    #diag_indices = jnp.unique(A_indices[diag_mask][:, 0])
-    #y = jnp.zeros((m,)).at[diag_indices].set(avg_old_diag_val)
-    y = jnp.zeros((m,))
+    old_diag_mask = ((old_sdp_state.A_indices[:, 1] == old_sdp_state.A_indices[:, 2])
+                     & (old_sdp_state.A_data == 1.0))
+    old_diag_indices = jnp.unique(old_sdp_state.A_indices[old_diag_mask][:, 0])
+    avg_old_diag_val = jnp.mean(old_sdp_state.y[old_diag_indices])
+
+    diag_mask = ((A_indices[:, 1] == A_indices[:, 2]) & (A_data == 1.0))
+    diag_indices = jnp.unique(A_indices[diag_mask][:, 0])
+    y = jnp.zeros((m,)).at[diag_indices].set(avg_old_diag_val)
     y = y.at[jnp.arange(old_sdp_state.b.shape[0])].set(
         old_sdp_state.y / old_sdp_state.SCALE_A)
     y = y * (SCALE_X / old_sdp_state.SCALE_X) * SCALE_A
 
+    # note: this is proximal step: (1 / rho)*(AX - b)
+    y = y + ((1 / (1.0 * rho)) * SCALE_X * jnp.clip(b - z, a_max=0.0))
 
     sdp_state = SDPState(
         C=C,
