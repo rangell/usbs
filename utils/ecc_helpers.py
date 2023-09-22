@@ -270,7 +270,7 @@ def warm_start_add_constraint(
         #point_embeds = point_embeds.at[ecc_points].set(avg_embed[None, :])
         point_embeds = jnp.concatenate([point_embeds, avg_embed[None, :]], axis=0)
 
-        #point_embeds = point_embeds / jnp.linalg.norm(point_embeds, axis=1)[:, None]
+        point_embeds = point_embeds / jnp.linalg.norm(point_embeds, axis=1)[:, None]
 
         if neg_points.size > 0:
             point_embeds = point_embeds.at[neg_points].set(jnp.zeros_like(point_embeds[0]))
@@ -342,8 +342,8 @@ def create_sparse_laplacian(edge_weights: coo_matrix, eps: float) -> csr_matrix:
     pos_n, pos_m = pos_graph.shape[0], pos_graph.data.shape[0]
     neg_n, neg_m = neg_graph.shape[0], neg_graph.data.shape[0]
 
-    pos_k = np.ceil(np.log(pos_n) / eps**2).astype(int)
-    neg_k = np.ceil(np.log(neg_n) / eps**2).astype(int)
+    pos_k = np.ceil(10 * np.log(pos_n) / eps**2).astype(int)
+    neg_k = np.ceil(10 * np.log(neg_n) / eps**2).astype(int)
 
     pos_diag_edge_mx = coo_matrix(
         (pos_graph.data, (np.arange(pos_m), np.arange(pos_m))), shape=(pos_m, pos_m))
