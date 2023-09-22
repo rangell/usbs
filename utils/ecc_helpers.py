@@ -278,7 +278,7 @@ def warm_start_add_constraint(
         
         X = point_embeds @ point_embeds.T
 
-        #X = jnp.zeros_like(X)
+        X = jnp.zeros_like(X)
 
         z = apply_A_operator_mx(n, m, A_data, A_indices, X) 
     if old_sdp_state.P is not None:
