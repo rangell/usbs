@@ -910,7 +910,6 @@ def simulate(edge_weights: csr_matrix,
             ])
             if already_exists:
                 logging.error('Produced duplicate ecc constraint')
-                exit()
                 continue
 
             already_satisfied = (
@@ -918,7 +917,6 @@ def simulate(edge_weights: csr_matrix,
             ).todense().any()
             if already_satisfied:
                 logging.warning('Produced already satisfied ecc constraint')
-                exit()
                 continue
 
             pairwise_constraints_for_replay.append(pairwise_constraints)
