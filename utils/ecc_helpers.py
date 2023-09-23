@@ -250,6 +250,8 @@ def warm_start_add_constraint(
     P = old_sdp_state.P
     if old_sdp_state.X is not None:
         if jnp.unique(prev_pred_clusters[ecc_points]).size == jnp.unique(prev_pred_clusters).size:
+            embed()
+            exit()
             X = jnp.zeros((n, n))
         else:
             # compute rank-`num_pred_clusters` approximation of X
