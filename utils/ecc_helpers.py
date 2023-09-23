@@ -243,43 +243,27 @@ def warm_start_add_constraint(
 
     neg_points = jnp.array([v for v, _ in ortho_indices])
 
-    num_pred_clusters = max(jnp.unique(prev_pred_clusters).shape[0], 2)
-    #num_pred_clusters = min(max(2 * (jnp.unique(prev_pred_clusters).shape[0]**2), 2), old_n)
-    #num_pred_clusters = int(0.2 * old_n)
-
-    nbr_ecc_points = np.where(np.isin(prev_pred_clusters, prev_pred_clusters[ecc_points]))[0]
-
-    if len(ortho_indices) > 0:
-        nbr_ecc_points = nbr_ecc_points[~np.isin(nbr_ecc_points, neg_points)]
+    embed_dim = max(jnp.unique(prev_pred_clusters).shape[0], 2)
 
     X = old_sdp_state.X
     Omega = old_sdp_state.Omega
     P = old_sdp_state.P
     if old_sdp_state.X is not None:
-        # compute rank-`num_pred_clusters` approximation of X
-        eigvals, eigvecs = jnp.linalg.eigh(old_sdp_state.X)
-        print("embed dim: ", num_pred_clusters)
-        point_embeds = (eigvecs[:,-num_pred_clusters:] * jnp.sqrt(eigvals[None, -num_pred_clusters:]))
-        point_embeds = point_embeds / jnp.linalg.norm(point_embeds, axis=1)[:, None]
-        avg_embed = jnp.sum(point_embeds[ecc_points] / ecc_counts[:, None], axis=0)
-        avg_embed = avg_embed / jnp.linalg.norm(avg_embed)
-
-        #avg_embed = jnp.zeros_like(avg_embed)
-        
-        #point_embeds = point_embeds.at[nbr_ecc_points].set(point_embeds[nbr_ecc_points] + 0.5 * avg_embed[None, :])
-        #point_embeds = point_embeds.at[ecc_points].set(point_embeds[ecc_points] + avg_embed[None, :])
-        point_embeds = point_embeds.at[ecc_points].set(avg_embed[None, :])
-        point_embeds = jnp.concatenate([point_embeds, avg_embed[None, :]], axis=0)
-
-        point_embeds = point_embeds / jnp.linalg.norm(point_embeds, axis=1)[:, None]
-
-        if neg_points.size > 0:
-            point_embeds = point_embeds.at[neg_points].set(jnp.zeros_like(point_embeds[0]))
-        
-        X = point_embeds @ point_embeds.T
-
-        X = jnp.zeros_like(X)
-
+        if jnp.unique(prev_pred_clusters[ecc_points]).size == jnp.unique(prev_pred_clusters).size:
+            X = jnp.zeros((n, n))
+        else:
+            # compute rank-`num_pred_clusters` approximation of X
+            eigvals, eigvecs = jnp.linalg.eigh(old_sdp_state.X)
+            point_embeds = (eigvecs[:,-embed_dim:] * jnp.sqrt(eigvals[None, -embed_dim:]))
+            point_embeds = point_embeds / jnp.linalg.norm(point_embeds, axis=1)[:, None]
+            avg_embed = jnp.sum(point_embeds[ecc_points] / ecc_counts[:, None], axis=0)
+            avg_embed = avg_embed / jnp.linalg.norm(avg_embed)
+            point_embeds = point_embeds.at[ecc_points].set(avg_embed[None, :])
+            point_embeds = jnp.concatenate([point_embeds, avg_embed[None, :]], axis=0)
+            point_embeds = point_embeds / jnp.linalg.norm(point_embeds, axis=1)[:, None]
+            if neg_points.size > 0:
+                point_embeds = point_embeds.at[neg_points].set(jnp.zeros_like(point_embeds[0]))
+            X = point_embeds @ point_embeds.T
         z = apply_A_operator_mx(n, m, A_data, A_indices, X) 
     if old_sdp_state.P is not None:
         assert False
@@ -299,8 +283,6 @@ def warm_start_add_constraint(
     diag_mask = ((A_indices[:, 1] == A_indices[:, 2]) & (A_data == 1.0))
     diag_indices = jnp.unique(A_indices[diag_mask][:, 0])
     y = jnp.zeros((m,)).at[diag_indices].set(avg_old_diag_val)
-    #y = jnp.zeros((m,)).at[diag_indices].set(0.0)
-    #y = jnp.zeros((m,))
     y = y.at[jnp.arange(old_sdp_state.b.shape[0])].set(
         old_sdp_state.y / old_sdp_state.SCALE_A)
     y = y * (SCALE_X / old_sdp_state.SCALE_X) * SCALE_A
