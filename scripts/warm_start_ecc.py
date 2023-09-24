@@ -44,7 +44,7 @@ class EccClusterer(object):
         self.hparams = hparams
         self.edge_weights = edge_weights
         self.edge_weights.data
-        self.sparse_laplacian = create_sparse_laplacian(edge_weights=edge_weights, eps=0.8)
+        self.sparse_laplacian = create_sparse_laplacian(edge_weights=edge_weights, eps=0.7)
 
         self.features = features
         self.n = self.features.shape[0]
@@ -1053,9 +1053,9 @@ if __name__ == '__main__':
         point_features = block_data['point_features'].tocsr()
         gold_clustering = block_data['labels']
 
-        ## skip small blocks
-        #if edge_weights.shape[0] < 20:
-        #    continue
+        # skip small blocks
+        if edge_weights.shape[0] < 20:
+            continue
 
         assert edge_weights.shape[0] == point_features.shape[0]
         num_clusters = np.unique(gold_clustering).size
