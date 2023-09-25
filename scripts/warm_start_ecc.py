@@ -1053,9 +1053,9 @@ if __name__ == '__main__':
         point_features = block_data['point_features'].tocsr()
         gold_clustering = block_data['labels']
 
-        ## skip small blocks
-        #if edge_weights.shape[0] < 20:
-        #    continue
+        # skip small blocks
+        if edge_weights.shape[0] < 20:
+            continue
 
         assert edge_weights.shape[0] == point_features.shape[0]
         num_clusters = np.unique(gold_clustering).size
