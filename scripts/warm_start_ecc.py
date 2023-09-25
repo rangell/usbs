@@ -549,7 +549,7 @@ def gen_forced_ecc_constraint(point_feats: csr_matrix,
             gold_and_pred_sfc
     )
     sampled_overlap_feats = np.where(gold_and_pred_sfc == 1.0)[0]
-    np.random.shuffle(sampled_overlap_feats)
+    #np.random.shuffle(sampled_overlap_feats)
     sampled_overlap_feats = sampled_overlap_feats[:max_overlap_feats]
     # NOTE: why doesn't this line below work well with the SDP?
     # i.e. why don't the most common features work best
@@ -569,7 +569,7 @@ def gen_forced_ecc_constraint(point_feats: csr_matrix,
                 gold_not_pred_sfc
         )
         _sampled_pos_feats = np.where(gold_not_pred_sfc == np.max(gold_not_pred_sfc))[0]
-        np.random.shuffle(_sampled_pos_feats)
+        #np.random.shuffle(_sampled_pos_feats)
         sampled_pos_feats.append(_sampled_pos_feats[0])
     sampled_pos_feats = np.asarray(sampled_pos_feats)
 
@@ -587,7 +587,7 @@ def gen_forced_ecc_constraint(point_feats: csr_matrix,
                 pred_not_gold_sfc
         )
         _sampled_neg_feats = np.where(pred_not_gold_sfc == np.max(pred_not_gold_sfc))[0]
-        np.random.shuffle(_sampled_neg_feats)
+        #np.random.shuffle(_sampled_neg_feats)
         sampled_neg_feats.append(_sampled_neg_feats[0])
     sampled_neg_feats = np.asarray(sampled_neg_feats)
 
