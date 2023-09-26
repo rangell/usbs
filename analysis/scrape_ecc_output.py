@@ -7,7 +7,7 @@ from IPython import embed
 
 
 if __name__ == "__main__":
-    log_fname = "zbmath.out"
+    log_fname = "pubmed.out"
 
     start_time = None
     solve_time = None
@@ -59,9 +59,9 @@ if __name__ == "__main__":
     df = df.reindex(range(1, len(vals)+1))
 
     sns.lineplot(df)
-    plt.title("zbmath")
+    #plt.title("zbmath")
     plt.xlabel("# of $\exists$-constraints")
     plt.ylabel("cumulative SDP solve time (s)")
-    #plt.show()
+    plt.show()
 
-    plt.savefig("zbmath.png")
+    #plt.savefig("zbmath.png")
