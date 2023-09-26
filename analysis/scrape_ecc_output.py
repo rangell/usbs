@@ -1,14 +1,14 @@
 from collections import defaultdict
+import matplotlib.pyplot as plt
+import os
 import pandas as pd
 import re
-import matplotlib.pyplot as plt
 import seaborn as sns
+
 from IPython import embed
 
 
-if __name__ == "__main__":
-    log_fname = "results/ecc/qian.out"
-
+def create_df(log_fname: str) -> pd.DataFrame:
     start_time = None
     solve_time = None
     skip_flag = False
@@ -53,11 +53,13 @@ if __name__ == "__main__":
 
     df = pd.DataFrame(
         columns=(
+            "dataset",
             "solver",
             "warm-start",
             "num ecc",
             "per-iteration time",
-            "cumulative time"
+            "cumulative time",
+            "time reduction"
         )
     )
     i = 0
@@ -66,20 +68,49 @@ if __name__ == "__main__":
         for j, val in enumerate(vals):
             cum_time += val
             df.loc[i] = [
+                os.path.basename(log_fname).split(".")[0],
                 "CGAL" if name.split("/")[0] == "cgal" else "SpecBM",
                 "True" if name.split("/")[1] == "warm" else "False",
                 j+1,
                 val,
-                cum_time
+                cum_time,
+                val / solve_times[name.replace("warm", "cold")][j] if name.split("/")[1] == "warm" else 1.0
             ]
             i += 1
 
+    return df
 
-    sns.lineplot(df, x="num ecc", y="cumulative time", hue="solver", style="warm-start")
-    #plt.title("zbmath")
+
+if __name__ == "__main__":
+    pubmed_df = create_df(log_fname="results/ecc/pubmed.out")
+    qian_df = create_df(log_fname="results/ecc/qian.out")
+    zbmath_df = create_df(log_fname="results/ecc/zbmath.out")
+
+    ax = sns.lineplot(pubmed_df, x="num ecc", y="cumulative time", hue="solver", style="warm-start")
     plt.xlabel("# of $\exists$-constraints")
     plt.ylabel("cumulative SDP solve time (s)")
     plt.grid()
-    plt.show()
+    plt.savefig("pubmed.png")
+    plt.clf()
 
-    #plt.savefig("zbmath.png")
+    ax = sns.lineplot(qian_df, x="num ecc", y="cumulative time", hue="solver", style="warm-start")
+    ax.get_legend().set_visible(False)
+    plt.xlabel("# of $\exists$-constraints")
+    plt.ylabel("cumulative SDP solve time (s)")
+    plt.grid()
+    plt.savefig("qian.png")
+    plt.clf()
+
+    ax = sns.lineplot(zbmath_df, x="num ecc", y="cumulative time", hue="solver", style="warm-start")
+    ax.get_legend().set_visible(False)
+    plt.xlabel("# of $\exists$-constraints")
+    plt.ylabel("cumulative SDP solve time (s)")
+    plt.grid()
+    plt.savefig("zbmath.png")
+    plt.clf()
+
+    df = pd.concat([pubmed_df, qian_df, zbmath_df]).reset_index(drop=True)
+    warm_start_df = df[df["warm-start"] == "True"]
+
+    sns.catplot(data=df, x="solver", y="time reduction", col="dataset", kind="bar", height=4, aspect=.6)
+    plt.show()
