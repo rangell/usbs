@@ -7,7 +7,7 @@ from IPython import embed
 
 
 if __name__ == "__main__":
-    log_fname = "pubmed.out"
+    log_fname = "zbmath.out"
 
     start_time = None
     solve_time = None
