@@ -6,11 +6,8 @@ from jax.experimental.sparse import BCOO
 import jax.numpy as jnp
 import numba as nb
 import numpy as np
-import pickle
-from scipy.spatial.distance import pdist, squareform  # type: ignore
 from scipy.sparse import coo_matrix, csr_matrix
 from scipy.sparse.csgraph import laplacian
-from scipy.sparse.linalg import eigsh
 from typing import Any, Tuple, List
 
 from solver.utils import apply_A_operator_batched
