@@ -7,7 +7,7 @@ from IPython import embed
 
 
 if __name__ == "__main__":
-    log_fname = "arnetminer.out"
+    log_fname = "zbmath.out"
 
     start_time = None
     solve_time = None
@@ -20,8 +20,9 @@ if __name__ == "__main__":
         for line in f:
             line.strip()
 
-            re_new_block = re.search(">> loaded block", line)
+            re_new_block = re.search(">> loaded block \"(.*)\"", line)
             if re_new_block:
+                print("@@@ current block: ", re_new_block.group(1))
                 start_time = None
                 skip_flag = True
 
@@ -47,21 +48,20 @@ if __name__ == "__main__":
                 if re_solver_name:
                     assert solver_name == re_solver_name.group(1)
                     solve_times[solver_name].append(solve_time)
+                    print("{}: {}".format(solver_name, solve_time))
                     start_time = None
 
     df = pd.DataFrame(columns=tuple(solve_times.keys()))
     for name, vals in solve_times.items():
         df[name] = [0] + vals
-    
+
     df = df.cumsum()
     df = df.reindex(range(1, len(vals)+1))
 
     sns.lineplot(df)
-    #plt.title("Pubmed")
+    plt.title("zbmath")
     plt.xlabel("# of $\exists$-constraints")
-    plt.ylabel("cumulative time (sec)")
-    plt.show()
+    plt.ylabel("cumulative SDP solve time (s)")
+    #plt.show()
 
-    #plt.savefig("qian.png")
-
-
+    plt.savefig("zbmath.png")
