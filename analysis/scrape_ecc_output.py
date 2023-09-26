@@ -7,7 +7,7 @@ from IPython import embed
 
 
 if __name__ == "__main__":
-    log_fname = "zbmath.out"
+    log_fname = "results/ecc/qian.out"
 
     start_time = None
     solve_time = None
@@ -51,17 +51,35 @@ if __name__ == "__main__":
                     print("{}: {}".format(solver_name, solve_time))
                     start_time = None
 
-    df = pd.DataFrame(columns=tuple(solve_times.keys()))
+    df = pd.DataFrame(
+        columns=(
+            "solver",
+            "warm-start",
+            "num ecc",
+            "per-iteration time",
+            "cumulative time"
+        )
+    )
+    i = 0
     for name, vals in solve_times.items():
-        df[name] = [0] + vals
+        cum_time = 0.0
+        for j, val in enumerate(vals):
+            cum_time += val
+            df.loc[i] = [
+                "CGAL" if name.split("/")[0] == "cgal" else "SpecBM",
+                "True" if name.split("/")[1] == "warm" else "False",
+                j+1,
+                val,
+                cum_time
+            ]
+            i += 1
 
-    df = df.cumsum()
-    df = df.reindex(range(1, len(vals)+1))
 
-    sns.lineplot(df)
+    sns.lineplot(df, x="num ecc", y="cumulative time", hue="solver", style="warm-start")
     #plt.title("zbmath")
     plt.xlabel("# of $\exists$-constraints")
     plt.ylabel("cumulative SDP solve time (s)")
+    plt.grid()
     plt.show()
 
     #plt.savefig("zbmath.png")
