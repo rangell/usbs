@@ -480,7 +480,7 @@ def specbm(
                     jnp.logical_or(
                         state.obj_gap > obj_gap_eps,
                         jnp.logical_or(state.infeas_gap > infeas_gap_eps,
-                                    state.max_infeas > max_infeas_eps)))))
+                                    state.max_infeas > max_infeas_eps))))
 
     @jax.jit
     def body_func(state: StateStruct) -> StateStruct:
