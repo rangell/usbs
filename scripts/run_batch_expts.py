@@ -9,7 +9,7 @@ from IPython import embed
 # - add safeguards
 # - move template and config to files
 
-safe_mode = False
+safe_mode = True
 
 
 sbatch_template = """
@@ -85,4 +85,4 @@ if __name__ == "__main__":
         with tempfile.NamedTemporaryFile() as f:
             f.write(bytes(sbatch_str, "utf-8"))
             if not safe_mode:
-                os.system("sbatch {f.name}")
+                os.system(f"sbatch {f.name}")
