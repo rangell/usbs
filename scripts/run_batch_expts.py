@@ -79,9 +79,9 @@ if __name__ == "__main__":
         sbatch_str = sbatch_str.replace("__out_path__", out_path)
         sbatch_str = sbatch_str.replace("__cmd_str__", cmd_str)
         
-        with tempfile.TemporaryFile() as f:
+        with tempfile.NamedTemporaryFile() as f:
             f.write(bytes(sbatch_str, "utf-8"))
             f.seek(0)
-            os.system("cat {}".format(f.name))
+
             embed()
             exit()
