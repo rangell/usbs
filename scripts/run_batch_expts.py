@@ -9,7 +9,7 @@ from IPython import embed
 # - add safeguards
 # - move template and config to files
 
-safe_mode = True
+safe_mode = False
 
 
 sbatch_template = """
