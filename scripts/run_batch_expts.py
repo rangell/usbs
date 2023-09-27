@@ -1,8 +1,28 @@
 import itertools
 import pickle
+import tempfile
 from types import SimpleNamespace
 
 from IPython import embed
+
+
+sbatch_template = """
+#!/bin/bash
+#
+#SBATCH --job-name=__job_name__
+#SBATCH --output=__out_path__.out
+#SBATCH -e __out_path__.err
+#SBATCH --partition=longq
+#
+#SBATCH --n 16
+#SBATCH --mem=32G
+#SBATCH --time=0-01:00         
+
+export PYTHONPATH=$(pwd):$PYTHONPATH
+eval "$(conda shell.bash hook)"
+conda activate specbm
+__cmd_str__
+"""
 
 
 if __name__ == "__main__":
@@ -33,6 +53,8 @@ if __name__ == "__main__":
     }
     cgal_exclude = ["solver", "k_curr", "k_past", "rho", "beta"]
 
+    submitted_cmds = set()
+
     keys, values = zip(*expt_config["hparam_grid"].items())
     for d in [dict(zip(keys, v)) for v in itertools.product(*values)]:
 
@@ -42,4 +64,18 @@ if __name__ == "__main__":
         elif d["solver"] == "specbm":
             cmd_str += " ".join([f"--{k}={v}" for k, v in d.items() if k not in ["solver"]])
 
-        print(f"cmd: {cmd_str}\n")
+        if cmd_str in submitted_cmds:
+            continue
+
+        submitted_cmds.add(cmd_str)
+        job_name = "{}.{}".format(expt_config["expt_name"], str(len(submitted_cmds)))
+        out_path = "results/{}/{}".format(expt_config["problem"], job_name)
+
+        sbatch_str = sbatch_template.replace("__job_name__", job_name)
+        sbatch_str = sbatch_str.replace("__out_path__", out_path)
+        sbatch_str = sbatch_str.replace("__cmd_str__", cmd_str)
+        
+        with tempfile.TemporaryFile() as f:
+            f.write(bytes(sbatch_str, "utf-8"))
+            f.seek(0)
+            print(f.read())
