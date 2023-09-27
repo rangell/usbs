@@ -20,7 +20,7 @@ sbatch_template = """
 #SBATCH -e __out_path__.err
 #SBATCH --partition=longq
 #
-#SBATCH --n 16
+#SBATCH -n 16
 #SBATCH --mem=32G
 #SBATCH --time=0-01:00         
 
