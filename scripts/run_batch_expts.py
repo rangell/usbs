@@ -82,6 +82,6 @@ if __name__ == "__main__":
         with tempfile.TemporaryFile() as f:
             f.write(bytes(sbatch_str, "utf-8"))
             f.seek(0)
-            os.system("cat {}", f.name)
+            os.system("cat {}".format(f.name))
             embed()
             exit()
