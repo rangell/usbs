@@ -83,7 +83,7 @@ if __name__ == "__main__":
         
         print(f"cmd: {cmd_str}\n")
         with tempfile.NamedTemporaryFile() as f:
-            f.write(bytes(sbatch_str, "utf-8"))
+            f.write(bytes(sbatch_str.strip(), "utf-8"))
             f.seek(0)
             if not safe_mode:
                 os.system(f"sbatch {f.name}")
