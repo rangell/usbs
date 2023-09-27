@@ -150,7 +150,7 @@ if __name__ == "__main__":
         kind="bar",
         aspect=0.5,
         capsize=0.1,
-        errwidth=1.5)
+        errwidth=3.0)
     g.set_axis_labels("", "warm-start time reduction")
     g.set_titles("{col_name}")
     plt.savefig("warm_start_time_reduction.png")
