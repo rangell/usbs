@@ -9,6 +9,8 @@ from IPython import embed
 # - add safeguards
 # - move template and config to files
 
+safe_mode = False
+
 
 sbatch_template = """
 #!/bin/bash
@@ -79,9 +81,8 @@ if __name__ == "__main__":
         sbatch_str = sbatch_str.replace("__out_path__", out_path)
         sbatch_str = sbatch_str.replace("__cmd_str__", cmd_str)
         
+        print("cmd: {cmd_str}\n")
         with tempfile.NamedTemporaryFile() as f:
             f.write(bytes(sbatch_str, "utf-8"))
-            f.seek(0)
-
-            embed()
-            exit()
+            if not safe_mode:
+                os.system("sbatch {f.name}")
