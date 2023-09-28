@@ -135,3 +135,4 @@ results/maxcut/*.out
 results/maxcut/*.err
 results/qap/*.out
 results/qap/*.err
+results/qap/*.pkl
