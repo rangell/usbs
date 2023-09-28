@@ -11,7 +11,6 @@ from IPython import embed
 
 safe_mode = False
 
-
 sbatch_template = """
 #!/bin/bash
 #
@@ -25,7 +24,7 @@ sbatch_template = """
 #SBATCH --time=0-01:00         
 
 export PYTHONPATH=$(pwd):$PYTHONPATH
-eval "$(conda shell.bash hook)"
+eval "$(conda shell.zsh hook)"
 conda activate specbm
 __cmd_str__
 """
