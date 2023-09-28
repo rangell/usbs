@@ -45,7 +45,6 @@ if __name__ == "__main__":
             "infeas_gap_eps": [1e-7],
             "max_infeas_eps": [1e-7],
             "trace_factor": [2.0],
-            "warm_start_frac": [0.9],
             "k_curr": [3],
             "k_past": [1],
             "rho": [0.5],
@@ -54,15 +53,23 @@ if __name__ == "__main__":
             "subprob_max_iters": [100],
             "subprob_eps": [1e-15],
             "lanczos_max_restarts": [100],
-            "warm_start_strategy": ["none", "implicit"]
+            "warm_start": [(1.0, "none"), (0.9, "implicit")]
         }
     }
-    cgal_exclude = ["solver", "k_curr", "k_past", "rho", "beta"]
+    cgal_exclude = ["solver", "warm_start", "k_curr", "k_past", "rho", "beta"]
 
     submitted_cmds = set()
 
     keys, values = zip(*expt_config["hparam_grid"].items())
     for d in [dict(zip(keys, v)) for v in itertools.product(*values)]:
+        if expt_config["problem"] == "maxcut":
+            d["warm_start_frac"], d["warm_start_strategy"] = d["warm_start"]
+            del d["warm_start"]
+        elif expt_config["problem"] == "qap":
+            d["num_drop"], d["warm_start_strategy"] = d["warm_start"]
+            del d["warm_start"]
+        else:
+            raise ValueError("Unsupported problem type")
 
         cmd_str = "python scripts/warm_start_{}_{}.py ".format(expt_config["problem"], d["solver"])
         if d["solver"] == "cgal":
