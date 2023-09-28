@@ -8,6 +8,7 @@ from IPython import embed
 # TODO:
 # - add safeguards
 # - move template and config to files
+# - argparse
 
 safe_mode = False
 
@@ -51,7 +52,7 @@ if __name__ == "__main__":
             "beta": [0.25],
             "sketch_dim": [10],
             "subprob_max_iters": [100],
-            "subprob_eps": [1e-15],
+            "subprob_eps": [1e-10],
             "lanczos_max_restarts": [100],
             "warm_start": [(1.0, "none"), (0.9, "implicit")]
         }
