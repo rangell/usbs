@@ -1,3 +1,4 @@
+import argparse
 import ast
 from collections import defaultdict
 import glob
@@ -64,9 +65,9 @@ def create_df_from_log(log_fname):
                     if re_start_time:
                         start_time = float(re_start_time.group(1))
 
-                re_iter_info = re.search("t:\s(\d+).*end_time:\s([\.0-9]+).*obj_gap:\s([\.0-9]+)"
-                                         ".*infeas_gap:\s([\.0-9]+).*max_infeas:\s([\.0-9]+)"
-                                         ".*callback_val:\s([\.0-9]+)", line)
+                re_iter_info = re.search("t:\s(\d+).*end_time:\s([\.0-9]+).*obj_gap:\s([-e\.0-9]+)"
+                                         ".*infeas_gap:\s([-e\.0-9]+).*max_infeas:\s([-e\.0-9]+)"
+                                         ".*callback_val:\s([-e\.0-9]+)", line)
                 if re_iter_info:
                     iteration.append(int(re_iter_info.group(1)))
                     time.append(float(re_iter_info.group(2)) - start_time)
@@ -76,15 +77,15 @@ def create_df_from_log(log_fname):
                     callback_val.append(float(re_iter_info.group(6)))
     
     df = pd.DataFrame(
-            columns=(
-                *hparam_names,
-                "time (sec)",
-                "iteration",
-                "objective residual",
-                "infeasibility gap",
-                "max infeasibility",
-                "callback value"
-            )
+        columns=(
+            *hparam_names,
+            "time (sec)",
+            "iteration",
+            "objective residual",
+            "infeasibility gap",
+            "max infeasibility",
+            "callback value"
+        )
     )
 
     if len(iteration) < 1:
@@ -94,7 +95,7 @@ def create_df_from_log(log_fname):
     time = [t - time[0] + 0.1 for t in time]
     df["time (sec)"] = time
     df["iteration"] = iteration
-    df["objective residual"] = iteration
+    df["objective residual"] = objective_gap
     df["infeasibility gap"] = infeasibility_gap
     df["max infeasibility"] = max_infeasibility
     df["callback value"] = callback_val
@@ -102,26 +103,29 @@ def create_df_from_log(log_fname):
     for hparam_key in hparam_names:
         df[hparam_key] = hparam_dict[hparam_key]
 
-    return df
+    return df.iloc[1:]
+
+
+def get_hparams():
+    parser = argparse.ArgumentParser() 
+    parser.add_argument("--expt_name", type=str, required=True, help="experiment basename")
+    hparams = parser.parse_args()
+    return hparams
 
 
 if __name__ == "__main__":
     
-    expt_name = "maxcut_G67_B"
-    expt_out_files = glob.glob(f"results/*{expt_name}*")
+    hparams = get_hparams()
+    expt_out_files = glob.glob(f"results/maxcut/{hparams.expt_name}*.out")
 
     dfs = []
     for fname in tqdm(expt_out_files):
         dfs.append(create_df_from_log(fname))
 
-    embed()
-    exit()
-
-    merged_df = pd.concat(dfs)
+    merged_df = pd.concat(dfs).reset_index(drop=True)
     
-    # dump aggregated df to pickle file
-    with open(f"analysis/sims_summary_df_{expt_name}.pkl", "wb") as f:
+    summary_df_fname = f"results/maxcut/{hparams.expt_name}.pkl"
+    print(f"Writing summary df: {summary_df_fname}...")
+    with open(summary_df_fname, "wb") as f:
         pickle.dump(merged_df, f)
-
-    embed()
-    exit()
+    print("Done.")
