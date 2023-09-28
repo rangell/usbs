@@ -1,62 +1,29 @@
+import argparse
 import itertools
+import json
 import os
 import tempfile
 
 from IPython import embed
 
 
-# TODO:
-# - add safeguards
-# - move template and config to files
-# - argparse
-
-safe_mode = False
-
-sbatch_template = """
-#!/bin/bash
-#
-#SBATCH --job-name=__job_name__
-#SBATCH --output=__out_path__.out
-#SBATCH -e __out_path__.err
-#SBATCH --partition=longq
-#
-#SBATCH -n 16
-#SBATCH --mem=32G
-#SBATCH --time=0-01:00         
-
-export PYTHONPATH=$(pwd):$PYTHONPATH
-source ~/.bashrc
-eval "$(conda shell.bash hook)"
-conda activate specbm
-__cmd_str__
-"""
-
+def get_hparams():
+    parser = argparse.ArgumentParser() 
+    parser.add_argument("--config", type=str, required=True, help="path to config file")
+    parser.add_argument("--sbatch_template", type=str, required=True, help="path to sbatch template")
+    parser.add_argument("--safe_mode", action="store_true", help="runs script without submitting jobs")
+    hparams = parser.parse_args()
+    return hparams
 
 if __name__ == "__main__":
+    hparams = get_hparams()
 
-    expt_config = {
-        "expt_name": "test_sweep",
-        "problem": "maxcut",
-        "hparam_grid": {
-            "solver": ["cgal", "specbm"],
-            "data_path": ["data/maxcut/Gset/G1.mat"],
-            "max_iters": [10000],
-            "max_time": [360],
-            "obj_gap_eps": [1e-7],
-            "infeas_gap_eps": [1e-7],
-            "max_infeas_eps": [1e-7],
-            "trace_factor": [2.0],
-            "k_curr": [3],
-            "k_past": [1],
-            "rho": [0.5],
-            "beta": [0.25],
-            "sketch_dim": [10],
-            "subprob_max_iters": [100],
-            "subprob_eps": [1e-10],
-            "lanczos_max_restarts": [100],
-            "warm_start": [(1.0, "none"), (0.9, "implicit")]
-        }
-    }
+    with open(hparams.config, "r") as f:
+        expt_config = json.load(f)
+
+    with open(hparams.sbatch_template, "r") as f:
+        sbatch_template = f.read()
+
     cgal_exclude = ["solver", "k_curr", "k_past", "rho", "beta"]
 
     submitted_cmds = set()
@@ -93,5 +60,5 @@ if __name__ == "__main__":
         with tempfile.NamedTemporaryFile() as f:
             f.write(bytes(sbatch_str.strip(), "utf-8"))
             f.seek(0)
-            if not safe_mode:
+            if not hparams.safe_mode:
                 os.system(f"sbatch {f.name}")
