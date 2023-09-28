@@ -24,7 +24,8 @@ sbatch_template = """
 #SBATCH --time=0-01:00         
 
 export PYTHONPATH=$(pwd):$PYTHONPATH
-eval "$(conda shell.zsh hook)"
+source ~/.bashrc
+eval "$(conda shell.bash hook)"
 conda activate specbm
 __cmd_str__
 """
@@ -55,7 +56,7 @@ if __name__ == "__main__":
             "warm_start": [(1.0, "none"), (0.9, "implicit")]
         }
     }
-    cgal_exclude = ["solver", "warm_start", "k_curr", "k_past", "rho", "beta"]
+    cgal_exclude = ["solver", "k_curr", "k_past", "rho", "beta"]
 
     submitted_cmds = set()
 
