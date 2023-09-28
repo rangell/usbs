@@ -131,3 +131,7 @@ dmypy.json
 # rangell
 .vscode/
 data/
+results/maxcut/*.out
+results/maxcut/*.err
+results/qap/*.out
+results/qap/*.err
