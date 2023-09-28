@@ -133,6 +133,7 @@ dmypy.json
 data/
 results/maxcut/*.out
 results/maxcut/*.err
+results/maxcut/*.pkl
 results/qap/*.out
 results/qap/*.err
 results/qap/*.pkl
