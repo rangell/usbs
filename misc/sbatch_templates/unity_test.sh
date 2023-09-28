@@ -5,8 +5,9 @@
 #SBATCH -e __out_path__.err
 #SBATCH --partition=cpu
 #
-#SBATCH -n 16
-#SBATCH --mem=32G
+#SBATCH -N 1
+#SBATCH -n 8
+#SBATCH --mem=16G
 #SBATCH --time=0-01:00         
 
 export PYTHONPATH=$(pwd):$PYTHONPATH
