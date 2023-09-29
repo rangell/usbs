@@ -29,7 +29,7 @@ if __name__ == "__main__":
         df,
         x="time (sec)",
         y="objective residual",
-        hue="solver",
+            hue="solver",
         style="warm-start",
         linewidth=3)
     ax.xaxis.set_major_locator(MaxNLocator(integer=True))
