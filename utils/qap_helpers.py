@@ -25,11 +25,10 @@ from IPython import embed
 
 def load_and_process_qap(fname: str, num_drop: int = 0) -> Tuple[Array, Array]:
     with open(fname, "r") as f:
-        datastr = f.read()
-        split_index = datastr.find("\n\n")
-        str_n, str_data = datastr[:split_index], datastr[split_index+2:]
+        datastr = f.read().strip().split()
+        str_n, str_data = datastr[0], datastr[1:]
         n = int(str_n)
-        M = jnp.array([float(v) for v in str_data.split()]).reshape(2*n, n)
+        M = jnp.array([float(v) for v in str_data]).reshape(2*n, n)
         D = M[:n]
         W = M[n:]
 
