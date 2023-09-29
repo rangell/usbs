@@ -7,7 +7,7 @@
 #
 #SBATCH -n 16
 #SBATCH --mem=32G
-#SBATCH --time=0-01:00         
+#SBATCH --time=0-01:00:00
 
 export PYTHONPATH=$(pwd):$PYTHONPATH
 source ~/.bashrc

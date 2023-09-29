@@ -39,7 +39,7 @@ if __name__ == "__main__":
         else:
             raise ValueError("Unsupported problem type")
 
-        cmd_str = "python scripts/warm_start_{}_{}.py ".format(expt_config["problem"], d["solver"])
+        cmd_str = "python -u scripts/warm_start_{}_{}.py ".format(expt_config["problem"], d["solver"])
         if d["solver"] == "cgal":
             cmd_str += " ".join([f"--{k}={v}" for k, v in d.items() if k not in cgal_exclude])
         elif d["solver"] == "specbm":
