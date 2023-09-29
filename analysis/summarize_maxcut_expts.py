@@ -103,7 +103,8 @@ def create_df_from_log(log_fname):
     for hparam_key in hparam_names:
         df[hparam_key] = hparam_dict[hparam_key]
 
-    return df.iloc[1:]
+    #return df.iloc[1:]
+    return df
 
 
 def get_hparams():
@@ -121,6 +122,9 @@ if __name__ == "__main__":
     dfs = []
     for fname in tqdm(expt_out_files):
         dfs.append(create_df_from_log(fname))
+
+    embed()
+    exit()
 
     merged_df = pd.concat(dfs).reset_index(drop=True)
     
