@@ -41,8 +41,10 @@ if __name__ == "__main__":
 
         cmd_str = "python -u scripts/warm_start_{}_{}.py ".format(expt_config["problem"], d["solver"])
         if d["solver"] == "cgal":
+            d["trace_factor"] = 1.0
             cmd_str += " ".join([f"--{k}={v}" for k, v in d.items() if k not in cgal_exclude])
         elif d["solver"] == "specbm":
+            d["trace_factor"] = 2.0
             cmd_str += " ".join([f"--{k}={v}" for k, v in d.items() if k not in ["solver"]])
 
         if cmd_str in submitted_cmds:
