@@ -48,9 +48,6 @@ def initialize_state(C: csc_matrix, sketch_dim: int) -> SDPState:
     SCALE_C = 1.0 / jnp.linalg.norm(C.data)  # equivalent to frobenius norm
     SCALE_A = jnp.ones_like(b)
 
-    SCALE_X = 10.0 * SCALE_X
-    SCALE_C = 10.0 * SCALE_C
-
     if sketch_dim == -1:
         X = jnp.zeros((n, n))
         Omega = None
@@ -131,9 +128,6 @@ def get_implicit_warm_start_state(old_sdp_state: SDPState, C: BCOO, sketch_dim: 
     SCALE_C = 1.0 / jnp.linalg.norm(C.data)  # equivalent to frobenius norm
     SCALE_A = jnp.ones_like(b)
 
-    SCALE_X = 10.0 * SCALE_X
-    SCALE_C = 10.0 * SCALE_C
-
     sdp_state = SDPState(
         C=C,
         A_indices=A_indices,
@@ -197,9 +191,6 @@ def get_explicit_warm_start_state(old_sdp_state: SDPState, C: BCOO, sketch_dim: 
     SCALE_C = 1.0 / jnp.linalg.norm(C.data)  # equivalent to frobenius norm
     SCALE_A = jnp.ones_like(b)
 
-    SCALE_X = 10.0 * SCALE_X
-    SCALE_C = 10.0 * SCALE_C
-
     sdp_state = SDPState(
         C=C,
         A_indices=A_indices,
@@ -238,9 +229,6 @@ def get_dual_only_warm_start_state(old_sdp_state: SDPState, C: BCOO, sketch_dim:
     SCALE_X = 1.0 / float(n)
     SCALE_C = 1.0 / jnp.linalg.norm(C.data)  # equivalent to frobenius norm
     SCALE_A = jnp.ones_like(b)
-
-    SCALE_X = 10.0 * SCALE_X
-    SCALE_C = 10.0 * SCALE_C
 
     if sketch_dim == -1:
         X = jnp.zeros((n, n))
