@@ -23,25 +23,68 @@ if __name__ == "__main__":
 
     df["warm-start"] = (df["warm_start_strategy"] != "none")
 
-    plt.rcParams.update({'font.size': 16})
+    for k_curr in [k for k in df["k_curr"].unique() if k is not None]:
+        for k_past in [k for k in df["k_past"].unique() if k is not None]:
+            for warm_start_strategy in ["implicit", "explicit", "dual_only"]:
+                cgal_mask = (df["solver"] == "cgal")
+                k_curr_mask = (df["k_curr"] == k_curr)
+                k_past_mask = (df["k_past"] == k_past)
+                warm_start_strategy_mask = (df["warm_start_strategy"] == warm_start_strategy)
+                warm_start_strategy_mask |= (df["warm_start_strategy"] == "none")
 
-    ax = sns.lineplot(
-        df,
-        x="time (sec)",
-        y="objective residual",
-            hue="solver",
-        style="warm-start",
-        linewidth=3)
-    ax.xaxis.set_major_locator(MaxNLocator(integer=True))
-    plt.xlabel("time (sec)")
-    plt.ylabel("objective residual")
-    #plt.xscale("log")
-    plt.yscale("log")
-    plt.grid()
-    plt.show()
-    #plt.savefig("time-vs-obj.png")
-    plt.clf()
-    #os.system("convert pubmed.png -trim pubmed.png")
+                subset_mask = cgal_mask | (k_curr_mask & k_past_mask)
+                subset_mask &= warm_start_strategy_mask
+                subset_df = df[subset_mask]
 
-    embed()
-    exit()
+                ax = sns.lineplot(
+                    subset_df,
+                    x="time (sec)",
+                    y="objective residual",
+                    hue="solver",
+                    style="warm-start",
+                    linewidth=1)
+
+                plt.xscale("log")
+                plt.yscale("log")
+                plt.grid()
+                #plt.show()
+                imgname = "time-vs-obj-{}-{}-{}.png".format(k_curr, k_past, warm_start_strategy)
+                print(f"Saving plot to {imgname}...")
+                plt.savefig(imgname)
+                plt.clf()
+                #os.system("convert pubmed.png -trim pubmed.png")
+
+                ax = sns.lineplot(
+                    subset_df,
+                    x="time (sec)",
+                    y="infeasibility gap",
+                    hue="solver",
+                    style="warm-start",
+                    linewidth=1)
+
+                plt.xscale("log")
+                plt.yscale("log")
+                plt.grid()
+                #plt.show()
+                imgname = "time-vs-infeas-{}-{}-{}.png".format(k_curr, k_past, warm_start_strategy)
+                print(f"Saving plot to {imgname}...")
+                plt.savefig(imgname)
+                plt.clf()
+                #os.system("convert pubmed.png -trim pubmed.png")
+
+                ax = sns.lineplot(
+                    subset_df,
+                    x="time (sec)",
+                    y="callback value",
+                    hue="solver",
+                    style="warm-start",
+                    linewidth=1)
+
+                plt.xscale("log")
+                plt.grid()
+                #plt.show()
+                imgname = "time-vs-cut-{}-{}-{}.png".format(k_curr, k_past, warm_start_strategy)
+                print(f"Saving plot to {imgname}...")
+                plt.savefig(imgname)
+                plt.clf()
+                #os.system("convert pubmed.png -trim pubmed.png")

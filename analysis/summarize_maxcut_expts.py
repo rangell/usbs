@@ -2,9 +2,11 @@ import argparse
 import ast
 from collections import defaultdict
 import glob
+import math
 import pandas as pd
 import pickle
 import re
+from scipy.ndimage import gaussian_filter1d
 from tqdm import tqdm, trange
 
 from IPython import embed
@@ -84,26 +86,35 @@ def create_df_from_log(log_fname):
             "objective residual",
             "infeasibility gap",
             "max infeasibility",
-            "callback value"
+            "callback value",
+            "smooth objective residual",
+            "smooth infeasibility gap",
+            "smooth max infeasibility",
+            "smooth callback value"
         )
     )
 
-    if len(iteration) < 1:
-        embed()
-        exit()
+    log_indices = [j*(2**i) for j in range(10) for i in range(int(math.log2(len(iteration))))]
+    log_indices = set(log_indices)
+    log_indices = sorted([i for i in log_indices if i < len(iteration)])
+
+    log_indices = list(range(len(iteration)))
 
     time = [t - time[0] + 0.1 for t in time]
-    df["time (sec)"] = time
-    df["iteration"] = iteration
-    df["objective residual"] = objective_gap
-    df["infeasibility gap"] = infeasibility_gap
-    df["max infeasibility"] = max_infeasibility
-    df["callback value"] = callback_val
+    df["time (sec)"] = [time[i] for i in log_indices]
+    df["iteration"] = [iteration[i] for i in log_indices]
+    df["objective residual"] = [objective_gap[i] for i in log_indices]
+    df["infeasibility gap"] = [infeasibility_gap[i] for i in log_indices]
+    df["max infeasibility"] = [max_infeasibility[i] for i in log_indices]
+    df["callback value"] = [callback_val[i] for i in log_indices]
+    df["smooth objective residual"] = gaussian_filter1d(df["objective residual"], 10)
+    df["smooth infeasibility gap"] = gaussian_filter1d(df["infeasibility gap"], 10)
+    df["smooth max infeasibility"] = gaussian_filter1d(df["max infeasibility"], 10)
+    df["smooth callback value"] = gaussian_filter1d(df["callback value"], 10)
 
     for hparam_key in hparam_names:
         df[hparam_key] = hparam_dict[hparam_key]
 
-    #return df.iloc[1:]
     return df
 
 
@@ -122,9 +133,6 @@ if __name__ == "__main__":
     dfs = []
     for fname in tqdm(expt_out_files):
         dfs.append(create_df_from_log(fname))
-
-    embed()
-    exit()
 
     merged_df = pd.concat(dfs).reset_index(drop=True)
     

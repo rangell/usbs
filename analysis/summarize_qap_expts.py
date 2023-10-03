@@ -133,9 +133,6 @@ if __name__ == "__main__":
     for fname in tqdm(expt_out_files):
         dfs.append(create_df_from_log(fname))
 
-    embed()
-    exit()
-
     merged_df = pd.concat(dfs).reset_index(drop=True)
     
     summary_df_fname = f"results/maxcut/{hparams.expt_name}.pkl"
