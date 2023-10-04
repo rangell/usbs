@@ -98,7 +98,7 @@ def create_df_from_log(log_fname):
     log_indices = set(log_indices)
     log_indices = sorted([i for i in log_indices if i < len(iteration)])
 
-    log_indices = list(range(len(iteration)))
+    #log_indices = list(range(len(iteration)))
 
     time = [t - time[0] + 0.1 for t in time]
     df["time (sec)"] = [time[i] for i in log_indices]

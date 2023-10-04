@@ -2,6 +2,8 @@ import argparse
 import ast
 from collections import defaultdict
 import glob
+import json
+import os
 import pandas as pd
 import pickle
 import re
@@ -91,7 +93,9 @@ def create_df_from_log(log_fname):
             "infeasibility gap",
             "max infeasibility",
             "callback value",
-            "best callback value"
+            "best callback value",
+            "relative gap",
+            "best relative gap"
         )
     )
 
@@ -110,6 +114,25 @@ def create_df_from_log(log_fname):
 
     for hparam_key in hparam_names:
         df[hparam_key] = hparam_dict[hparam_key]
+
+    data_path = df["data_path"].unique()
+    assert len(data_path) == 1
+    data_path = data_path[0]
+
+    if "qapdata" in data_path:
+        soln_path = data_path.split(".")[0] + ".sln"
+        with open(soln_path, "r") as f:
+            opt_soln = int(f.read().strip().split()[1])
+        df["relative gap"] = (df["callback value"] - opt_soln) / opt_soln
+        df["best relative gap"] = (df["best callback value"] - opt_soln) / opt_soln
+    elif "tspdata" in data_path:
+        with open("data/qap/tspdata/tsp_solns.json", "r") as f:
+            tsp_solns = json.load(f)
+        opt_soln = tsp_solns[os.path.basename(data_path).split(".")[0]]
+        df["relative gap"] = (df["callback value"] - opt_soln) / opt_soln
+        df["best relative gap"] = (df["best callback value"] - opt_soln) / opt_soln
+    else:
+        raise ValueError("Data path does not belong to a known set")
     
     if hparam_dict["warm_start_strategy"] == "none":
         return df.iloc[1:]
@@ -135,7 +158,7 @@ if __name__ == "__main__":
 
     merged_df = pd.concat(dfs).reset_index(drop=True)
     
-    summary_df_fname = f"results/maxcut/{hparams.expt_name}.pkl"
+    summary_df_fname = f"results/qap/{hparams.expt_name}.pkl"
     print(f"Writing summary df: {summary_df_fname}...")
     with open(summary_df_fname, "wb") as f:
         pickle.dump(merged_df, f)
