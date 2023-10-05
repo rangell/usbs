@@ -330,11 +330,11 @@ def initialize_state(C: BCOO, sketch_dim: int) -> SDPState:
     SCALE_X = 1.0 / float(l + 1)
     SCALE_C = 1.0 / jnp.linalg.norm(C.data)  # equivalent to frobenius norm
     SCALE_A = 1.0 / jnp.sqrt(jnp.zeros((m,)).at[A_indices[:,0]].add(A_data**2))
-    A_tensor = BCOO((A_data, A_indices), shape=(m, n, n))
-    A_matrix = SCALE_A[:, None] * A_tensor.reshape(m, n**2)
-    A_matrix = coo_matrix(
-        (A_matrix.data, (A_matrix.indices[:,0], A_matrix.indices[:,1])), shape=A_matrix.shape)
-    norm_A = jnp.sqrt(eigsh(A_matrix @ A_matrix.T, k=1, which="LM", return_eigenvectors=False)[0])
+    #A_tensor = BCOO((A_data, A_indices), shape=(m, n, n))
+    #A_matrix = SCALE_A[:, None] * A_tensor.reshape(m, n**2)
+    #A_matrix = coo_matrix(
+    #    (A_matrix.data, (A_matrix.indices[:,0], A_matrix.indices[:,1])), shape=A_matrix.shape)
+    #norm_A = jnp.sqrt(eigsh(A_matrix @ A_matrix.T, k=1, which="LM", return_eigenvectors=False)[0])
     #SCALE_A /= norm_A
 
     if sketch_dim == -1:
@@ -425,11 +425,11 @@ def get_implicit_warm_start_state(old_sdp_state: SDPState, C: BCOO, sketch_dim: 
     SCALE_X = 1.0 / float(l + 1)
     SCALE_C = 1.0 / jnp.linalg.norm(C.data)  # equivalent to frobenius norm
     SCALE_A = 1.0 / jnp.sqrt(jnp.zeros((m,)).at[A_indices[:,0]].add(A_data**2))
-    A_tensor = BCOO((A_data, A_indices), shape=(m, n, n))
-    A_matrix = SCALE_A[:, None] * A_tensor.reshape(m, n**2)
-    A_matrix = coo_matrix(
-        (A_matrix.data, (A_matrix.indices[:,0], A_matrix.indices[:,1])), shape=A_matrix.shape)
-    norm_A = jnp.sqrt(eigsh(A_matrix @ A_matrix.T, k=1, which="LM", return_eigenvectors=False)[0])
+    #A_tensor = BCOO((A_data, A_indices), shape=(m, n, n))
+    #A_matrix = SCALE_A[:, None] * A_tensor.reshape(m, n**2)
+    #A_matrix = coo_matrix(
+    #    (A_matrix.data, (A_matrix.indices[:,0], A_matrix.indices[:,1])), shape=A_matrix.shape)
+    #norm_A = jnp.sqrt(eigsh(A_matrix @ A_matrix.T, k=1, which="LM", return_eigenvectors=False)[0])
     #SCALE_A /= norm_A
 
     sdp_state = SDPState(
@@ -499,11 +499,11 @@ def get_explicit_warm_start_state(old_sdp_state: SDPState, C: BCOO, sketch_dim: 
     SCALE_X = 1.0 / float(l + 1)
     SCALE_C = 1.0 / jnp.linalg.norm(C.data)  # equivalent to frobenius norm
     SCALE_A = 1.0 / jnp.sqrt(jnp.zeros((m,)).at[A_indices[:,0]].add(A_data**2))
-    A_tensor = BCOO((A_data, A_indices), shape=(m, n, n))
-    A_matrix = SCALE_A[:, None] * A_tensor.reshape(m, n**2)
-    A_matrix = coo_matrix(
-        (A_matrix.data, (A_matrix.indices[:,0], A_matrix.indices[:,1])), shape=A_matrix.shape)
-    norm_A = jnp.sqrt(eigsh(A_matrix @ A_matrix.T, k=1, which="LM", return_eigenvectors=False)[0])
+    #A_tensor = BCOO((A_data, A_indices), shape=(m, n, n))
+    #A_matrix = SCALE_A[:, None] * A_tensor.reshape(m, n**2)
+    #A_matrix = coo_matrix(
+    #    (A_matrix.data, (A_matrix.indices[:,0], A_matrix.indices[:,1])), shape=A_matrix.shape)
+    #norm_A = jnp.sqrt(eigsh(A_matrix @ A_matrix.T, k=1, which="LM", return_eigenvectors=False)[0])
     #SCALE_A /= norm_A
 
     sdp_state = SDPState(
@@ -551,11 +551,11 @@ def get_dual_only_warm_start_state(old_sdp_state: SDPState, C: BCOO, sketch_dim:
     SCALE_X = 1.0 / float(l + 1)
     SCALE_C = 1.0 / jnp.linalg.norm(C.data)  # equivalent to frobenius norm
     SCALE_A = 1.0 / jnp.sqrt(jnp.zeros((m,)).at[A_indices[:,0]].add(A_data**2))
-    A_tensor = BCOO((A_data, A_indices), shape=(m, n, n))
-    A_matrix = SCALE_A[:, None] * A_tensor.reshape(m, n**2)
-    A_matrix = coo_matrix(
-        (A_matrix.data, (A_matrix.indices[:,0], A_matrix.indices[:,1])), shape=A_matrix.shape)
-    norm_A = jnp.sqrt(eigsh(A_matrix @ A_matrix.T, k=1, which="LM", return_eigenvectors=False)[0])
+    #A_tensor = BCOO((A_data, A_indices), shape=(m, n, n))
+    #A_matrix = SCALE_A[:, None] * A_tensor.reshape(m, n**2)
+    #A_matrix = coo_matrix(
+    #    (A_matrix.data, (A_matrix.indices[:,0], A_matrix.indices[:,1])), shape=A_matrix.shape)
+    #norm_A = jnp.sqrt(eigsh(A_matrix @ A_matrix.T, k=1, which="LM", return_eigenvectors=False)[0])
     #SCALE_A /= norm_A
 
     if sketch_dim == -1:
