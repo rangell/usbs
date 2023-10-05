@@ -98,3 +98,60 @@ if __name__ == "__main__":
                 plt.savefig(imgname)
                 plt.clf()
                 #os.system("convert pubmed.png -trim pubmed.png")
+
+                ax = sns.lineplot(
+                    subset_df,
+                    x="time (sec)",
+                    y="best relative gap",
+                    hue="solver",
+                    hue_order=["cgal", "specbm"],
+                    style="warm-start",
+                    linewidth=1)
+
+                plt.xscale("log")
+                plt.grid()
+                #plt.show()
+                imgname = "time-vs-best_gap-{}-{}-{}-{}.png".format(
+                    dataset_basename, k_curr, k_past, warm_start_strategy)
+                print(f"Saving plot to {imgname}...")
+                plt.savefig(imgname)
+                plt.clf()
+                #os.system("convert pubmed.png -trim pubmed.png")
+
+                ax = sns.lineplot(
+                    subset_df,
+                    x="time (sec)",
+                    y="callback value",
+                    hue="solver",
+                    hue_order=["cgal", "specbm"],
+                    style="warm-start",
+                    linewidth=1)
+
+                plt.xscale("log")
+                plt.grid()
+                #plt.show()
+                imgname = "time-vs-callback-{}-{}-{}-{}.png".format(
+                    dataset_basename, k_curr, k_past, warm_start_strategy)
+                print(f"Saving plot to {imgname}...")
+                plt.savefig(imgname)
+                plt.clf()
+                #os.system("convert pubmed.png -trim pubmed.png")
+
+                ax = sns.lineplot(
+                    subset_df,
+                    x="time (sec)",
+                    y="best callback value",
+                    hue="solver",
+                    hue_order=["cgal", "specbm"],
+                    style="warm-start",
+                    linewidth=1)
+
+                plt.xscale("log")
+                plt.grid()
+                #plt.show()
+                imgname = "time-vs-best_callback-{}-{}-{}-{}.png".format(
+                    dataset_basename, k_curr, k_past, warm_start_strategy)
+                print(f"Saving plot to {imgname}...")
+                plt.savefig(imgname)
+                plt.clf()
+                #os.system("convert pubmed.png -trim pubmed.png")

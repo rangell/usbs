@@ -49,7 +49,7 @@ if __name__ == "__main__":
                     ax = sns.lineplot(
                         subset_df,
                         x="time (sec)",
-                        y="smooth objective residual",
+                        y="objective residual",
                         hue="solver",
                         hue_order=["cgal", "specbm"],
                         style="warm-start",
@@ -72,7 +72,7 @@ if __name__ == "__main__":
                     ax = sns.lineplot(
                         subset_df,
                         x="time (sec)",
-                        y="smooth infeasibility gap",
+                        y="infeasibility gap",
                         hue="solver",
                         hue_order=["cgal", "specbm"],
                         style="warm-start",
