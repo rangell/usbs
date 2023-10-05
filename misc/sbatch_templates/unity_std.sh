@@ -3,7 +3,7 @@
 #SBATCH --job-name=__job_name__
 #SBATCH --output=__out_path__.out
 #SBATCH -e __out_path__.err
-#SBATCH --partition=longq
+#SBATCH --partition=cpu
 #
 #SBATCH -N 1
 #SBATCH -n 8
