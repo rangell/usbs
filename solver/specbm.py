@@ -582,7 +582,7 @@ def specbm(
         bar_primal_obj_next = eta * state.bar_primal_obj
         bar_primal_obj_next += jnp.trace(curr_VSV_T_factor.T @ (state.C @ curr_VSV_T_factor))
         
-        obj_gap = primal_obj_next + neg_obj_lb / (SCALE_C * SCALE_X)
+        obj_gap = (primal_obj_next + neg_obj_lb) / (SCALE_C * SCALE_X)
         obj_gap /= 1.0 + jnp.clip(jnp.abs(primal_obj_next), a_min=jnp.abs(neg_obj_lb)) / (SCALE_C * SCALE_X)
         infeas_gap = jnp.linalg.norm((z_next - state.b + upsilon_next) / SCALE_A) / SCALE_X
         infeas_gap /= 1.0 + jnp.linalg.norm((state.b / SCALE_A) / SCALE_X)
@@ -609,7 +609,7 @@ def specbm(
                         cand_pen_dual_obj=cand_pen_dual_obj,
                         lb_spec_est=lb_spec_est,
                         pen_dual_obj_next=pen_dual_obj_next,
-                        primal_obj=primal_obj_next,
+                        primal_obj=primal_obj_next / (SCALE_C * SCALE_X),
                         neg_obj_lb=neg_obj_lb,
                         obj_gap=obj_gap,
                         infeas_gap=infeas_gap,
