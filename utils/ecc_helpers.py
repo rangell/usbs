@@ -344,6 +344,11 @@ def create_sparse_laplacian(edge_weights: coo_matrix, eps: float) -> csr_matrix:
     pos_laplacian_mx = pos_incidence_mx.T @ pos_diag_edge_mx @ pos_incidence_mx 
     neg_laplacian_mx = neg_incidence_mx.T @ neg_diag_edge_mx @ neg_incidence_mx 
 
+    # if the matrix is small, we do not need to sample
+    if pos_laplacian_mx.shape[0] < 15:
+        return pos_laplacian_mx - neg_laplacian_mx
+
+
     pos_rand_proj = np.random.binomial(n=1, p=0.5, size=(pos_m, pos_k))
     pos_rand_proj = (1 / np.sqrt(pos_k)) * (2 * pos_rand_proj - 1)
     neg_rand_proj = np.random.binomial(n=1, p=0.5, size=(neg_m, neg_k))
