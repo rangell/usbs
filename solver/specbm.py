@@ -609,7 +609,7 @@ def specbm(
                         cand_pen_dual_obj=cand_pen_dual_obj,
                         lb_spec_est=lb_spec_est,
                         pen_dual_obj_next=pen_dual_obj_next,
-                        primal_obj=primal_obj_next / (SCALE_C * SCALE_X),
+                        primal_obj=primal_obj_next,
                         neg_obj_lb=neg_obj_lb,
                         obj_gap=obj_gap,
                         infeas_gap=infeas_gap,
