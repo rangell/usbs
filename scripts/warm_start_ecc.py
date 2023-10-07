@@ -233,7 +233,7 @@ class EccClusterer(object):
         #_ = self._call_sdp_solver(self.warm_start_sdp_state, "cgal/warm")
         self.cold_start_sdp_state = self._call_sdp_solver(self.cold_start_sdp_state, "specbm/cold")
 
-        if len(self.ecc_constraints) > 1:
+        if len(self.ecc_constraints) > 3:
             _ = self._call_sdp_solver(self.warm_start_sdp_state, "specbm/warm")
 
         unscaled_state = unscale_sdp_state(self.cold_start_sdp_state)
