@@ -88,40 +88,42 @@ if __name__ == "__main__":
 
     plt.rcParams.update({'font.size': 16})
 
-    pubmed_df = create_df(log_fname="results/ecc/pubmed.out")
-    qian_df = create_df(log_fname="results/ecc/qian.out")
-    zbmath_df = create_df(log_fname="results/ecc/zbmath.out")
+    #pubmed_df = create_df(log_fname="results/ecc/pubmed.out")
+    #qian_df = create_df(log_fname="results/ecc/qian.out")
+    #zbmath_df = create_df(log_fname="results/ecc/zbmath.out")
 
-    ax = sns.lineplot(
-        pubmed_df,
-        x="num ecc",
-        y="cumulative time",
-        hue="solver",
-        style="warm-start",
-        linewidth=3)
-    ax.xaxis.set_major_locator(MaxNLocator(integer=True))
-    plt.xlabel("# of $\exists$-constraints")
-    plt.ylabel("cumulative SDP solve time (s)")
-    plt.grid()
-    plt.savefig("pubmed.png")
-    plt.clf()
-    os.system("convert pubmed.png -trim pubmed.png")
+    zbmath_df = create_df(log_fname="zbmath.out")
+    
+    #ax = sns.lineplot(
+    #    pubmed_df,
+    #    x="num ecc",
+    #    y="cumulative time",
+    #    hue="solver",
+    #    style="warm-start",
+    #    linewidth=3)
+    #ax.xaxis.set_major_locator(MaxNLocator(integer=True))
+    #plt.xlabel("# of $\exists$-constraints")
+    #plt.ylabel("cumulative SDP solve time (s)")
+    #plt.grid()
+    #plt.savefig("pubmed.png")
+    #plt.clf()
+    #os.system("convert pubmed.png -trim pubmed.png")
 
-    ax = sns.lineplot(
-        qian_df,
-        x="num ecc",
-        y="cumulative time",
-        hue="solver",
-        style="warm-start",
-        linewidth=3)
-    ax.xaxis.set_major_locator(MaxNLocator(integer=True))
-    ax.get_legend().set_visible(False)
-    plt.xlabel("# of $\exists$-constraints")
-    plt.ylabel("cumulative SDP solve time (s)")
-    plt.grid()
-    plt.savefig("qian.png")
-    plt.clf()
-    os.system("convert qian.png -trim qian.png")
+    #ax = sns.lineplot(
+    #    qian_df,
+    #    x="num ecc",
+    #    y="cumulative time",
+    #    hue="solver",
+    #    style="warm-start",
+    #    linewidth=3)
+    #ax.xaxis.set_major_locator(MaxNLocator(integer=True))
+    #ax.get_legend().set_visible(False)
+    #plt.xlabel("# of $\exists$-constraints")
+    #plt.ylabel("cumulative SDP solve time (s)")
+    #plt.grid()
+    #plt.savefig("qian.png")
+    #plt.clf()
+    #os.system("convert qian.png -trim qian.png")
 
     ax = sns.lineplot(
         zbmath_df,
@@ -131,7 +133,7 @@ if __name__ == "__main__":
         style="warm-start",
         linewidth=3)
     ax.xaxis.set_major_locator(MaxNLocator(integer=True))
-    ax.get_legend().set_visible(False)
+    #ax.get_legend().set_visible(False)
     plt.xlabel("# of $\exists$-constraints")
     plt.ylabel("cumulative SDP solve time (s)")
     plt.grid()
@@ -139,20 +141,20 @@ if __name__ == "__main__":
     plt.clf()
     os.system("convert zbmath.png -trim zbmath.png")
 
-    df = pd.concat([pubmed_df, qian_df, zbmath_df]).reset_index(drop=True)
-    warm_start_df = df[df["warm-start"] == "True"]
+    #df = pd.concat([pubmed_df, qian_df, zbmath_df]).reset_index(drop=True)
+    #warm_start_df = df[df["warm-start"] == "True"]
 
-    g = sns.catplot(
-        data=warm_start_df,
-        x="solver",
-        y="time reduction",
-        col="dataset",
-        kind="bar",
-        aspect=0.5,
-        capsize=0.1,
-        errwidth=3.0)
-    g.set_axis_labels("", "warm-start time reduction")
-    g.set_titles("{col_name}")
-    plt.savefig("warm_start_time_reduction.png")
-    plt.clf()
-    os.system("convert warm_start_time_reduction.png -trim warm_start_time_reduction.png")
+    #g = sns.catplot(
+    #    data=warm_start_df,
+    #    x="solver",
+    #    y="time reduction",
+    #    col="dataset",
+    #    kind="bar",
+    #    aspect=0.5,
+    #    capsize=0.1,
+    #    errwidth=3.0)
+    #g.set_axis_labels("", "warm-start time reduction")
+    #g.set_titles("{col_name}")
+    #plt.savefig("warm_start_time_reduction.png")
+    #plt.clf()
+    #os.system("convert warm_start_time_reduction.png -trim warm_start_time_reduction.png")
