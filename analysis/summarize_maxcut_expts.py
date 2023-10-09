@@ -94,11 +94,15 @@ def create_df_from_log(log_fname):
         )
     )
 
-    log_indices = [j*(2**i) for j in range(10) for i in range(int(math.log2(len(iteration))))]
-    log_indices = set(log_indices)
-    log_indices = sorted([i for i in log_indices if i < len(iteration)])
+    if len(iteration) == 0:
+        print(f"Failed: {log_fname}, dataset: {hparam_dict['data_path']}")
+        return
 
-    #log_indices = list(range(len(iteration)))
+    #log_indices = [j*(2**i) for j in range(10) for i in range(int(math.log2(len(iteration))))]
+    #log_indices = set(log_indices)
+    #log_indices = sorted([i for i in log_indices if i < len(iteration)])
+
+    log_indices = list(range(len(iteration)))
 
     time = [t - time[0] + 0.1 for t in time]
     df["time (sec)"] = [time[i] for i in log_indices]
@@ -134,8 +138,14 @@ if __name__ == "__main__":
     for fname in tqdm(expt_out_files):
         dfs.append(create_df_from_log(fname))
 
-    merged_df = pd.concat(dfs).reset_index(drop=True)
+    print(f"len(dfs) before trimming: {len(dfs)}")
+
+    dfs = [df for df in dfs if df is not None and "144" not in df["data_path"].unique()[0]]
+
+    print(f"len(dfs) after trimming: {len(dfs)}")
     
+    merged_df = pd.concat(dfs).reset_index(drop=True)
+
     summary_df_fname = f"results/maxcut/{hparams.expt_name}.pkl"
     print(f"Writing summary df: {summary_df_fname}...")
     with open(summary_df_fname, "wb") as f:
