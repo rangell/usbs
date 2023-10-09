@@ -6,8 +6,8 @@
 #SBATCH --partition=cpu
 #
 #SBATCH -N 1
-#SBATCH -n 8
-#SBATCH --mem=16G
+#SBATCH -n 16
+#SBATCH --mem=64G
 #SBATCH --time=0-02:10:00         
 
 export PYTHONPATH=$(pwd):$PYTHONPATH
