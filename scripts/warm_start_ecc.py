@@ -182,7 +182,8 @@ class EccClusterer(object):
             trace_ub = (self.hparams.trace_factor
                         * float(sdp_state.C.shape[0])
                         * sdp_state.SCALE_X)
-            adj_rho = self.hparams.rho if "cold" in solver_name else self.hparams.rho / 5.0
+            #adj_rho = self.hparams.rho if "cold" in solver_name else self.hparams.rho / 5.0
+            adj_rho = self.hparams.rho
             out_sdp_state = specbm(
                 sdp_state=sdp_state,
                 n=sdp_state.C.shape[0],
