@@ -254,13 +254,14 @@ def warm_start_add_constraint(
         point_embeds = point_embeds / jnp.linalg.norm(point_embeds, axis=1)[:, None]
         avg_embed = jnp.sum(point_embeds[ecc_points] / ecc_counts[:, None], axis=0)
         avg_embed = avg_embed / jnp.linalg.norm(avg_embed)
-        point_embeds = point_embeds.at[ecc_points].set(avg_embed[None, :])
+        #point_embeds = point_embeds.at[ecc_points].set(avg_embed[None, :])
         point_embeds = jnp.concatenate([point_embeds, avg_embed[None, :]], axis=0)
-        point_embeds = point_embeds / jnp.linalg.norm(point_embeds, axis=1)[:, None]
 
         # maybe change this to nbr points
-        point_embeds = point_embeds.at[nbr_points].set(avg_embed[None, :])
+        #point_embeds = point_embeds.at[nbr_points].set(avg_embed[None, :])
         #point_embeds = point_embeds.at[ecc_points].set(avg_embed[None, :])
+
+        point_embeds = point_embeds / jnp.linalg.norm(point_embeds, axis=1)[:, None]
 
         if neg_points.size > 0:
             point_embeds = point_embeds.at[neg_points].set(jnp.zeros_like(point_embeds[0]))
