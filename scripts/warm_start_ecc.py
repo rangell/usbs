@@ -29,6 +29,8 @@ from utils.ecc_helpers import (initialize_state,
                                create_sparse_laplacian)
 from utils.trellis import Trellis
 
+from IPython import embed
+
 
 class EccClusterer(object):
 
@@ -180,13 +182,14 @@ class EccClusterer(object):
             trace_ub = (self.hparams.trace_factor
                         * float(sdp_state.C.shape[0])
                         * sdp_state.SCALE_X)
+            adj_rho = self.hparams.rho if "cold" in solver_name else self.hparams.rho / 5.0
             out_sdp_state = specbm(
                 sdp_state=sdp_state,
                 n=sdp_state.C.shape[0],
                 m=sdp_state.b.shape[0],
                 trace_ub=trace_ub,
                 trace_factor=self.hparams.trace_factor,
-                rho=self.hparams.rho,
+                rho=adj_rho,
                 beta=self.hparams.beta,
                 k_curr=min(self.hparams.k_curr, sdp_state.C.shape[0]),
                 k_past=self.hparams.k_past,
