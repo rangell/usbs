@@ -42,7 +42,7 @@ class EccClusterer(object):
         self.hparams = hparams
         self.edge_weights = edge_weights
         self.edge_weights.data
-        self.sparse_laplacian = create_sparse_laplacian(edge_weights=edge_weights, eps=0.99)
+        self.sparse_laplacian = create_sparse_laplacian(edge_weights=edge_weights, eps=0.25)
 
         self.features = features
         self.n = self.features.shape[0]
@@ -182,7 +182,7 @@ class EccClusterer(object):
             trace_ub = (self.hparams.trace_factor
                         * float(sdp_state.C.shape[0])
                         * sdp_state.SCALE_X)
-            adj_rho = self.hparams.rho if "cold" in solver_name else self.hparams.rho / 5.0
+            #adj_rho = self.hparams.rho if "cold" in solver_name else self.hparams.rho / 5.0
             out_sdp_state = specbm(
                 sdp_state=sdp_state,
                 n=sdp_state.C.shape[0],
