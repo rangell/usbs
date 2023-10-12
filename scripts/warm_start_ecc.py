@@ -29,6 +29,8 @@ from utils.ecc_helpers import (initialize_state,
                                create_sparse_laplacian)
 from utils.trellis import Trellis
 
+from IPython import embed
+
 
 class EccClusterer(object):
 
@@ -233,6 +235,10 @@ class EccClusterer(object):
             _ = self._call_sdp_solver(self.cold_start_sdp_state, "cgal/cold")
             _ = self._call_sdp_solver(self.warm_start_sdp_state, "cgal/warm")
         self.cold_start_sdp_state = self._call_sdp_solver(self.cold_start_sdp_state, "specbm/cold")
+
+        if len(self.ecc_constraints) == 3:
+            embed()
+            exit()
 
         if len(self.ecc_constraints) > 0:
             _ = self._call_sdp_solver(self.warm_start_sdp_state, "specbm/warm")
