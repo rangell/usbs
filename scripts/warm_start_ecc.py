@@ -30,6 +30,8 @@ from utils.ecc_helpers import (initialize_state,
                                create_sparse_laplacian)
 from utils.trellis import Trellis
 
+from IPython import embed
+
 
 class EccClusterer(object):
 
@@ -43,6 +45,9 @@ class EccClusterer(object):
         self.edge_weights.data
         #self.sparse_laplacian = create_sparse_laplacian(edge_weights=edge_weights, eps=0.99)
         self.sparse_laplacian = laplacian(edge_weights)
+
+        embed()
+        exit()
 
         self.features = features
         self.n = self.features.shape[0]
