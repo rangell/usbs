@@ -229,8 +229,7 @@ def warm_start_add_constraint(
     columns_to_drop = [v for l in sum_gt_one_constraints for pairs in l for v in pairs if len(l) <= 2]
     equality_columns = [v for l in sum_gt_one_constraints for pairs in l for v in pairs if len(l) == 1]
 
-    #ecc_points_and_counts = [(pairs[1], len(l)) for l in sum_gt_one_constraints for pairs in l if len(l) < 3]
-    ecc_points_and_counts = [(pairs[1], len(l)) for l in sum_gt_one_constraints for pairs in l if len(l)]
+    ecc_points_and_counts = [(pairs[1], len(l)) for l in sum_gt_one_constraints for pairs in l if len(l) < 3]
     ecc_points_and_counts = jnp.array(list(set(ecc_points_and_counts)))
     ecc_points = ecc_points_and_counts[:, 0]
     ecc_counts = ecc_points_and_counts[:, 1]
@@ -243,8 +242,6 @@ def warm_start_add_constraint(
 
     embed_dim = max(jnp.unique(prev_pred_clusters).shape[0], 2)
 
-    nbr_points = np.where(np.isin(prev_pred_clusters, prev_pred_clusters[ecc_points]))[0]
-
     X = old_sdp_state.X
     Omega = old_sdp_state.Omega
     P = old_sdp_state.P
@@ -256,13 +253,7 @@ def warm_start_add_constraint(
         avg_embed = avg_embed / jnp.linalg.norm(avg_embed)
         point_embeds = point_embeds.at[ecc_points].set(avg_embed[None, :])
         point_embeds = jnp.concatenate([point_embeds, avg_embed[None, :]], axis=0)
-
-        # maybe change this to nbr points
-        #point_embeds = point_embeds.at[nbr_points].set(avg_embed[None, :])
-        #point_embeds = point_embeds.at[ecc_points].set(avg_embed[None, :])
-
         point_embeds = point_embeds / jnp.linalg.norm(point_embeds, axis=1)[:, None]
-
         if neg_points.size > 0:
             point_embeds = point_embeds.at[neg_points].set(jnp.zeros_like(point_embeds[0]))
         X = point_embeds @ point_embeds.T
