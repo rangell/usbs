@@ -236,10 +236,6 @@ class EccClusterer(object):
             _ = self._call_sdp_solver(self.warm_start_sdp_state, "cgal/warm")
         self.cold_start_sdp_state = self._call_sdp_solver(self.cold_start_sdp_state, "specbm/cold")
 
-        if len(self.ecc_constraints) == 3:
-            embed()
-            exit()
-
         if len(self.ecc_constraints) > 0:
             _ = self._call_sdp_solver(self.warm_start_sdp_state, "specbm/warm")
 
@@ -332,7 +328,7 @@ class EccClusterer(object):
                 cpair_obj_val = obj_vals[lchild] + obj_vals[rchild]
                 if (num_ecc_sat[node] < cpair_num_ecc_sat 
                     or (num_ecc_sat[node] == cpair_num_ecc_sat
-                        and obj_vals[node] < cpair_obj_val)):
+                        and obj_vals[node] <= cpair_obj_val)):
                     num_ecc_sat[node] = cpair_num_ecc_sat
                     obj_vals[node] = cpair_obj_val
                     lchild_start = membership_indptr[lchild]
