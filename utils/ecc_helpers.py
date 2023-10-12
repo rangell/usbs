@@ -282,7 +282,7 @@ def warm_start_add_constraint(
     y = y * (SCALE_X / old_sdp_state.SCALE_X) * SCALE_A
 
     # NOTE: this is proximal step: (1 / rho)*(AX - b)
-    y = y + ((1 / (2.0 * rho)) * SCALE_X * jnp.clip(b - z, a_max=0.0))
+    y = y + ((1 / (0.5 * rho)) * SCALE_X * jnp.clip(b - z, a_max=0.0))
 
     sdp_state = SDPState(
         C=C,
