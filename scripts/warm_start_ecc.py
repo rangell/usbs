@@ -17,7 +17,6 @@ from numba.typed import List
 import numpy as np
 from scipy.sparse import csr_matrix, coo_matrix, dok_matrix
 from scipy.sparse import vstack as sp_vstack
-from scipy.sparse.csgraph import laplacian
 from sklearn.metrics import adjusted_rand_score as rand_idx
 from sklearn.metrics import homogeneity_completeness_v_measure as cluster_f1
 
@@ -30,8 +29,6 @@ from utils.ecc_helpers import (initialize_state,
                                create_sparse_laplacian)
 from utils.trellis import Trellis
 
-from IPython import embed
-
 
 class EccClusterer(object):
 
@@ -43,8 +40,7 @@ class EccClusterer(object):
         self.hparams = hparams
         self.edge_weights = edge_weights
         self.edge_weights.data
-        #self.sparse_laplacian = create_sparse_laplacian(edge_weights=edge_weights, eps=0.99)
-        self.sparse_laplacian = laplacian(edge_weights)
+        self.sparse_laplacian = create_sparse_laplacian(edge_weights=edge_weights, eps=0.99)
 
         self.features = features
         self.n = self.features.shape[0]
