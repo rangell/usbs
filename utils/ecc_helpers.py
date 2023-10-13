@@ -229,8 +229,7 @@ def warm_start_add_constraint(
     columns_to_drop = [v for l in sum_gt_one_constraints for pairs in l for v in pairs if len(l) <= 2]
     equality_columns = [v for l in sum_gt_one_constraints for pairs in l for v in pairs if len(l) == 1]
 
-    #ecc_points_and_counts = [(pairs[1], len(l)) for l in sum_gt_one_constraints for pairs in l if len(l) < 3]
-    ecc_points_and_counts = [(pairs[1], len(l)) for l in sum_gt_one_constraints for pairs in l]
+    ecc_points_and_counts = [(pairs[1], len(l)) for l in sum_gt_one_constraints for pairs in l if len(l) < 3]
     ecc_points_and_counts = jnp.array(list(set(ecc_points_and_counts)))
     ecc_points = ecc_points_and_counts[:, 0]
     ecc_counts = ecc_points_and_counts[:, 1]
@@ -252,18 +251,9 @@ def warm_start_add_constraint(
         point_embeds = point_embeds / jnp.linalg.norm(point_embeds, axis=1)[:, None]
         avg_embed = jnp.sum(point_embeds[ecc_points] / ecc_counts[:, None], axis=0)
         avg_embed = avg_embed / jnp.linalg.norm(avg_embed)
-        point_embeds = jnp.concatenate([point_embeds, avg_embed[None, :]], axis=0)
-
-        ## compute old_z for updating dual variable y
-        #old_z = apply_A_operator_mx(n, m, A_data, A_indices, point_embeds @ point_embeds.T)
-
-        # heuristic for warm-starting X
         point_embeds = point_embeds.at[ecc_points].set(avg_embed[None, :])
-        #point_embeds = point_embeds.at[-1:].set(avg_embed[None, :])
+        point_embeds = jnp.concatenate([point_embeds, avg_embed[None, :]], axis=0)
         point_embeds = point_embeds / jnp.linalg.norm(point_embeds, axis=1)[:, None]
-
-        #point_embeds = point_embeds.at[ecc_points].set(jnp.zeros_like(point_embeds[0]))
-
         #if neg_points.size > 0:
         #    point_embeds = point_embeds.at[neg_points].set(jnp.zeros_like(point_embeds[0]))
         X = point_embeds @ point_embeds.T
@@ -283,19 +273,16 @@ def warm_start_add_constraint(
     old_diag_indices = jnp.unique(old_sdp_state.A_indices[old_diag_mask][:, 0])
     avg_old_diag_val = jnp.mean(old_sdp_state.y[old_diag_indices])
 
-    diag_mask = ((A_indices[:, 1] == A_indices[:, 2])
-                 & (A_data == 1.0)
-                 & jnp.isin(A_indices[:, 1], jnp.append(ecc_points, old_n)))
-    diag_indices = jnp.unique(A_indices[diag_mask][:, 0])
-
-    # NOTE: this is proximal step: (1 / rho)*(AX - b)
-    y = jnp.zeros((m,))
-    #y = y + ((1 / (1.0 * rho)) * SCALE_X * jnp.clip(b - old_z, a_max=0.0))
-    y = y + ((1 / (1.0 * rho)) * SCALE_X * jnp.clip(b - z, a_max=0.0))
+    #diag_mask = ((A_indices[:, 1] == A_indices[:, 2]) & (A_data == 1.0))
+    #diag_indices = jnp.unique(A_indices[diag_mask][:, 0])
+    #y = jnp.zeros((m,)).at[diag_indices].set(avg_old_diag_val)
+    #y = jnp.zeros((m,))
+    y = ((1 / (1.0 * rho)) * SCALE_X * jnp.clip(b - z, a_max=0.0))
     y = y.at[jnp.arange(old_sdp_state.b.shape[0])].set(
         old_sdp_state.y / old_sdp_state.SCALE_A)
-    y = y.at[diag_indices].set(avg_old_diag_val)
     y = y * (SCALE_X / old_sdp_state.SCALE_X) * SCALE_A
+
+    # NOTE: this is proximal step: (1 / rho)*(AX - b)
 
     sdp_state = SDPState(
         C=C,
