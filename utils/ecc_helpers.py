@@ -282,10 +282,10 @@ def warm_start_add_constraint(
     old_diag_indices = jnp.unique(old_sdp_state.A_indices[old_diag_mask][:, 0])
     avg_old_diag_val = jnp.mean(old_sdp_state.y[old_diag_indices])
 
-    diag_mask = ((A_indices[:, 1] == A_indices[:, 2]) & (A_data == 1.0))
-    diag_indices = jnp.unique(A_indices[diag_mask][:, 0])
-    y = jnp.zeros((m,)).at[diag_indices].set(avg_old_diag_val)
-    #y = jnp.zeros((m,))
+    #diag_mask = ((A_indices[:, 1] == A_indices[:, 2]) & (A_data == 1.0))
+    #diag_indices = jnp.unique(A_indices[diag_mask][:, 0])
+    #y = jnp.zeros((m,)).at[diag_indices].set(avg_old_diag_val)
+    y = jnp.zeros((m,))
 
     # NOTE: this is proximal step: (1 / rho)*(AX - b)
     y = y + ((1 / (1.0 * rho)) * SCALE_X * jnp.clip(b - old_z, a_max=0.0))
@@ -293,9 +293,9 @@ def warm_start_add_constraint(
         old_sdp_state.y / old_sdp_state.SCALE_A)
     y = y * (SCALE_X / old_sdp_state.SCALE_X) * SCALE_A
 
-    if n == 323:
-        embed()
-        exit()
+    #if n == 323:
+    #    embed()
+    #    exit()
 
 
     sdp_state = SDPState(
