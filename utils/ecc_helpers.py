@@ -229,7 +229,8 @@ def warm_start_add_constraint(
     columns_to_drop = [v for l in sum_gt_one_constraints for pairs in l for v in pairs if len(l) <= 2]
     equality_columns = [v for l in sum_gt_one_constraints for pairs in l for v in pairs if len(l) == 1]
 
-    ecc_points_and_counts = [(pairs[1], len(l)) for l in sum_gt_one_constraints for pairs in l if len(l) < 3]
+    #ecc_points_and_counts = [(pairs[1], len(l)) for l in sum_gt_one_constraints for pairs in l if len(l) < 3]
+    ecc_points_and_counts = [(pairs[1], len(l)) for l in sum_gt_one_constraints for pairs in l]
     ecc_points_and_counts = jnp.array(list(set(ecc_points_and_counts)))
     ecc_points = ecc_points_and_counts[:, 0]
     ecc_counts = ecc_points_and_counts[:, 1]
@@ -282,10 +283,10 @@ def warm_start_add_constraint(
     old_diag_indices = jnp.unique(old_sdp_state.A_indices[old_diag_mask][:, 0])
     avg_old_diag_val = jnp.mean(old_sdp_state.y[old_diag_indices])
 
-    #diag_mask = ((A_indices[:, 1] == A_indices[:, 2]) & (A_data == 1.0))
-    #diag_indices = jnp.unique(A_indices[diag_mask][:, 0])
-    #y = jnp.zeros((m,)).at[diag_indices].set(avg_old_diag_val)
-    y = jnp.zeros((m,))
+    diag_mask = ((A_indices[:, 1] == A_indices[:, 2]) & (A_data == 1.0))
+    diag_indices = jnp.unique(A_indices[diag_mask][:, 0])
+    y = jnp.zeros((m,)).at[diag_indices].set(avg_old_diag_val)
+    #y = jnp.zeros((m,))
 
     # NOTE: this is proximal step: (1 / rho)*(AX - b)
     y = y + ((1 / (1.0 * rho)) * SCALE_X * jnp.clip(b - old_z, a_max=0.0))
