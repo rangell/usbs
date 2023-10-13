@@ -293,11 +293,6 @@ def warm_start_add_constraint(
         old_sdp_state.y / old_sdp_state.SCALE_A)
     y = y * (SCALE_X / old_sdp_state.SCALE_X) * SCALE_A
 
-    if n == 323:
-        embed()
-        exit()
-
-
     sdp_state = SDPState(
         C=C,
         A_indices=A_indices,
