@@ -251,13 +251,14 @@ def warm_start_add_constraint(
         point_embeds = point_embeds / jnp.linalg.norm(point_embeds, axis=1)[:, None]
         avg_embed = jnp.sum(point_embeds[ecc_points] / ecc_counts[:, None], axis=0)
         avg_embed = avg_embed / jnp.linalg.norm(avg_embed)
-        point_embeds = jnp.concatenate([point_embeds, avg_embed[None, :]], axis=0)
+        point_embeds = jnp.concatenate([point_embeds, jnp.zeros_like(avg_embed[None, :])], axis=0)
 
         # compute old_z for updating dual variable y
         old_z = apply_A_operator_mx(n, m, A_data, A_indices, point_embeds @ point_embeds.T)
 
         # heuristic for warm-starting X
         point_embeds = point_embeds.at[ecc_points].set(avg_embed[None, :])
+        point_embeds = point_embeds.at[-1].set(avg_embed[None, :])
         point_embeds = point_embeds / jnp.linalg.norm(point_embeds, axis=1)[:, None]
 
         #point_embeds = point_embeds.at[ecc_points].set(jnp.zeros_like(point_embeds[0]))
