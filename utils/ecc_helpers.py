@@ -258,7 +258,7 @@ def warm_start_add_constraint(
 
         # heuristic for warm-starting X
         point_embeds = point_embeds.at[ecc_points].set(avg_embed[None, :])
-        point_embeds = point_embeds.at[-1].set(avg_embed[None, :])
+        point_embeds = point_embeds.at[-1:].set(avg_embed[None, :])
         point_embeds = point_embeds / jnp.linalg.norm(point_embeds, axis=1)[:, None]
 
         #point_embeds = point_embeds.at[ecc_points].set(jnp.zeros_like(point_embeds[0]))
