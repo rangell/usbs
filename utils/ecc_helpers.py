@@ -261,7 +261,7 @@ def warm_start_add_constraint(
         if neg_points.size > 0:
             point_embeds = point_embeds.at[neg_points].set(jnp.zeros_like(point_embeds[0]))
 
-        #point_embeds = point_embeds.at[nbr_ecc_points].set(jnp.zeros_like(point_embeds[0]))
+        point_embeds = point_embeds.at[nbr_ecc_points].set(jnp.zeros_like(point_embeds[0]))
 
         X = point_embeds @ point_embeds.T
         z = apply_A_operator_mx(n, m, A_data, A_indices, X) 
