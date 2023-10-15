@@ -567,7 +567,8 @@ def gen_ecc_constraint(point_feats: csr_matrix,
                 gold_not_pred_sfc
         )
         _sampled_pos_feats = np.where(gold_not_pred_sfc == np.max(gold_not_pred_sfc))[0]
-        sampled_pos_feats.append(_sampled_pos_feats[0])
+        np.random.shuffle(_sampled_pos_feats)
+        sampled_pos_feats.append(_sampled_pos_feats[:2])
     sampled_pos_feats = np.asarray(sampled_pos_feats)
 
     # lastly, negative feats
@@ -584,7 +585,8 @@ def gen_ecc_constraint(point_feats: csr_matrix,
                 pred_not_gold_sfc
         )
         _sampled_neg_feats = np.where(pred_not_gold_sfc == np.max(pred_not_gold_sfc))[0]
-        sampled_neg_feats.append(_sampled_neg_feats[0])
+        np.random.shuffle(_sampled_neg_feats)
+        sampled_neg_feats.append(_sampled_neg_feats[:2])
     sampled_neg_feats = np.asarray(sampled_neg_feats)
 
     # create the ecc constraint
