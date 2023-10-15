@@ -283,9 +283,6 @@ def warm_start_add_constraint(
     y = y.at[ecc_points].set(avg_old_diag_val)
     y = y.at[old_n].set(avg_old_diag_val)
 
-    embed()
-    exit()
-
     y = y * (SCALE_X / old_sdp_state.SCALE_X) * SCALE_A
 
     # NOTE: this is proximal step: (1 / rho)*(AX - b)
