@@ -229,8 +229,8 @@ def warm_start_add_constraint(
     columns_to_drop = [v for l in sum_gt_one_constraints for pairs in l for v in pairs if len(l) <= 2]
     equality_columns = [v for l in sum_gt_one_constraints for pairs in l for v in pairs if len(l) == 1]
 
-    ecc_points_and_counts = [(pairs[1], len(l)) for l in sum_gt_one_constraints for pairs in l if len(l) < 3]
-    #ecc_points_and_counts = [(pairs[1], len(l)) for l in sum_gt_one_constraints for pairs in l]
+    #ecc_points_and_counts = [(pairs[1], len(l)) for l in sum_gt_one_constraints for pairs in l if len(l) < 3]
+    ecc_points_and_counts = [(pairs[1], len(l)) for l in sum_gt_one_constraints for pairs in l]
     ecc_points_and_counts = jnp.array(list(set(ecc_points_and_counts)))
     ecc_points = ecc_points_and_counts[:, 0]
     ecc_counts = ecc_points_and_counts[:, 1]
@@ -255,8 +255,8 @@ def warm_start_add_constraint(
         avg_embed = jnp.sum(point_embeds[ecc_points] / ecc_counts[:, None], axis=0)
         avg_embed = avg_embed / jnp.linalg.norm(avg_embed)
         #point_embeds = point_embeds.at[nbr_ecc_points].set(avg_embed[None, :])
-        point_embeds = point_embeds.at[ecc_points].set(point_embeds[ecc_points] + (0.5 * avg_embed[None, :]))
-        #point_embeds = point_embeds.at[nbr_ecc_points].set(point_embeds[nbr_ecc_points] + (0.1 * avg_embed[None, :]))
+        point_embeds = point_embeds.at[ecc_points].set(avg_embed[None, :])
+        #point_embeds = point_embeds.at[nbr_ecc_points].set(point_embeds[nbr_ecc_points] + avg_embed[None, :])
         point_embeds = jnp.concatenate([point_embeds, avg_embed[None, :]], axis=0)
         point_embeds = point_embeds / jnp.linalg.norm(point_embeds, axis=1)[:, None]
         if neg_points.size > 0:
