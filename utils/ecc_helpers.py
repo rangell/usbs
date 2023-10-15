@@ -280,7 +280,7 @@ def warm_start_add_constraint(
     y = y.at[jnp.arange(old_sdp_state.b.shape[0])].set(
         old_sdp_state.y / old_sdp_state.SCALE_A)
 
-    y = y.at[ecc_points].set(avg_old_diag_val)
+    #y = y.at[ecc_points].set(avg_old_diag_val)
     y = y.at[old_n].set(avg_old_diag_val)
 
     y = y * (SCALE_X / old_sdp_state.SCALE_X) * SCALE_A
