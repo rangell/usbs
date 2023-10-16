@@ -182,7 +182,7 @@ class EccClusterer(object):
             trace_ub = (self.hparams.trace_factor
                         * float(sdp_state.C.shape[0])
                         * sdp_state.SCALE_X)
-            _rho = hparams.rho if "cold" in solver_name else 0.005
+            _rho = hparams.rho if "cold" in solver_name else 0.01
             #_rho = self.hparams.rho
             _k_curr = self.hparams.k_curr if "cold" in solver_name else 4
             #_k_curr = self.hparams.k_curr
