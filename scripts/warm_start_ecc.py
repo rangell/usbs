@@ -184,8 +184,8 @@ class EccClusterer(object):
                         * sdp_state.SCALE_X)
             _rho = hparams.rho if "cold" in solver_name else 0.005
             #_rho = self.hparams.rho
-            #_k_curr = self.hparams.k_curr if "cold" in solver_name else 2 * self.hparams.k_curr
-            _k_curr = self.hparams.k_curr
+            _k_curr = self.hparams.k_curr if "cold" in solver_name else 4
+            #_k_curr = self.hparams.k_curr
             out_sdp_state = specbm(
                 sdp_state=sdp_state,
                 n=sdp_state.C.shape[0],
