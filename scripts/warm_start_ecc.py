@@ -182,7 +182,8 @@ class EccClusterer(object):
             trace_ub = (self.hparams.trace_factor
                         * float(sdp_state.C.shape[0])
                         * sdp_state.SCALE_X)
-            _rho = hparams.rho if "cold" in solver_name else 0.01
+            #_rho = hparams.rho if "cold" in solver_name else 0.025
+            _rho = self.hparams.rho
             out_sdp_state = specbm(
                 sdp_state=sdp_state,
                 n=sdp_state.C.shape[0],
@@ -236,8 +237,8 @@ class EccClusterer(object):
         #_ = self._call_sdp_solver(self.warm_start_sdp_state, "cgal/warm")
         self.cold_start_sdp_state = self._call_sdp_solver(self.cold_start_sdp_state, "specbm/cold")
 
-        if len(self.ecc_constraints) > 0:
-            _warm_start_sdp_final = self._call_sdp_solver(self.warm_start_sdp_state, "specbm/warm")
+        #if len(self.ecc_constraints) > 0:
+        #    _warm_start_sdp_final = self._call_sdp_solver(self.warm_start_sdp_state, "specbm/warm")
 
         #if len(self.ecc_constraints) == 6:
         #    embed()
