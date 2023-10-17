@@ -42,7 +42,7 @@ class EccClusterer(object):
         self.hparams = hparams
         self.edge_weights = edge_weights
         self.edge_weights.data
-        self.sparse_laplacian = create_sparse_laplacian(edge_weights=edge_weights, eps=0.99)
+        self.sparse_laplacian = create_sparse_laplacian(edge_weights=edge_weights, eps=0.9)
 
         self.features = features
         self.n = self.features.shape[0]
@@ -235,13 +235,14 @@ class EccClusterer(object):
 
 
     def build_and_solve_sdp(self):
-        if len(self.ecc_constraints) > 0:
-            _ = self._call_sdp_solver(self.cold_start_sdp_state, "cgal/cold")
-            _ = self._call_sdp_solver(self.warm_start_sdp_state, "cgal/warm")
+        #if len(self.ecc_constraints) > 0:
+        #    _ = self._call_sdp_solver(self.cold_start_sdp_state, "cgal/cold")
+        #    _ = self._call_sdp_solver(self.warm_start_sdp_state, "cgal/warm")
+
         self.cold_start_sdp_state = self._call_sdp_solver(self.cold_start_sdp_state, "specbm/cold")
 
-        if len(self.ecc_constraints) > 0:
-            _warm_start_sdp_final = self._call_sdp_solver(self.warm_start_sdp_state, "specbm/warm")
+        #if len(self.ecc_constraints) > 0:
+        #    _warm_start_sdp_final = self._call_sdp_solver(self.warm_start_sdp_state, "specbm/warm")
 
         #if len(self.ecc_constraints) == 6:
         #    embed()
