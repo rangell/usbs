@@ -140,7 +140,7 @@ if __name__ == "__main__":
 
     print(f"len(dfs) before trimming: {len(dfs)}")
 
-    dfs = [df for df in dfs if df is not None and "144" not in df["data_path"].unique()[0]]
+    dfs = [df for df in dfs if df is not None]
 
     print(f"len(dfs) after trimming: {len(dfs)}")
     

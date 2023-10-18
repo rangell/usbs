@@ -92,8 +92,13 @@ if __name__ == "__main__":
     #qian_df = create_df(log_fname="results/ecc/qian.out")
     #zbmath_df = create_df(log_fname="results/ecc/zbmath.out")
 
+    #pubmed_df = create_df(log_fname="pubmed.out")
+    #qian_df = create_df(log_fname="qian.out")
     zbmath_df = create_df(log_fname="zbmath.out")
-    
+
+    embed()
+    exit()
+
     #ax = sns.lineplot(
     #    pubmed_df,
     #    x="num ecc",
@@ -117,7 +122,7 @@ if __name__ == "__main__":
     #    style="warm-start",
     #    linewidth=3)
     #ax.xaxis.set_major_locator(MaxNLocator(integer=True))
-    #ax.get_legend().set_visible(False)
+    ##ax.get_legend().set_visible(False)
     #plt.xlabel("# of $\exists$-constraints")
     #plt.ylabel("cumulative SDP solve time (s)")
     #plt.grid()

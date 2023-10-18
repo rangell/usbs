@@ -16,6 +16,9 @@ def get_hparams():
 
 
 if __name__ == "__main__":
+
+    #plt.rcParams.update({'font.size': 16})
+
     hparams = get_hparams()
 
     with open(hparams.summary_df_fname, "rb") as f:

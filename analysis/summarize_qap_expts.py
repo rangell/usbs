@@ -3,6 +3,7 @@ import ast
 from collections import defaultdict
 import glob
 import json
+import math
 import os
 import pandas as pd
 import pickle
@@ -99,21 +100,36 @@ def create_df_from_log(log_fname):
         )
     )
 
-    if len(iteration) < 1:
-        embed()
-        exit()
+    #log_indices = [j*(2**i) for j in range(10) for i in range(int(math.log2(len(iteration))))]
+    #log_indices = set(log_indices)
+    #log_indices = sorted([i for i in log_indices if i < len(iteration)])
+
+    log_indices = list(range(len(iteration)))
 
     time = [t - time[0] + 0.1 for t in time]
-    df["time (sec)"] = time
-    df["iteration"] = iteration
-    df["objective residual"] = objective_gap
-    df["infeasibility gap"] = infeasibility_gap
-    df["max infeasibility"] = max_infeasibility
-    df["callback value"] = callback_val
-    df["best callback value"] = best_callback_val
+
+    if len(time) < 2:
+        _data_path = hparam_dict["data_path"]
+        print(f"Dropping experiment: {log_fname}, {_data_path}")
+        return None
+
+    if hparam_dict["warm_start_strategy"] == "none":
+        time = [t - time[1] + 1.0 for t in time]
+    else:
+        time = [t - time[0] + 1.0 for t in time]
+    df["time (sec)"] = [time[i] for i in log_indices]
+    df["iteration"] = [iteration[i] for i in log_indices]
+    df["objective residual"] = [objective_gap[i] for i in log_indices]
+    df["infeasibility gap"] = [infeasibility_gap[i] for i in log_indices]
+    df["max infeasibility"] = [max_infeasibility[i] for i in log_indices]
+    df["callback value"] = [callback_val[i] for i in log_indices]
+    df["best callback value"] = [best_callback_val[i] for i in log_indices]
 
     for hparam_key in hparam_names:
-        df[hparam_key] = hparam_dict[hparam_key]
+        if hparam_key == "solver":
+            df[hparam_key] = "CGAL" if hparam_dict[hparam_key] == "cgal" else "SpecBM"
+        else:
+            df[hparam_key] = hparam_dict[hparam_key]
 
     data_path = df["data_path"].unique()
     assert len(data_path) == 1
@@ -155,6 +171,8 @@ if __name__ == "__main__":
     dfs = []
     for fname in tqdm(expt_out_files):
         dfs.append(create_df_from_log(fname))
+
+    dfs = [df for df in dfs if df is not None]
 
     merged_df = pd.concat(dfs).reset_index(drop=True)
     
