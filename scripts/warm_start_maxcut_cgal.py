@@ -33,6 +33,8 @@ def get_hparams():
                         help="early stop if max_infeas is less than this number")
     parser.add_argument("--lanczos_max_restarts", type=int, default=100,
                         help="number of restarts to use for thick restart lanczos")
+    parser.add_argument("--lanczos_max_inner_iterations", type=int, default=32,
+                        help="number of inner iterations to use for thick restart lanczos")
     parser.add_argument("--subprob_eps", type=float, default=1e-7,
                         help="error tolerance for IPM, alternating minimization, and lanczos")
     parser.add_argument("--subprob_max_iters", type=int, default=15,
@@ -103,7 +105,7 @@ if __name__ == "__main__":
         obj_gap_eps=hparams.obj_gap_eps,
         infeas_gap_eps=hparams.infeas_gap_eps,
         max_infeas_eps=hparams.max_infeas_eps,
-        lanczos_inner_iterations=min(sdp_state.C.shape[0], 32),
+        lanczos_inner_iterations=min(sdp_state.C.shape[0], hparams.lanczos_max_inner_iterations),
         lanczos_max_restarts=hparams.lanczos_max_restarts,
         subprob_eps=hparams.subprob_eps,
         callback_fn=compute_max_cut,
@@ -156,7 +158,7 @@ if __name__ == "__main__":
         obj_gap_eps=hparams.obj_gap_eps,
         infeas_gap_eps=hparams.infeas_gap_eps,
         max_infeas_eps=hparams.max_infeas_eps,
-        lanczos_inner_iterations=min(sdp_state.C.shape[0], 32),
+        lanczos_inner_iterations=min(sdp_state.C.shape[0], hparams.lanczos_max_inner_iterations),
         lanczos_max_restarts=hparams.lanczos_max_restarts,
         subprob_eps=hparams.subprob_eps,
         callback_fn=compute_max_cut,
