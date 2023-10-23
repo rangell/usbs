@@ -92,14 +92,14 @@ def create_df_from_log(log_fname):
 
     if len(iteration) == 0:
         print(f"Failed: {log_fname}, dataset: {hparam_dict['data_path']}")
-        return
+        return None, hparam_dict["data_path"]
 
-    #log_indices = [j*(2**i) for j in range(2) for i in range(int(math.log2(len(iteration))) + 1)]
-    #log_indices = set(log_indices)
-    #log_indices = sorted([i for i in log_indices if i < len(iteration)])
-    #log_indices.append(len(iteration) - 1)
+    log_indices = [j*(2**i) for j in range(2) for i in range(int(math.log2(len(iteration))) + 1)]
+    log_indices = set(log_indices)
+    log_indices = sorted([i for i in log_indices if i < len(iteration)])
+    log_indices.append(len(iteration) - 1)
 
-    log_indices = list(range(len(iteration)))
+    #log_indices = list(range(len(iteration)))
 
     time = [t - time[0] + 1.0 for t in time]
     df["time (sec)"] = [time[i] for i in log_indices]
@@ -115,7 +115,7 @@ def create_df_from_log(log_fname):
         else:
             df[hparam_key] = hparam_dict[hparam_key]
 
-    return df
+    return df, hparam_dict["data_path"]
 
 
 def get_hparams():
@@ -130,24 +130,24 @@ if __name__ == "__main__":
     hparams = get_hparams()
     expt_out_files = glob.glob(f"results/maxcut/{hparams.expt_name}*.out")
 
-    dfs = []
+    df_tuples = []
     for fname in tqdm(expt_out_files):
-        dfs.append(create_df_from_log(fname))
+        df_tuples.append(create_df_from_log(fname))
 
-    print(f"len(dfs) before trimming: {len(dfs)}")
+    dropped_data_paths = set([x[1] for x in df_tuples if x[0] is None])
+    dfs = [x[0] for x in df_tuples if x[1] not in dropped_data_paths]
 
-    #dfs = [df for df in dfs if df is not None]
-    dfs = [df.iloc[-1:] for df in dfs if df is not None]
-
-    print(f"len(dfs) after trimming: {len(dfs)}")
-    
     merged_df = pd.concat(dfs).reset_index(drop=True)
-
-    embed()
-    exit()
-
+    slim_merged_df = pd.concat([df.iloc[-1:] for df in dfs]).reset_index(drop=True)
+    
     summary_df_fname = f"results/maxcut/{hparams.expt_name}.pkl"
     print(f"Writing summary df: {summary_df_fname}...")
     with open(summary_df_fname, "wb") as f:
         pickle.dump(merged_df, f)
+    print("Done.")
+
+    slim_summary_df_fname = f"results/maxcut/{hparams.expt_name}.slim.pkl"
+    print(f"Writing slim summary df: {slim_summary_df_fname}...")
+    with open(slim_summary_df_fname, "wb") as f:
+        pickle.dump(slim_merged_df, f)
     print("Done.")
