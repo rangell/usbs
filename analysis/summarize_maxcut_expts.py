@@ -87,10 +87,6 @@ def create_df_from_log(log_fname):
             "infeasibility gap",
             "max infeasibility",
             "callback value",
-            "smooth objective residual",
-            "smooth infeasibility gap",
-            "smooth max infeasibility",
-            "smooth callback value"
         )
     )
 
@@ -98,26 +94,26 @@ def create_df_from_log(log_fname):
         print(f"Failed: {log_fname}, dataset: {hparam_dict['data_path']}")
         return
 
-    #log_indices = [j*(2**i) for j in range(10) for i in range(int(math.log2(len(iteration))))]
+    #log_indices = [j*(2**i) for j in range(2) for i in range(int(math.log2(len(iteration))) + 1)]
     #log_indices = set(log_indices)
     #log_indices = sorted([i for i in log_indices if i < len(iteration)])
+    #log_indices.append(len(iteration) - 1)
 
     log_indices = list(range(len(iteration)))
 
-    time = [t - time[0] + 0.1 for t in time]
+    time = [t - time[0] + 1.0 for t in time]
     df["time (sec)"] = [time[i] for i in log_indices]
     df["iteration"] = [iteration[i] for i in log_indices]
     df["objective residual"] = [objective_gap[i] for i in log_indices]
     df["infeasibility gap"] = [infeasibility_gap[i] for i in log_indices]
     df["max infeasibility"] = [max_infeasibility[i] for i in log_indices]
     df["callback value"] = [callback_val[i] for i in log_indices]
-    df["smooth objective residual"] = gaussian_filter1d(df["objective residual"], 10)
-    df["smooth infeasibility gap"] = gaussian_filter1d(df["infeasibility gap"], 10)
-    df["smooth max infeasibility"] = gaussian_filter1d(df["max infeasibility"], 10)
-    df["smooth callback value"] = gaussian_filter1d(df["callback value"], 10)
 
     for hparam_key in hparam_names:
-        df[hparam_key] = hparam_dict[hparam_key]
+        if hparam_key == "solver":
+            df[hparam_key] = "CGAL" if hparam_dict[hparam_key] == "cgal" else "SpecBM"
+        else:
+            df[hparam_key] = hparam_dict[hparam_key]
 
     return df
 
@@ -140,11 +136,15 @@ if __name__ == "__main__":
 
     print(f"len(dfs) before trimming: {len(dfs)}")
 
-    dfs = [df for df in dfs if df is not None]
+    #dfs = [df for df in dfs if df is not None]
+    dfs = [df.iloc[-1:] for df in dfs if df is not None]
 
     print(f"len(dfs) after trimming: {len(dfs)}")
     
     merged_df = pd.concat(dfs).reset_index(drop=True)
+
+    embed()
+    exit()
 
     summary_df_fname = f"results/maxcut/{hparams.expt_name}.pkl"
     print(f"Writing summary df: {summary_df_fname}...")

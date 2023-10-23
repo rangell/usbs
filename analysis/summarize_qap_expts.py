@@ -44,7 +44,9 @@ def create_df_from_log(log_fname):
     objective_gap = []
     callback_val = []
     min_callback_val = None
+    min_callback_iter = None
     best_callback_val = []
+    best_callback_iter = []
 
     with open(log_fname, "r") as f:
         for line in f:
@@ -82,7 +84,9 @@ def create_df_from_log(log_fname):
                     if  min_callback_val is None or float(re_iter_info.group(6)) < min_callback_val:
                         if float(re_iter_info.group(6)) > 0:
                             min_callback_val = float(re_iter_info.group(6))
+                            min_callback_iter = int(re_iter_info.group(1))
                     best_callback_val.append(min_callback_val)
+                    best_callback_iter.append(min_callback_iter)
 
     
     df = pd.DataFrame(
@@ -96,7 +100,8 @@ def create_df_from_log(log_fname):
             "callback value",
             "best callback value",
             "relative gap",
-            "best relative gap"
+            "best relative gap",
+            "best callback iter"
         )
     )
 
@@ -111,7 +116,7 @@ def create_df_from_log(log_fname):
     if len(time) < 2:
         _data_path = hparam_dict["data_path"]
         print(f"Dropping experiment: {log_fname}, {_data_path}")
-        return None
+        return None, hparam_dict["data_path"]
 
     if hparam_dict["warm_start_strategy"] == "none":
         time = [t - time[1] + 1.0 for t in time]
@@ -124,6 +129,7 @@ def create_df_from_log(log_fname):
     df["max infeasibility"] = [max_infeasibility[i] for i in log_indices]
     df["callback value"] = [callback_val[i] for i in log_indices]
     df["best callback value"] = [best_callback_val[i] for i in log_indices]
+    df["best callback iter"] = [best_callback_iter[i] for i in log_indices]
 
     for hparam_key in hparam_names:
         if hparam_key == "solver":
@@ -151,9 +157,9 @@ def create_df_from_log(log_fname):
         raise ValueError("Data path does not belong to a known set")
     
     if hparam_dict["warm_start_strategy"] == "none":
-        return df.iloc[1:]
+        return df.iloc[1:], hparam_dict["data_path"]
     else:
-        return df
+        return df, hparam_dict["data_path"]
 
 
 def get_hparams():
@@ -168,16 +174,27 @@ if __name__ == "__main__":
     hparams = get_hparams()
     expt_out_files = glob.glob(f"results/qap/{hparams.expt_name}*.out")
 
-    dfs = []
+    df_tuples = []
     for fname in tqdm(expt_out_files):
-        dfs.append(create_df_from_log(fname))
+        df_tuples.append(create_df_from_log(fname))
 
-    dfs = [df for df in dfs if df is not None]
+    dropped_data_paths = set([x[1] for x in df_tuples if x[0] is None])
+    dfs = [x[0] for x in df_tuples if x[1] not in dropped_data_paths]
 
     merged_df = pd.concat(dfs).reset_index(drop=True)
+    slim_merged_df = pd.concat([df.iloc[-1:] for df in dfs]).reset_index(drop=True)
     
     summary_df_fname = f"results/qap/{hparams.expt_name}.pkl"
     print(f"Writing summary df: {summary_df_fname}...")
     with open(summary_df_fname, "wb") as f:
         pickle.dump(merged_df, f)
     print("Done.")
+
+    slim_summary_df_fname = f"results/qap/{hparams.expt_name}.slim.pkl"
+    print(f"Writing slim summary df: {slim_summary_df_fname}...")
+    with open(slim_summary_df_fname, "wb") as f:
+        pickle.dump(slim_merged_df, f)
+    print("Done.")
+
+    embed()
+    exit()

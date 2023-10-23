@@ -92,7 +92,7 @@ if __name__ == "__main__":
                     hue="solver",
                     hue_order=["CGAL", "SpecBM"],
                     style="warm-start",
-                    linewidth=3)
+                    linewidth=2)
 
                 ax.xaxis.set_major_locator(MaxNLocator(integer=True))
                 if dataset_basename != "pr124":
@@ -114,7 +114,7 @@ if __name__ == "__main__":
                     hue="solver",
                     hue_order=["CGAL", "SpecBM"],
                     style="warm-start",
-                    linewidth=3)
+                    linewidth=2)
 
                 ax.xaxis.set_major_locator(MaxNLocator(integer=True))
                 if dataset_basename != "pr124":

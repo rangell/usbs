@@ -96,9 +96,6 @@ if __name__ == "__main__":
     #qian_df = create_df(log_fname="qian.out")
     zbmath_df = create_df(log_fname="zbmath.out")
 
-    embed()
-    exit()
-
     #ax = sns.lineplot(
     #    pubmed_df,
     #    x="num ecc",
