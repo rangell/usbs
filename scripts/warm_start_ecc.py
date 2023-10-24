@@ -210,8 +210,23 @@ class EccClusterer(object):
                 callback_nonstatic_args=None)
         elif "cgal" in solver_name:
             trace_ub = float(sdp_state.C.shape[0]) * sdp_state.SCALE_X
-            tmp_sdp_state = copy.deepcopy(sdp_state)
-            tmp_sdp_state.SCALE_A = jnp.ones_like(tmp_sdp_state.b)
+            # update scale for warm-starting
+            tmp_sdp_state = SDPState(
+                C=sdp_state.C,
+                A_indices=sdp_state.A_indices,
+                A_data=sdp_state.A_data,
+                b=sdp_state.b,
+                b_ineq_mask=sdp_state.b_ineq_mask,
+                X=sdp_state.X,
+                P=sdp_state.P,
+                Omega=sdp_state.Omega,
+                y=sdp_state.y,
+                z=sdp_state.z,
+                tr_X=sdp_state.tr_X,
+                primal_obj=sdp_state.primal_obj,
+                SCALE_C=sdp_state.SCALE_C,
+                SCALE_X=sdp_state.SCALE_X,
+                SCALE_A=jnp.ones_like(sdp_state.b))
             out_sdp_state = cgal(
                 sdp_state=tmp_sdp_state,
                 n=sdp_state.C.shape[0],
