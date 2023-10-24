@@ -7,7 +7,7 @@
 #
 #SBATCH -N 1
 #SBATCH -n 64
-#SBATCH --mem=512G
+#SBATCH --mem=128G
 #SBATCH --time=48:10:00         
 
 export PYTHONPATH=$(pwd):$PYTHONPATH
