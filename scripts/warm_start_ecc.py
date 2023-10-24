@@ -213,7 +213,7 @@ class EccClusterer(object):
             tmp_sdp_state = copy.deepcopy(sdp_state)
             tmp_sdp_state.SCALE_A = jnp.ones_like(tmp_sdp_state.b)
             out_sdp_state = cgal(
-                sdp_state=sdp_state,
+                sdp_state=tmp_sdp_state,
                 n=sdp_state.C.shape[0],
                 m=sdp_state.b.shape[0],
                 trace_ub=trace_ub,
