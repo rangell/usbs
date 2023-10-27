@@ -257,8 +257,8 @@ def warm_start_add_constraint(
         point_embeds = point_embeds.at[ecc_points].set(avg_embed[None, :])
         point_embeds = jnp.concatenate([point_embeds, avg_embed[None, :]], axis=0)
         point_embeds = point_embeds / jnp.linalg.norm(point_embeds, axis=1)[:, None]
-        #if neg_points.size > 0:
-        #    point_embeds = point_embeds.at[neg_points].set(jnp.zeros_like(point_embeds[0]))
+        if neg_points.size > 0:
+            point_embeds = point_embeds.at[neg_points].set(jnp.zeros_like(point_embeds[0]))
         X = point_embeds @ point_embeds.T
         z = apply_A_operator_mx(n, m, A_data, A_indices, X) 
     if old_sdp_state.P is not None:
@@ -273,6 +273,7 @@ def warm_start_add_constraint(
     SCALE_C = 1.0 / jnp.linalg.norm(C.data)  # equivalent to frobenius norm
     SCALE_A = jnp.full(b.shape, constraint_scale_factor).at[jnp.arange(old_sdp_state.b.shape[0])].set(1.0)
     SCALE_A = SCALE_A.at[ecc_points].set(constraint_scale_factor)
+    SCALE_A = SCALE_A.at[neg_points].set(constraint_scale_factor)
     #SCALE_A = jnp.ones_like(b)
 
     old_diag_mask = ((old_sdp_state.A_indices[:, 1] == old_sdp_state.A_indices[:, 2])
