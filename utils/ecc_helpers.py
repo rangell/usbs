@@ -267,7 +267,7 @@ def warm_start_add_constraint(
     tr_X = jnp.trace(X)
     primal_obj = jnp.trace(C @ X)
 
-    constraint_scale_factor = 5.0
+    constraint_scale_factor = 2.0
 
     SCALE_X = 1.0 / float(n)
     SCALE_C = 1.0 / jnp.linalg.norm(C.data)  # equivalent to frobenius norm
