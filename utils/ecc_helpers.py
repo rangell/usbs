@@ -235,13 +235,13 @@ def warm_start_add_constraint(
     ecc_points = ecc_points_and_counts[:, 0]
     ecc_counts = ecc_points_and_counts[:, 1]
 
-    columns_to_drop = jnp.array(list(set(columns_to_drop)))
-    equality_columns = jnp.array(list(set(equality_columns)))
-    equality_columns = equality_columns[equality_columns < old_n]
+    #columns_to_drop = jnp.array(list(set(columns_to_drop)))
+    #equality_columns = jnp.array(list(set(equality_columns)))
+    #equality_columns = equality_columns[equality_columns < old_n]
 
     neg_points = jnp.array([v for v, _ in ortho_indices])
 
-    nbr_ecc_points = np.where(jnp.isin(prev_pred_clusters, prev_pred_clusters[ecc_points]))[0]
+    #nbr_ecc_points = np.where(jnp.isin(prev_pred_clusters, prev_pred_clusters[ecc_points]))[0]
 
     embed_dim = max(jnp.unique(prev_pred_clusters).shape[0], 2)
 
@@ -287,10 +287,14 @@ def warm_start_add_constraint(
     #y = jnp.zeros((m,)).at[diag_indices].set(avg_old_diag_val)
     y = jnp.zeros((m,))
     y = y.at[jnp.arange(old_sdp_state.b.shape[0])].set(old_sdp_state.y)
-    y = y * (SCALE_X / old_sdp_state.SCALE_X) * SCALE_A
+    y = y * (SCALE_X / old_sdp_state.SCALE_X)
 
     # NOTE: this is proximal step: (1 / rho)*(AX - b)
-    y = y + (SCALE_A / (1.0 * rho)) * SCALE_X * jnp.clip(b - z, a_max=0.0)
+    y = y + ((1.0 / rho)) * SCALE_X * jnp.clip(b - z, a_max=0.0)
+
+    if 265 in ecc_points and 268 in ecc_points:
+        embed()
+        exit()
 
     sdp_state = SDPState(
         C=C,
