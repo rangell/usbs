@@ -243,7 +243,7 @@ def warm_start_add_constraint(
 
     nbr_ecc_points = np.where(jnp.isin(prev_pred_clusters, prev_pred_clusters[ecc_points]))[0]
 
-    embed_dim = max(jnp.unique(prev_pred_clusters).shape[0], 2)
+    embed_dim = max(jnp.unique(prev_pred_clusters).shape[0] // 2, 2)
 
     X = old_sdp_state.X
     Omega = old_sdp_state.Omega
@@ -267,7 +267,7 @@ def warm_start_add_constraint(
     tr_X = jnp.trace(X)
     primal_obj = jnp.trace(C @ X)
 
-    constraint_scale_factor = 1.0 / ((ecc_points.size + neg_points.size) * rho)
+    constraint_scale_factor = 5.0
 
     SCALE_X = 1.0 / float(n)
     SCALE_C = 1.0 / jnp.linalg.norm(C.data)  # equivalent to frobenius norm
