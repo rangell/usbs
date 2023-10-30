@@ -817,7 +817,7 @@ def get_hparams() -> argparse.Namespace:
     # for constraint generation
     parser.add_argument('--max_rounds', type=int, default=100,
                         help="number of rounds to generate feedback for")
-    parser.add_argument('--max_overlap_feats', type=int, default=2,
+    parser.add_argument('--max_overlap_feats', type=int, default=3,
                         help="max num overlap features to sample.")
     hparams = parser.parse_args()
     return hparams
