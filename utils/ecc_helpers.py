@@ -273,6 +273,9 @@ def warm_start_add_constraint(
     SCALE_C = 1.0 / jnp.linalg.norm(C.data)  # equivalent to frobenius norm
     SCALE_A = jnp.full(b.shape, constraint_scale_factor).at[jnp.arange(old_sdp_state.b.shape[0])].set(1.0)
     SCALE_A = SCALE_A.at[ecc_points].set(constraint_scale_factor)
+    if neg_points.size > 0:
+        SCALE_A = SCALE_A.at[neg_points].set(constraint_scale_factor)
+
     #SCALE_A = jnp.ones_like(b)
 
     old_diag_mask = ((old_sdp_state.A_indices[:, 1] == old_sdp_state.A_indices[:, 2])
@@ -288,7 +291,7 @@ def warm_start_add_constraint(
     y = y * (SCALE_X / old_sdp_state.SCALE_X) * SCALE_A
 
     # NOTE: this is proximal step: (1 / rho)*(AX - b)
-    y = y + (1.0 / (1.0 * rho)) * SCALE_X * SCALE_A * jnp.clip(b - z, a_max=0.0)
+    #y = y + (1.0 / (1.0 * rho)) * SCALE_X * SCALE_A * jnp.clip(b - z, a_max=0.0)
 
     sdp_state = SDPState(
         C=C,
