@@ -246,7 +246,7 @@ def warm_start_add_constraint(
 
     #nbr_ecc_points = np.where(jnp.isin(prev_pred_clusters, prev_pred_clusters[ecc_points]))[0]
 
-    embed_dim = max(jnp.unique(prev_pred_clusters).shape[0] / 2, 2)
+    embed_dim = max(jnp.unique(prev_pred_clusters).shape[0] // 2, 2)
 
     X = old_sdp_state.X
     Omega = old_sdp_state.Omega
@@ -260,8 +260,8 @@ def warm_start_add_constraint(
         #point_embeds = point_embeds.at[ecc_points].set(avg_embed[None, :])
         point_embeds = jnp.concatenate([point_embeds, avg_embed[None, :]], axis=0)
         point_embeds = point_embeds / jnp.linalg.norm(point_embeds, axis=1)[:, None]
-        if neg_points.size > 0:
-            point_embeds = point_embeds.at[neg_points].set(jnp.zeros_like(point_embeds[0]))
+        #if neg_points.size > 0:
+        #    point_embeds = point_embeds.at[neg_points].set(jnp.zeros_like(point_embeds[0]))
         X = point_embeds @ point_embeds.T
         z = apply_A_operator_mx(n, m, A_data, A_indices, X) 
     if old_sdp_state.P is not None:
