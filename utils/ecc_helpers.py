@@ -241,7 +241,7 @@ def warm_start_add_constraint(
 
     neg_points = jnp.array([v for v, _ in ortho_indices])
 
-    nbr_ecc_points = np.where(jnp.isin(prev_pred_clusters, prev_pred_clusters[ecc_points]))[0]
+    #nbr_ecc_points = np.where(jnp.isin(prev_pred_clusters, prev_pred_clusters[ecc_points]))[0]
 
     embed_dim = max(jnp.unique(prev_pred_clusters).shape[0], 2)
 
