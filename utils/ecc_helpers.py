@@ -247,7 +247,7 @@ def warm_start_add_constraint(
 
     #nbr_ecc_points = np.where(jnp.isin(prev_pred_clusters, prev_pred_clusters[ecc_points]))[0]
 
-    embed_dim = max(2 * jnp.unique(prev_pred_clusters).shape[0], 2)
+    embed_dim = max(jnp.unique(prev_pred_clusters).shape[0], 2)
 
     X = old_sdp_state.X
     Omega = old_sdp_state.Omega
@@ -294,7 +294,8 @@ def warm_start_add_constraint(
     y = y * (SCALE_X / old_sdp_state.SCALE_X) * SCALE_A
 
     # NOTE: this is proximal step: (1 / rho)*(AX - b)
-    y = y + (SCALE_A / (1.0 * rho)) * SCALE_X * jnp.clip(b - z, a_max=0.0)
+    if neg_points.size > 0:
+        y = y + (SCALE_A / (1.0 * rho)) * SCALE_X * jnp.clip(b - z, a_max=0.0)
 
     #if np.all(np.isin(ecc_points, np.array([265, 268]))):
     #    embed()
