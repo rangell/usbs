@@ -229,8 +229,8 @@ def warm_start_add_constraint(
     columns_to_drop = [v for l in sum_gt_one_constraints for pairs in l for v in pairs if len(l) <= 2]
     equality_columns = [v for l in sum_gt_one_constraints for pairs in l for v in pairs if len(l) == 1]
 
-    ecc_points_and_counts = [(pairs[1], len(l)) for l in sum_gt_one_constraints for pairs in l if len(l) < 3]
-    #ecc_points_and_counts = [(pairs[1], len(l)) for l in sum_gt_one_constraints for pairs in l]
+    #ecc_points_and_counts = [(pairs[1], len(l)) for l in sum_gt_one_constraints for pairs in l if len(l) < 3]
+    ecc_points_and_counts = [(pairs[1], len(l)) for l in sum_gt_one_constraints for pairs in l]
     ecc_points_and_counts = jnp.array(list(set(ecc_points_and_counts)))
     ecc_points = ecc_points_and_counts[:, 0]
     ecc_counts = ecc_points_and_counts[:, 1]
@@ -246,7 +246,7 @@ def warm_start_add_constraint(
 
     #nbr_ecc_points = np.where(jnp.isin(prev_pred_clusters, prev_pred_clusters[ecc_points]))[0]
 
-    embed_dim = max(jnp.unique(prev_pred_clusters).shape[0], 2)
+    embed_dim = max(jnp.unique(prev_pred_clusters).shape[0] / 2, 2)
 
     X = old_sdp_state.X
     Omega = old_sdp_state.Omega
