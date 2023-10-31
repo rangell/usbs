@@ -272,13 +272,13 @@ def warm_start_add_constraint(
     SCALE_X = 1.0 / float(n)
     SCALE_C = 1.0 / jnp.linalg.norm(C.data)  # equivalent to frobenius norm
     SCALE_A = jnp.full(b.shape, constraint_scale_factor).at[jnp.arange(old_sdp_state.b.shape[0])].set(1.0)
-    SCALE_A = SCALE_A.at[ecc_points].set(constraint_scale_factor)
-    if neg_points.size > 0:
-        SCALE_A = SCALE_A.at[neg_points].set(constraint_scale_factor)
-
-    # TODO: set related constraints
-    embed()
-    exit()
+    interest_points = jnp.concatenate([ecc_points, neg_points])
+    upscale_indices = jnp.where(jnp.isin(A_indices[:, 1], interest_points)
+                                | jnp.isin(A_indices[:, 2], interest_points))[0]
+    SCALE_A = SCALE_A.at[upscale_indices].set(constraint_scale_factor)
+    #SCALE_A = SCALE_A.at[ecc_points].set(constraint_scale_factor)
+    #if neg_points.size > 0:
+    #    SCALE_A = SCALE_A.at[neg_points].set(constraint_scale_factor)
 
     old_diag_mask = ((old_sdp_state.A_indices[:, 1] == old_sdp_state.A_indices[:, 2])
                      & (old_sdp_state.A_data == 1.0))
