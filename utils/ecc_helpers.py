@@ -226,22 +226,12 @@ def warm_start_add_constraint(
 
     m = b.shape[0]
 
-    columns_to_drop = [v for l in sum_gt_one_constraints for pairs in l for v in pairs if len(l) <= 2]
-    equality_columns = [v for l in sum_gt_one_constraints for pairs in l for v in pairs if len(l) == 1]
-
-    #ecc_points_and_counts = [(pairs[1], len(l)) for l in sum_gt_one_constraints for pairs in l if len(l) < 3]
     ecc_points_and_counts = [(pairs[1], len(l)) for l in sum_gt_one_constraints for pairs in l]
     ecc_points_and_counts = jnp.array(list(set(ecc_points_and_counts)))
     ecc_points = ecc_points_and_counts[:, 0]
     ecc_counts = ecc_points_and_counts[:, 1]
 
-    columns_to_drop = jnp.array(list(set(columns_to_drop)))
-    equality_columns = jnp.array(list(set(equality_columns)))
-    equality_columns = equality_columns[equality_columns < old_n]
-
     neg_points = jnp.array([v for v, _ in ortho_indices])
-
-    #nbr_ecc_points = np.where(jnp.isin(prev_pred_clusters, prev_pred_clusters[ecc_points]))[0]
 
     embed_dim = max(jnp.unique(prev_pred_clusters).shape[0], 2)
 
@@ -254,9 +244,7 @@ def warm_start_add_constraint(
         point_embeds = point_embeds / jnp.linalg.norm(point_embeds, axis=1)[:, None]
         avg_embed = jnp.sum(point_embeds[ecc_points] / ecc_counts[:, None], axis=0)
         avg_embed = avg_embed / jnp.linalg.norm(avg_embed)
-        #point_embeds = point_embeds.at[ecc_points].set(avg_embed[None, :])
         point_embeds = jnp.concatenate([point_embeds, avg_embed[None, :]], axis=0)
-        point_embeds = point_embeds / jnp.linalg.norm(point_embeds, axis=1)[:, None]
         if neg_points.size > 0:
             point_embeds = point_embeds.at[neg_points].set(jnp.zeros_like(point_embeds[0]))
         X = point_embeds @ point_embeds.T
@@ -270,31 +258,15 @@ def warm_start_add_constraint(
     constraint_scale_factor = 5.0
 
     SCALE_X = 1.0 / float(n)
-    SCALE_C = 1.0 / jnp.linalg.norm(C.data)  # equivalent to frobenius norm
+    SCALE_C = 1.0 / jnp.linalg.norm(C.data)  # equivalent to Frobenius norm
     SCALE_A = jnp.full(b.shape, constraint_scale_factor).at[jnp.arange(old_sdp_state.b.shape[0])].set(1.0)
-    interest_points = jnp.concatenate([ecc_points, neg_points])
-    upscale_indices = jnp.where(jnp.isin(A_indices[:, 1], interest_points)
-                                | jnp.isin(A_indices[:, 2], interest_points))[0]
-    #SCALE_A = SCALE_A.at[upscale_indices].set(constraint_scale_factor)
     SCALE_A = SCALE_A.at[ecc_points].set(constraint_scale_factor)
     if neg_points.size > 0:
         SCALE_A = SCALE_A.at[neg_points].set(constraint_scale_factor)
 
-    #old_diag_mask = ((old_sdp_state.A_indices[:, 1] == old_sdp_state.A_indices[:, 2])
-    #                 & (old_sdp_state.A_data == 1.0))
-    #old_diag_indices = jnp.unique(old_sdp_state.A_indices[old_diag_mask][:, 0])
-    #avg_old_diag_val = jnp.mean(old_sdp_state.y[old_diag_indices])
-
-    #diag_mask = ((A_indices[:, 1] == A_indices[:, 2]) & (A_data == 1.0))
-    #diag_indices = jnp.unique(A_indices[diag_mask][:, 0])
-    #y = jnp.zeros((m,)).at[diag_indices].set(avg_old_diag_val)
     y = jnp.zeros((m,))
     y = y.at[jnp.arange(old_sdp_state.b.shape[0])].set(old_sdp_state.y)
     y = y * (SCALE_X / old_sdp_state.SCALE_X)
-
-    ## NOTE: this is proximal step: (1 / rho)*(AX - b)
-    #if neg_points.size > 0:
-    #    y = y + (1.0 / rho) * SCALE_X * jnp.clip(b - z, a_max=0.0)
 
     sdp_state = SDPState(
         C=C,
