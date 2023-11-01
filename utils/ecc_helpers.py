@@ -254,7 +254,7 @@ def warm_start_add_constraint(
         point_embeds = point_embeds / jnp.linalg.norm(point_embeds, axis=1)[:, None]
         avg_embed = jnp.sum(point_embeds[ecc_points] / ecc_counts[:, None], axis=0)
         avg_embed = avg_embed / jnp.linalg.norm(avg_embed)
-        point_embeds = point_embeds.at[ecc_points].set(avg_embed[None, :])
+        #point_embeds = point_embeds.at[ecc_points].set(avg_embed[None, :])
         point_embeds = jnp.concatenate([point_embeds, avg_embed[None, :]], axis=0)
         point_embeds = point_embeds / jnp.linalg.norm(point_embeds, axis=1)[:, None]
         if neg_points.size > 0:
@@ -267,7 +267,7 @@ def warm_start_add_constraint(
     tr_X = jnp.trace(X)
     primal_obj = jnp.trace(C @ X)
 
-    constraint_scale_factor = 1.0
+    constraint_scale_factor = 2.0
 
     SCALE_X = 1.0 / float(n)
     SCALE_C = 1.0 / jnp.linalg.norm(C.data)  # equivalent to frobenius norm
