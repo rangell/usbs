@@ -54,7 +54,6 @@ class EccClusterer(object):
         self.cold_start_sdp_state = initialize_state(C=C, sketch_dim=hparams.sketch_dim)
         self.warm_start_sdp_state = copy.deepcopy(self.cold_start_sdp_state)
 
-
     def add_constraint(self, ecc_constraint: csr_matrix):
         self.ecc_constraints.append(ecc_constraint)
         self.ecc_mx = sp_vstack(self.ecc_constraints)
@@ -112,7 +111,6 @@ class EccClusterer(object):
             ortho_indices=ortho_indices,
             sum_gt_one_constraints=sum_gt_one_constraints,
             sketch_dim=-1)
-
 
     @staticmethod
     @nb.njit(parallel=True)
@@ -175,24 +173,21 @@ class EccClusterer(object):
 
         return (ecc_indices, points_indptr, points_indices)
 
-
     def _call_sdp_solver(self, sdp_state: SDPState, solver_name: str) -> None:
         print(">>>>> START: ", solver_name)
         if "specbm" in solver_name:
             trace_ub = (self.hparams.trace_factor
                         * float(sdp_state.C.shape[0])
                         * sdp_state.SCALE_X)
-            _rho = self.hparams.rho
-            _k_curr = self.hparams.k_curr
             out_sdp_state = specbm(
                 sdp_state=sdp_state,
                 n=sdp_state.C.shape[0],
                 m=sdp_state.b.shape[0],
                 trace_ub=trace_ub,
                 trace_factor=self.hparams.trace_factor,
-                rho=_rho,
+                rho=self.hparams.rho,
                 beta=self.hparams.beta,
-                k_curr=min(_k_curr, sdp_state.C.shape[0]),
+                k_curr=min(self.hparams.k_curr, sdp_state.C.shape[0]),
                 k_past=self.hparams.k_past,
                 max_iters=self.hparams.max_iters,
                 max_time=self.hparams.max_time,
@@ -231,16 +226,11 @@ class EccClusterer(object):
 
         return out_sdp_state
 
-
     def build_and_solve_sdp(self):
-        if len(self.ecc_constraints) > 0:
-            _ = self._call_sdp_solver(self.cold_start_sdp_state, "cgal/cold")
-            _ = self._call_sdp_solver(self.warm_start_sdp_state, "cgal/warm")
-
+        _ = self._call_sdp_solver(self.cold_start_sdp_state, "cgal/cold")
+        _ = self._call_sdp_solver(self.warm_start_sdp_state, "cgal/warm")
         self.cold_start_sdp_state = self._call_sdp_solver(self.cold_start_sdp_state, "specbm/cold")
-
-        if len(self.ecc_constraints) > 0:
-            _ = self._call_sdp_solver(self.warm_start_sdp_state, "specbm/warm")
+        _ = self._call_sdp_solver(self.warm_start_sdp_state, "specbm/warm")
 
         unscaled_state = unscale_sdp_state(self.cold_start_sdp_state)
         sdp_obj_value = float(jnp.trace(-unscaled_state.C @ unscaled_state.X))
