@@ -275,10 +275,10 @@ def warm_start_add_constraint(
     interest_points = jnp.concatenate([ecc_points, neg_points])
     upscale_indices = jnp.where(jnp.isin(A_indices[:, 1], interest_points)
                                 | jnp.isin(A_indices[:, 2], interest_points))[0]
-    SCALE_A = SCALE_A.at[upscale_indices].set(constraint_scale_factor)
-    #SCALE_A = SCALE_A.at[ecc_points].set(constraint_scale_factor)
-    #if neg_points.size > 0:
-    #    SCALE_A = SCALE_A.at[neg_points].set(constraint_scale_factor)
+    #SCALE_A = SCALE_A.at[upscale_indices].set(constraint_scale_factor)
+    SCALE_A = SCALE_A.at[ecc_points].set(constraint_scale_factor)
+    if neg_points.size > 0:
+        SCALE_A = SCALE_A.at[neg_points].set(constraint_scale_factor)
 
     #old_diag_mask = ((old_sdp_state.A_indices[:, 1] == old_sdp_state.A_indices[:, 2])
     #                 & (old_sdp_state.A_data == 1.0))
