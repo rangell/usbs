@@ -18,8 +18,7 @@ def get_hparams():
 
 
 if __name__ == "__main__":
-    plt.rcParams.update({"font.size": 10, "figure.figsize": (30, 5)})
-    plt.gcf().subplots_adjust(left=0.3, bottom=0.3)
+    plt.rcParams.update({"font.size": 18, "figure.figsize": (20, 6)})
 
     hparams = get_hparams()
 
@@ -31,15 +30,14 @@ if __name__ == "__main__":
     df["temp"] = df["warm-start"].apply(lambda x: "warm" if x else "cold")
     df["solve_strategy"] = df[["solver", "temp"]].apply(lambda x: "/".join(x.astype(str)), axis=1)
 
-    # TODO: which datasets should we show in bar chart
-
     select_datasets = np.array(sorted([s for s in df["dataset name"].unique().tolist()
-                                       if int(re.sub("[a-z,A-Z]+", "", s)) > 135
-                                       and s not in ["pr124", "kroA150", "tai150b", "brg180", "tho150"]])[::-1])
+                                       if int(re.sub("[a-z,A-Z]+", "", s)) > 121
+                                       and s not in ["pr124", "si175", "brg180",
+                                                     "bier127", "tho150", "ch130", "u159"]]))
 
     subset_df = df[df["dataset name"].isin(select_datasets.tolist())]
-    subset_df = subset_df.sort_values(by="solve_strategy")
-    subset_df = subset_df.sort_values(by="dataset name")
+    subset_df = subset_df.sort_values(by="dataset name", kind="quicksort")
+    subset_df = subset_df.sort_values(by="solve_strategy", kind="quicksort")
 
     palette = sns.color_palette()
     ax = sns.barplot(
@@ -48,9 +46,10 @@ if __name__ == "__main__":
         y="best relative gap",
         hue="solve_strategy",
         palette=[palette[0], palette[0], palette[1], palette[1]],
-        #palette=palette,
+        width=0.8,
         errorbar=None,
-        edgecolor='black')
+        edgecolor='black',
+        linewidth=2)
 
     for bars, hatch, legend_handle in zip(ax.containers, ['', '//', '', '//'], ax.legend_.legend_handles):
         for bar, color in zip(bars, palette):
@@ -58,9 +57,15 @@ if __name__ == "__main__":
         # update the existing legend, use twice the hatching pattern to make it denser
         legend_handle.set_hatch(hatch + hatch)
 
+    plt.xlabel("dataset")
     plt.yscale("log")
     sns.despine()
-    plt.show()
-
-    embed()
-    exit()
+    ax.set_ylim((0, 16))
+    ax.legend(loc='upper center', bbox_to_anchor=(0.5, 1.05),
+          ncol=4, fancybox=True, shadow=True)
+    ax.tick_params(width=2)
+    plt.setp(ax.spines.values(), linewidth=2)
+    plt.tight_layout()
+    plt.savefig("qap_bar_chart.png")
+    plt.clf()
+    os.system("convert qap_bar_chart.png -trim qap_bar_chart.png")
