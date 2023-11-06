@@ -9,6 +9,7 @@ from scipy.io import loadmat  # type: ignore
 import sys
 
 from solver.specbm import specbm
+from utils.common import str2bool
 from utils.maxcut_helpers import (initialize_state,
                                   compute_max_cut,
                                   get_implicit_warm_start_state,
@@ -56,6 +57,8 @@ def get_hparams():
     parser.add_argument("--warm_start_strategy", type=str,
                         choices=["implicit", "explicit", "dual_only", "none"],
                         help="warm-start strategy to use")
+    parser.add_argument("--no_rounding", type=str2bool, nargs='?', const=True, default=False,
+                        help="turn rounding off during optimization")
     hparams = parser.parse_args()
     return hparams
 
@@ -105,6 +108,15 @@ if __name__ == "__main__":
     else:
         print("\n+++++++++++++++++++++++++++++ WARM-START ++++++++++++++++++++++++++++++++++\n")
 
+    if hparams.no_rounding:
+        callback_fn = None
+        callback_static_args = None
+        callback_nonstatic_args = None
+    else:
+        callback_fn = compute_max_cut
+        callback_static_args = pickle.dumps(None)
+        callback_nonstatic_args = sdp_state.C / sdp_state.SCALE_C
+
     sdp_state = specbm(
         sdp_state=sdp_state,
         n=sdp_state.C.shape[0],
@@ -124,9 +136,9 @@ if __name__ == "__main__":
         lanczos_max_restarts=hparams.lanczos_max_restarts,
         subprob_eps=hparams.subprob_eps,
         subprob_max_iters=hparams.subprob_max_iters,
-        callback_fn=compute_max_cut,
-        callback_static_args=pickle.dumps(None),
-        callback_nonstatic_args=sdp_state.C / sdp_state.SCALE_C)
+        callback_fn=callback_fn,
+        callback_static_args=callback_static_args,
+        callback_nonstatic_args=callback_nonstatic_args)
 
     if hparams.num_drop == 0:
         exit()
@@ -166,6 +178,15 @@ if __name__ == "__main__":
 
     print("\n+++++++++++++++++++++++++++++ BEGIN ++++++++++++++++++++++++++++++++++\n")
 
+    if hparams.no_rounding:
+        callback_fn = None
+        callback_static_args = None
+        callback_nonstatic_args = None
+    else:
+        callback_fn = compute_max_cut
+        callback_static_args = pickle.dumps(None)
+        callback_nonstatic_args = sdp_state.C / sdp_state.SCALE_C
+
     sdp_state = specbm(
         sdp_state=sdp_state,
         n=sdp_state.C.shape[0],
@@ -185,6 +206,6 @@ if __name__ == "__main__":
         lanczos_max_restarts=hparams.lanczos_max_restarts,
         subprob_eps=hparams.subprob_eps,
         subprob_max_iters=hparams.subprob_max_iters,
-        callback_fn=compute_max_cut,
-        callback_static_args=pickle.dumps(None),
-        callback_nonstatic_args=sdp_state.C / sdp_state.SCALE_C)
+        callback_fn=callback_fn,
+        callback_static_args=callback_static_args,
+        callback_nonstatic_args=callback_nonstatic_args)

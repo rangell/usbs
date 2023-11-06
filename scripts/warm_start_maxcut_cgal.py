@@ -9,6 +9,7 @@ from scipy.io import loadmat  # type: ignore
 import sys
 
 from solver.cgal import cgal
+from utils.common import str2bool
 from utils.maxcut_helpers import (initialize_state,
                                   compute_max_cut,
                                   get_implicit_warm_start_state,
@@ -48,8 +49,8 @@ def get_hparams():
     parser.add_argument("--warm_start_strategy", type=str,
                         choices=["implicit", "explicit", "dual_only", "none"],
                         help="warm-start strategy to use")
-    parser.add_argument("--no_rounding", action="store_true",
-                        help="turn during iteration rounding off")
+    parser.add_argument("--no_rounding", type=str2bool, nargs='?', const=True, default=False,
+                        help="turn rounding off during optimization")
     hparams = parser.parse_args()
     return hparams
 
