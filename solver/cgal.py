@@ -89,7 +89,7 @@ def cgal(
         q0 /= jnp.linalg.norm(q0)
         eigvals, eigvecs = eigsh_smallest(
             n=n,
-            C=state.C,
+            C=-state.C,
             A_data=state.A_data,
             A_indices=state.A_indices,
             adjoint_left_vec=adjoint_left_vec,
@@ -107,7 +107,7 @@ def cgal(
         X_update_dir = min_eigvec @ min_eigvec.T
         min_eigvec = min_eigvec.reshape(-1,)
 
-        surrogate_dual_gap = state.primal_obj - trace_ub*jnp.dot(min_eigvec, state.C @ min_eigvec)
+        surrogate_dual_gap = trace_ub*jnp.dot(min_eigvec, state.C @ min_eigvec) - state.primal_obj
         surrogate_dual_gap += jnp.dot(adjoint_left_vec, state.z)
         surrogate_dual_gap -= trace_ub * jnp.dot(
             min_eigvec, apply_A_adjoint_slim(
@@ -163,15 +163,14 @@ def cgal(
         end_time = hcb.call(lambda _: time.time(), arg=0, result_shape=float)
         jax.debug.print("t: {t} - end_time: {end_time} - primal_obj: {primal_obj} - obj_gap: {obj_gap}"
                         " - infeas_gap: {infeas_gap} - max_infeas: {max_infeas}"
-                        " - callback_val: {callback_val} - eta: {eta}",
+                        " - callback_val: {callback_val}",
                         t=state.t,
                         end_time=end_time,
                         primal_obj=state.primal_obj / (SCALE_C * SCALE_X),
                         obj_gap=obj_gap,
                         infeas_gap=infeas_gap,
                         max_infeas=max_infeas,
-                        callback_val=callback_val,
-                        eta=eta)
+                        callback_val=callback_val)
 
         return StateStruct(
             t=state.t+1,

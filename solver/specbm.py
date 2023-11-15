@@ -29,6 +29,7 @@ def solve_quad_subprob_ipm(
     A_indices: Array,
     U: BCOO,
     b: Array,
+    upsilon: Array,
     trace_ub: float,
     rho: float,
     bar_primal_obj: Array,
@@ -54,10 +55,10 @@ def solve_quad_subprob_ipm(
     q_12 = (trace_ub**2 / (rho * tr_X_bar)) * svec(
         V.T @ apply_A_adjoint_batched(n, A_data, A_indices, z_bar, V))
     q_22 = (trace_ub**2 / (rho * tr_X_bar**2)) * jnp.dot(z_bar, z_bar)
-    h_1 = trace_ub * svec(V.T @ (C @ V
-                                 - apply_A_adjoint_batched(n, A_data, A_indices, y, V)
-                                 - apply_A_adjoint_batched(n, A_data, A_indices, b, V) / rho))
-    h_2 = (trace_ub / tr_X_bar) * (bar_primal_obj - jnp.dot(z_bar, y) - (jnp.dot(z_bar, b) / rho))
+    h_1 = trace_ub * svec(V.T @ (apply_A_adjoint_batched(n, A_data, A_indices, y, V)
+                                 - C @ V
+                                 - apply_A_adjoint_batched(n, A_data, A_indices, b - upsilon, V) / rho))
+    h_2 = (trace_ub / tr_X_bar) * (jnp.dot(z_bar, y) - bar_primal_obj - (jnp.dot(z_bar, b - upsilon) / rho))
     svec_I = svec(jnp.eye(k))
 
     eta_init = jnp.asarray([(tr_X_bar / trace_ub) * eta_init])
@@ -197,9 +198,9 @@ def compute_lb_spec_est_ipm(
 
     # create problem constants
     tr_X_bar = lax.cond(tr_X_bar > 0.0, lambda _: tr_X_bar, lambda _: trace_ub, None)
-    g_1 = trace_ub * svec(V.T @ (C @ V)
-                          - V.T @ apply_A_adjoint_batched(n, A_data, A_indices, y, V))
-    g_2 = (trace_ub / tr_X_bar) * (bar_primal_obj - jnp.dot(z_bar, y))
+    g_1 = trace_ub * svec(V.T @ apply_A_adjoint_batched(n, A_data, A_indices, y, V)
+                          - V.T @ (C @ V))
+    g_2 = (trace_ub / tr_X_bar) * (jnp.dot(z_bar, y) - bar_primal_obj)
     svec_I = svec(jnp.eye(k))
 
     # initialize all Lagrangian variables
@@ -323,9 +324,9 @@ def compute_lb_spec_est_ipm(
         init_ipm_state,
         max_steps=ipm_max_iters)
 
-    lb_spec_est = jnp.dot(b, y) + jnp.dot(g_1, svec(final_ipm_state.S))
-    lb_spec_est += final_ipm_state.eta.squeeze() * g_2
-    return -lb_spec_est.squeeze()
+    lb_spec_est = (jnp.dot(b, y) - jnp.dot(g_1, svec(final_ipm_state.S))
+                   - final_ipm_state.eta.squeeze() * g_2)
+    return lb_spec_est.squeeze()
 
 
 @partial(jax.jit, static_argnames=["n", "m", "k", "subprob_eps", "subprob_max_iters"])
@@ -362,7 +363,8 @@ def solve_step_subprob(
             A_data=A_data,
             A_indices=A_indices,
             U=U,
-            b=b-state.upsilon,
+            b=b,
+            upsilon=state.upsilon,
             trace_ub=trace_ub,
             rho=rho,
             bar_primal_obj=bar_primal_obj,
@@ -382,7 +384,7 @@ def solve_step_subprob(
         VSV_T_factor = (V @ S_eigvecs) * jnp.sqrt(S_eigvals).reshape(1, -1)
         A_operator_VSV_T = apply_A_operator_batched(m, A_data, A_indices, VSV_T_factor)
         z_next = eta_next * z_bar + A_operator_VSV_T
-        upsilon_next = b_ineq_mask * jnp.clip(b - z_next + (rho * y), a_min=0.0)
+        upsilon_next = b_ineq_mask * jnp.clip(b - z_next - (rho * y), a_min=0.0)
         upsilon_gap = jnp.max(jnp.abs(state.upsilon - upsilon_next))
         _subprob_state = SubprobStateStruct(
             i=state.i + 1, eta=eta_next, S=S_next, upsilon=upsilon_next, upsilon_gap=upsilon_gap)
@@ -468,7 +470,7 @@ def specbm(
          "bar_primal_obj",
          "pen_dual_obj",
          "lb_spec_est",
-         "neg_obj_lb"])
+         "obj_ub"])
 
     @jax.jit
     def cond_func(state: StateStruct) -> Array:
@@ -521,27 +523,27 @@ def specbm(
             P_next = eta * state.P_bar + VSV_T_factor @ (VSV_T_factor.T @ state.Omega)
         tr_X_next = eta * state.tr_X_bar + jnp.trace(S)
         z_next = eta * state.z_bar + A_operator_VSV_T
-        y_cand = state.y + (1.0 / rho) * (state.b - z_next - upsilon_next)
+        y_cand = state.y - (1.0 / rho) * (state.b - z_next - upsilon_next)
         primal_obj_next = eta * state.bar_primal_obj
         primal_obj_next += jnp.trace(VSV_T_factor.T @ (state.C @ VSV_T_factor))
 
         cand_eigvals, cand_eigvecs = eigsh_smallest(
             n=n,
-            C=state.C,
+            C=-state.C,
             A_data=state.A_data,
             A_indices=state.A_indices,
-            adjoint_left_vec=-y_cand,
+            adjoint_left_vec=y_cand,
             q0=state.q0,
             num_desired=k_curr,
             inner_iterations=lanczos_inner_iterations,
             max_restarts=lanczos_max_restarts,
             tolerance=subprob_eps)
         cand_eigvals = -cand_eigvals
-        cand_pen_dual_obj = jnp.dot(-state.b, y_cand) + trace_ub*jnp.clip(cand_eigvals[0], a_min=0)
-        neg_obj_lb = jnp.clip(
-            jnp.dot(-state.b, y_cand)
+        cand_pen_dual_obj = jnp.dot(state.b, y_cand) + trace_ub*jnp.clip(cand_eigvals[0], a_min=0)
+        obj_ub = jnp.clip(
+            jnp.dot(state.b, y_cand)
             + (trace_ub / trace_factor)*jnp.clip(cand_eigvals[0], a_min=0),
-            a_max=state.neg_obj_lb)
+            a_max=state.obj_ub)
 
         lb_spec_est = compute_lb_spec_est_ipm(
             C=state.C,
@@ -582,8 +584,8 @@ def specbm(
         bar_primal_obj_next = eta * state.bar_primal_obj
         bar_primal_obj_next += jnp.trace(curr_VSV_T_factor.T @ (state.C @ curr_VSV_T_factor))
         
-        obj_gap = jnp.abs(primal_obj_next + neg_obj_lb) / (SCALE_C * SCALE_X)
-        obj_gap /= 1.0 + jnp.clip(jnp.abs(primal_obj_next), a_min=jnp.abs(neg_obj_lb)) / (SCALE_C * SCALE_X)
+        obj_gap = jnp.abs(obj_ub - primal_obj_next) / (SCALE_C * SCALE_X)
+        obj_gap /= 1.0 + jnp.clip(jnp.abs(primal_obj_next), a_min=jnp.abs(obj_ub)) / (SCALE_C * SCALE_X)
         infeas_gap = jnp.linalg.norm((z_next - state.b + upsilon_next) / SCALE_A) / SCALE_X
         infeas_gap /= 1.0 + jnp.linalg.norm((state.b / SCALE_A) / SCALE_X)
         max_infeas = jnp.max(jnp.abs(z_next - state.b + upsilon_next) / SCALE_A) / SCALE_X
@@ -601,7 +603,7 @@ def specbm(
         jax.debug.print("t: {t} - end_time: {end_time} - pen_dual_obj: {pen_dual_obj}"
                         " - cand_pen_dual_obj: {cand_pen_dual_obj} - lb_spec_est: {lb_spec_est}"
                         " - pen_dual_obj_next: {pen_dual_obj_next} - primal_obj: {primal_obj}"
-                        " - neg_obj_lb: {neg_obj_lb} - obj_gap: {obj_gap} - infeas_gap: {infeas_gap}"
+                        " - obj_ub: {obj_ub} - obj_gap: {obj_gap} - infeas_gap: {infeas_gap}"
                         " - max_infeas: {max_infeas} - callback_val: {callback_val}",
                         t=state.t,
                         end_time=end_time,
@@ -610,7 +612,7 @@ def specbm(
                         lb_spec_est=lb_spec_est,
                         pen_dual_obj_next=pen_dual_obj_next,
                         primal_obj=primal_obj_next / (SCALE_C * SCALE_X),
-                        neg_obj_lb=neg_obj_lb,
+                        obj_ub=obj_ub,
                         obj_gap=obj_gap,
                         infeas_gap=infeas_gap,
                         max_infeas=max_infeas,
@@ -647,24 +649,24 @@ def specbm(
             bar_primal_obj=bar_primal_obj_next,
             pen_dual_obj=pen_dual_obj_next,
             lb_spec_est=lb_spec_est,
-            neg_obj_lb=neg_obj_lb)
+            obj_ub=obj_ub)
 
 
     q0 = jax.random.normal(jax.random.PRNGKey(0), shape=(n,))
     q0 /= jnp.linalg.norm(q0)
     init_eigvals, init_eigvecs = eigsh_smallest(
         n=n,
-        C=sdp_state.C,
+        C=-sdp_state.C,
         A_data=sdp_state.A_data,
         A_indices=sdp_state.A_indices,
-        adjoint_left_vec=-sdp_state.y,
+        adjoint_left_vec=sdp_state.y,
         q0=q0,
         num_desired=k,
         inner_iterations=lanczos_inner_iterations,
         max_restarts=lanczos_max_restarts,
         tolerance=subprob_eps)
     init_eigvals = -init_eigvals
-    init_pen_dual_obj = jnp.dot(-sdp_state.b, sdp_state.y)
+    init_pen_dual_obj = jnp.dot(sdp_state.b, sdp_state.y)
     init_pen_dual_obj += trace_ub*jnp.clip(init_eigvals[0], a_min=0)
 
     global_start_time = time.time()
@@ -699,7 +701,7 @@ def specbm(
         bar_primal_obj=sdp_state.primal_obj,
         pen_dual_obj=init_pen_dual_obj,
         lb_spec_est=jnp.array(0.0),
-        neg_obj_lb=jnp.inf)
+        obj_ub=jnp.inf)
 
     final_state = bounded_while_loop(cond_func, body_func, init_state, max_steps=max_iters)
 

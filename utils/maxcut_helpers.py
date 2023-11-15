@@ -37,7 +37,7 @@ def initialize_state(C: csc_matrix, sketch_dim: int) -> SDPState:
     n = C.shape[0]
     C = scipy.sparse.spdiags((C @ np.ones((n,1))).T, 0, n, n) - C
     C = 0.5*(C + C.T)
-    C = -0.25*C
+    C = 0.25*C
     C = C.tocsc()
     C = BCOO.from_scipy_sparse(C)
 
@@ -45,7 +45,7 @@ def initialize_state(C: csc_matrix, sketch_dim: int) -> SDPState:
     m = b.shape[0]
 
     SCALE_X = 1.0 / float(n)
-    SCALE_C = 1.0 / jnp.linalg.norm(C.data)  # equivalent to frobenius norm
+    SCALE_C = 1.0 / jnp.linalg.norm(C.data)  # equivalent to Frobenius norm
     SCALE_A = jnp.ones_like(b)
 
     if sketch_dim == -1:
@@ -92,7 +92,7 @@ def get_implicit_warm_start_state(old_sdp_state: SDPState, C: BCOO, sketch_dim: 
     n = C.shape[0]
     C = scipy.sparse.spdiags((C @ np.ones((n,1))).T, 0, n, n) - C
     C = 0.5*(C + C.T)
-    C = -0.25*C
+    C = 0.25*C
     C = C.tocsc()
     C = BCOO.from_scipy_sparse(C)
 
@@ -125,7 +125,7 @@ def get_implicit_warm_start_state(old_sdp_state: SDPState, C: BCOO, sketch_dim: 
     primal_obj += jnp.dot(C_diag, z)
 
     SCALE_X = 1.0 / float(n)
-    SCALE_C = 1.0 / jnp.linalg.norm(C.data)  # equivalent to frobenius norm
+    SCALE_C = 1.0 / jnp.linalg.norm(C.data)  # equivalent to Frobenius norm
     SCALE_A = jnp.ones_like(b)
 
     sdp_state = SDPState(
@@ -156,7 +156,7 @@ def get_explicit_warm_start_state(old_sdp_state: SDPState, C: BCOO, sketch_dim: 
     n = C.shape[0]
     C = scipy.sparse.spdiags((C @ np.ones((n,1))).T, 0, n, n) - C
     C = 0.5*(C + C.T)
-    C = -0.25*C
+    C = 0.25*C
     C = C.tocsc()
     C = BCOO.from_scipy_sparse(C)
 
@@ -188,7 +188,7 @@ def get_explicit_warm_start_state(old_sdp_state: SDPState, C: BCOO, sketch_dim: 
     y = jnp.zeros((m,)).at[jnp.arange(old_sdp_state.b.shape[0])].set(old_sdp_state.y)
 
     SCALE_X = 1.0 / float(n)
-    SCALE_C = 1.0 / jnp.linalg.norm(C.data)  # equivalent to frobenius norm
+    SCALE_C = 1.0 / jnp.linalg.norm(C.data)  # equivalent to Frobenius norm
     SCALE_A = jnp.ones_like(b)
 
     sdp_state = SDPState(
@@ -219,7 +219,7 @@ def get_dual_only_warm_start_state(old_sdp_state: SDPState, C: BCOO, sketch_dim:
     n = C.shape[0]
     C = scipy.sparse.spdiags((C @ np.ones((n,1))).T, 0, n, n) - C
     C = 0.5*(C + C.T)
-    C = -0.25*C
+    C = 0.25*C
     C = C.tocsc()
     C = BCOO.from_scipy_sparse(C)
 
@@ -227,7 +227,7 @@ def get_dual_only_warm_start_state(old_sdp_state: SDPState, C: BCOO, sketch_dim:
     m = b.shape[0]
 
     SCALE_X = 1.0 / float(n)
-    SCALE_C = 1.0 / jnp.linalg.norm(C.data)  # equivalent to frobenius norm
+    SCALE_C = 1.0 / jnp.linalg.norm(C.data)  # equivalent to Frobenius norm
     SCALE_A = jnp.ones_like(b)
 
     if sketch_dim == -1:
@@ -277,4 +277,4 @@ def compute_max_cut(
     C = callback_nonstatic_args 
     W, _ = reconstruct_from_sketch(Omega, P)
     W_bin = 2 * (W > 0).astype(float) - 1
-    return jnp.max(jnp.diag(-W_bin.T @ C @ W_bin))
+    return jnp.max(jnp.diag(W_bin.T @ C @ W_bin))
