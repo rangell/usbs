@@ -586,9 +586,11 @@ def specbm(
         
         obj_gap = jnp.abs(obj_ub - primal_obj_next) / (SCALE_C * SCALE_X)
         obj_gap /= 1.0 + jnp.clip(jnp.abs(primal_obj_next), a_min=jnp.abs(obj_ub)) / (SCALE_C * SCALE_X)
-        infeas_gap = jnp.linalg.norm((z_next - state.b + upsilon_next) / SCALE_A) / SCALE_X
+        infeas = (jnp.clip(z_next - state.b, a_min=0.0)
+                  + (1.0 - state.b_ineq_mask) * jnp.clip(state.b - z_next, a_min=0.0))
+        infeas_gap = jnp.linalg.norm(infeas / SCALE_A) / SCALE_X
         infeas_gap /= 1.0 + jnp.linalg.norm((state.b / SCALE_A) / SCALE_X)
-        max_infeas = jnp.max(jnp.abs(z_next - state.b + upsilon_next) / SCALE_A) / SCALE_X
+        max_infeas = jnp.max(jnp.abs(infeas) / SCALE_A) / SCALE_X
 
         if state.Omega is not None and callback_fn is not None:
             callback_val = callback_fn(
