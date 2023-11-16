@@ -47,7 +47,6 @@ def get_all_problem_data(C: BCOO) -> Tuple[BCOO, Array, Array, Array]:
 
 def initialize_state(C: BCOO, sketch_dim: int) -> SDPState:
     A_data, A_indices, b, b_ineq_mask = get_all_problem_data(C)
-    C = -C
     n = C.shape[0]
     m = b.shape[0]
 
@@ -104,7 +103,6 @@ def cold_start_add_constraint(
     old_n = old_sdp_state.C.shape[0]
     n = old_n + 1
     C = BCOO((old_sdp_state.C.data, old_sdp_state.C.indices), shape=(n, n))
-    C = -C
 
     # add the additional diagonal == 1 constraint for the new ecc
     A_indices = jnp.concatenate([old_sdp_state.A_indices,
@@ -194,7 +192,6 @@ def warm_start_add_constraint(
     old_n = old_sdp_state.C.shape[0]
     n = old_n + 1
     C = BCOO((old_sdp_state.C.data, old_sdp_state.C.indices), shape=(n, n))
-    C = -C
 
     # add the additional diagonal == 1 constraint for the new ecc
     A_indices = jnp.concatenate([old_sdp_state.A_indices,
