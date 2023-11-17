@@ -52,7 +52,7 @@ class EccClusterer(object):
         self.incompat_mx = None
 
         C = BCOO.from_scipy_sparse(self.sparse_laplacian).astype(float)
-        self.cold_start_sdp_state = initialize_state(C=-C, sketch_dim=hparams.sketch_dim)
+        self.cold_start_sdp_state = initialize_state(C=-C, sketch_dim=self.hparams.sketch_dim)
         self.warm_start_sdp_state = copy.deepcopy(self.cold_start_sdp_state)
 
     def add_constraint(self, ecc_constraint: csr_matrix):
@@ -106,12 +106,12 @@ class EccClusterer(object):
             sum_gt_one_constraints=sum_gt_one_constraints,
             prev_pred_clusters=jnp.array(self.prev_pred_clusters),
             constraint_scale_factor=self.hparams.constraint_scale_factor,
-            sketch_dim=-1)
+            sketch_dim=self.hparams.sketch_dim)
         self.cold_start_sdp_state = cold_start_add_constraint(
             old_sdp_state=self.cold_start_sdp_state,
             ortho_indices=ortho_indices,
             sum_gt_one_constraints=sum_gt_one_constraints,
-            sketch_dim=-1)
+            sketch_dim=self.hparams.sketch_dim)
 
     @staticmethod
     @nb.njit(parallel=True)
