@@ -113,9 +113,6 @@ class EccClusterer(object):
             sum_gt_one_constraints=sum_gt_one_constraints,
             sketch_dim=self.hparams.sketch_dim)
 
-        embed()
-        exit()
-
     @staticmethod
     @nb.njit(parallel=True)
     def _set_incompat_mx(n: int,
@@ -236,6 +233,8 @@ class EccClusterer(object):
         self.cold_start_sdp_state = self._call_sdp_solver(self.cold_start_sdp_state, "specbm/cold")
         _ = self._call_sdp_solver(self.warm_start_sdp_state, "specbm/warm")
 
+        modified_sdp_state = copy.deepcopy(self.cold_start_sdp_state)
+
         # reconstruct from sketch
         if self.hparams.sketch_dim > 0:
             E, Lambda = reconstruct_from_sketch(
@@ -243,24 +242,24 @@ class EccClusterer(object):
             tr_offset = (self.cold_start_sdp_state.tr_X - jnp.sum(Lambda)) / Lambda.shape[0]
             Lambda_tr_correct = Lambda + tr_offset
             point_embeds = E * jnp.sqrt(Lambda_tr_correct)[None, :]
-            self.cold_start_sdp_state = SDPState(
-                C=self.cold_start_sdp_state.C,
-                A_indices=self.cold_start_sdp_state.A_indices,
-                A_data=self.cold_start_sdp_state.A_data,
-                b=self.cold_start_sdp_state.b,
-                b_ineq_mask=self.cold_start_sdp_state.b_ineq_mask,
+            modified_sdp_state = SDPState(
+                C=modified_sdp_state.C,
+                A_indices=modified_sdp_state.A_indices,
+                A_data=modified_sdp_state.A_data,
+                b=modified_sdp_state.b,
+                b_ineq_mask=modified_sdp_state.b_ineq_mask,
                 X=(point_embeds @ point_embeds.T),
-                P=self.cold_start_sdp_state.P,
-                Omega=self.cold_start_sdp_state.Omega,
-                y=self.cold_start_sdp_state.y,
-                z=self.cold_start_sdp_state.z,
-                tr_X=self.cold_start_sdp_state.tr_X,
-                primal_obj=self.cold_start_sdp_state.primal_obj,
-                SCALE_C=self.cold_start_sdp_state.SCALE_C,
-                SCALE_X=self.cold_start_sdp_state.SCALE_X,
-                SCALE_A=self.cold_start_sdp_state.SCALE_A)
+                P=modified_sdp_state.P,
+                Omega=modified_sdp_state.Omega,
+                y=modified_sdp_state.y,
+                z=modified_sdp_state.z,
+                tr_X=modified_sdp_state.tr_X,
+                primal_obj=modified_sdp_state.primal_obj,
+                SCALE_C=modified_sdp_state.SCALE_C,
+                SCALE_X=modified_sdp_state.SCALE_X,
+                SCALE_A=modified_sdp_state.SCALE_A)
 
-        unscaled_state = unscale_sdp_state(self.cold_start_sdp_state)
+        unscaled_state = unscale_sdp_state(modified_sdp_state)
         sdp_obj_value = float(jnp.trace(-unscaled_state.C @ unscaled_state.X))
         pw_probs = np.array(jnp.clip(unscaled_state.X, a_min=0.0, a_max=1.0))
         
