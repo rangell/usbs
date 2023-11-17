@@ -97,7 +97,6 @@ def cold_start_add_constraint(
     sum_gt_one_constraints: List[List[int]],
     sketch_dim: int) -> SDPState:
 
-    assert sketch_dim == -1
     old_sdp_state = unscale_sdp_state(old_sdp_state)
 
     old_n = old_sdp_state.C.shape[0]
@@ -186,7 +185,6 @@ def warm_start_add_constraint(
     constraint_scale_factor: float,
     sketch_dim: int) -> SDPState:
 
-    assert sketch_dim == -1
     old_sdp_state = unscale_sdp_state(old_sdp_state)
 
     old_n = old_sdp_state.C.shape[0]
