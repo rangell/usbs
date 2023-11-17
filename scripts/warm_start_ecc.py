@@ -240,7 +240,22 @@ class EccClusterer(object):
             tr_offset = (self.cold_start_sdp_state.tr_X - jnp.sum(Lambda)) / Lambda.shape[0]
             Lambda_tr_correct = Lambda + tr_offset
             point_embeds = E * jnp.sqrt(Lambda_tr_correct)[None, :]
-            self.cold_start_sdp_state.X = point_embeds @ point_embeds.T
+            self.cold_start_sdp_state = SDPState(
+                C=self.cold_start_sdp_state.C,
+                A_indices=self.cold_start_sdp_state.A_indices,
+                A_data=self.cold_start_sdp_state.A_data,
+                b=self.cold_start_sdp_state.b,
+                b_ineq_mask=self.cold_start_sdp_state.b_ineq_mask,
+                X=(point_embeds @ point_embeds.T),
+                P=self.cold_start_sdp_state.P,
+                Omega=self.cold_start_sdp_state.Omega,
+                y=self.cold_start_sdp_state.y,
+                z=self.cold_start_sdp_state.z,
+                tr_X=self.cold_start_sdp_state.tr_X,
+                primal_obj=self.cold_start_sdp_state.primal_obj,
+                SCALE_C=self.cold_start_sdp_state.SCALE_C,
+                SCALE_X=self.cold_start_sdp_state.SCALE_X,
+                SCALE_A=self.cold_start_sdp_state.SCALE_A)
 
         unscaled_state = unscale_sdp_state(self.cold_start_sdp_state)
         sdp_obj_value = float(jnp.trace(-unscaled_state.C @ unscaled_state.X))
