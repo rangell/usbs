@@ -236,6 +236,7 @@ def warm_start_add_constraint(
     embed_dim = max(jnp.unique(prev_pred_clusters).shape[0], 2)
 
     X = old_sdp_state.X
+    Omega = old_sdp_state.Omega
     P = old_sdp_state.P
     if old_sdp_state.X is not None:
         eigvals, eigvecs = jnp.linalg.eigh(old_sdp_state.X)
