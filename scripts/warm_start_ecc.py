@@ -22,7 +22,7 @@ from sklearn.metrics import homogeneity_completeness_v_measure as cluster_f1
 
 from solver.cgal import cgal
 from solver.specbm import specbm
-from utils.common import unscale_sdp_state, SDPState
+from utils.common import unscale_sdp_state, SDPState, reconstruct_from_sketch
 from utils.ecc_helpers import (initialize_state,
                                cold_start_add_constraint,
                                warm_start_add_constraint,
@@ -42,7 +42,8 @@ class EccClusterer(object):
         self.hparams = hparams
         self.edge_weights = edge_weights
         self.edge_weights.data
-        self.sparse_laplacian = create_sparse_laplacian(edge_weights=edge_weights, eps=0.9)
+        self.sparse_laplacian = create_sparse_laplacian(
+            edge_weights=edge_weights, eps=self.hparams.spectral_sparsifier_eps)
 
         self.features = features
         self.n = self.features.shape[0]
@@ -104,7 +105,7 @@ class EccClusterer(object):
             ortho_indices=ortho_indices,
             sum_gt_one_constraints=sum_gt_one_constraints,
             prev_pred_clusters=jnp.array(self.prev_pred_clusters),
-            rho=self.hparams.rho,
+            constraint_scale_factor=self.hparams.constraint_scale_factor,
             sketch_dim=-1)
         self.cold_start_sdp_state = cold_start_add_constraint(
             old_sdp_state=self.cold_start_sdp_state,
@@ -231,6 +232,15 @@ class EccClusterer(object):
         _ = self._call_sdp_solver(self.warm_start_sdp_state, "cgal/warm")
         self.cold_start_sdp_state = self._call_sdp_solver(self.cold_start_sdp_state, "specbm/cold")
         _ = self._call_sdp_solver(self.warm_start_sdp_state, "specbm/warm")
+
+        # reconstruct from sketch
+        if self.hparams.sketch_dim > 0:
+            E, Lambda = reconstruct_from_sketch(
+                self.cold_start_sdp_state.Omega, self.cold_start_sdp_state.P)
+            tr_offset = (self.cold_start_sdp_state.tr_X - jnp.sum(Lambda)) / Lambda.shape[0]
+            Lambda_tr_correct = Lambda + tr_offset
+            point_embeds = E * jnp.sqrt(Lambda_tr_correct)[None, :]
+            self.cold_start_sdp_state.X = point_embeds @ point_embeds.T
 
         unscaled_state = unscale_sdp_state(self.cold_start_sdp_state)
         sdp_obj_value = float(jnp.trace(-unscaled_state.C @ unscaled_state.X))
@@ -795,8 +805,12 @@ def get_hparams() -> argparse.Namespace:
                         help="proximal parameter")
     parser.add_argument("--beta", type=float, default=0.25,
                         help="sufficient decrease parameter")
+    parser.add_argument("--constraint_scale_factor", type=float, default=5.0,
+                        help="upweight scale factor for constraints for warm-starting")
     parser.add_argument("--sketch_dim", type=int, default=0,
                         help="dimension of Nystrom sketch")
+    parser.add_argument("--spectral_sparsifier_eps", type=float, default=0.9,
+                        help="eps for resistance based spectral sparsifier")
 
     # for constraint generation
     parser.add_argument('--max_rounds', type=int, default=100,

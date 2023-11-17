@@ -183,7 +183,7 @@ def warm_start_add_constraint(
     ortho_indices: List[Tuple[int, int]],
     sum_gt_one_constraints: List[List[int]],
     prev_pred_clusters: Array,
-    rho: float,
+    constraint_scale_factor: float,
     sketch_dim: int) -> SDPState:
 
     assert sketch_dim == -1
@@ -236,7 +236,6 @@ def warm_start_add_constraint(
     embed_dim = max(jnp.unique(prev_pred_clusters).shape[0], 2)
 
     X = old_sdp_state.X
-    Omega = old_sdp_state.Omega
     P = old_sdp_state.P
     if old_sdp_state.X is not None:
         eigvals, eigvecs = jnp.linalg.eigh(old_sdp_state.X)
@@ -249,13 +248,24 @@ def warm_start_add_constraint(
             point_embeds = point_embeds.at[neg_points].set(jnp.zeros_like(point_embeds[0]))
         X = point_embeds @ point_embeds.T
         z = apply_A_operator_mx(n, m, A_data, A_indices, X) 
+        tr_X = jnp.trace(X)
+        primal_obj = jnp.trace(C @ X)
     if old_sdp_state.P is not None:
-        assert False
-
-    tr_X = jnp.trace(X)
-    primal_obj = jnp.trace(C @ X)
-
-    constraint_scale_factor = 5.0
+        Omega = jax.random.normal(jax.random.PRNGKey(n), shape=(n, sketch_dim))
+        E, Lambda = reconstruct_from_sketch(old_sdp_state.Omega, old_sdp_state.P)
+        tr_offset = (old_sdp_state.tr_X - jnp.sum(Lambda)) / Lambda.shape[0]
+        Lambda_tr_correct = Lambda + tr_offset
+        point_embeds = E * jnp.sqrt(Lambda_tr_correct)[None, :]
+        point_embeds = point_embeds / jnp.linalg.norm(point_embeds, axis=1)[:, None]
+        avg_embed = jnp.sum(point_embeds[ecc_points] / ecc_counts[:, None], axis=0)
+        avg_embed = avg_embed / jnp.linalg.norm(avg_embed)
+        point_embeds = jnp.concatenate([point_embeds, avg_embed[None, :]], axis=0)
+        if neg_points.size > 0:
+            point_embeds = point_embeds.at[neg_points].set(jnp.zeros_like(point_embeds[0]))
+        P = point_embeds @ (point_embeds.T @ Omega)
+        z = apply_A_operator_batched(m, A_data, A_indices, point_embeds)
+        tr_X = jnp.sum(Lambda_tr_correct)
+        primal_obj = jnp.trace(point_embeds.T @ (C @ point_embeds))
 
     SCALE_X = 1.0 / float(n)
     SCALE_C = 1.0 / jnp.linalg.norm(C.data)  # equivalent to Frobenius norm
