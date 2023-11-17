@@ -113,6 +113,9 @@ class EccClusterer(object):
             sum_gt_one_constraints=sum_gt_one_constraints,
             sketch_dim=self.hparams.sketch_dim)
 
+        embed()
+        exit()
+
     @staticmethod
     @nb.njit(parallel=True)
     def _set_incompat_mx(n: int,
