@@ -254,7 +254,7 @@ def warm_start_add_constraint(
         E, Lambda = reconstruct_from_sketch(old_sdp_state.Omega, old_sdp_state.P)
         tr_offset = (old_sdp_state.tr_X - jnp.sum(Lambda)) / Lambda.shape[0]
         Lambda_tr_correct = Lambda + tr_offset
-        point_embeds = E * jnp.sqrt(Lambda_tr_correct)[None, :]
+        point_embeds = (E[:,-embed_dim:] * jnp.sqrt(Lambda_tr_correct[None, -embed_dim:]))
         point_embeds = point_embeds / jnp.linalg.norm(point_embeds, axis=1)[:, None]
         avg_embed = jnp.sum(point_embeds[ecc_points] / ecc_counts[:, None], axis=0)
         avg_embed = avg_embed / jnp.linalg.norm(avg_embed)
