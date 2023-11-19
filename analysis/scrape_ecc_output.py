@@ -87,9 +87,13 @@ def create_df(log_fname: str) -> pd.DataFrame:
 if __name__ == "__main__":
     plt.rcParams.update({'font.size': 16})
 
-    pubmed_df = create_df(log_fname="results/ecc/pubmed.out")
-    qian_df = create_df(log_fname="results/ecc/qian.out")
-    zbmath_df = create_df(log_fname="results/ecc/zbmath.out")
+    #pubmed_df = create_df(log_fname="results/ecc/pubmed.out")
+    #qian_df = create_df(log_fname="results/ecc/qian.out")
+    #zbmath_df = create_df(log_fname="results/ecc/zbmath.out")
+
+    pubmed_df = create_df(log_fname="pubmed.out")
+    qian_df = create_df(log_fname="qian.out")
+    zbmath_df = create_df(log_fname="zbmath.out")
 
     ax = sns.lineplot(
         pubmed_df,

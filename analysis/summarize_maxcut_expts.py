@@ -46,8 +46,6 @@ def create_df_from_log(log_fname):
 
     with open(log_fname, "r") as f:
         for line in f:
-            line.strip()
-
             for hparam_key in hparam_names:
                 if hparam_key not in hparam_dict.keys():
                     re_hparam_key = re.search(f"\"{hparam_key}\":\s+([^,]+).*$", line)
@@ -69,14 +67,17 @@ def create_df_from_log(log_fname):
 
                 re_iter_info = re.search("t:\s(\d+).*end_time:\s([\.0-9]+).*obj_gap:\s([-e\.0-9]+)"
                                          ".*infeas_gap:\s([-e\.0-9]+).*max_infeas:\s([-e\.0-9]+)"
-                                         ".*callback_val:\s([-e\.0-9]+)", line)
+                                         ".*callback_val:\s(.+)\s", line)
                 if re_iter_info:
                     iteration.append(int(re_iter_info.group(1)))
                     time.append(float(re_iter_info.group(2)) - start_time)
                     objective_gap.append(float(re_iter_info.group(3)))
                     infeasibility_gap.append(float(re_iter_info.group(4)))
                     max_infeasibility.append(float(re_iter_info.group(5)))
-                    callback_val.append(float(re_iter_info.group(6)))
+                    if "None" in re_iter_info.group(6):
+                        callback_val.append(float(-1.0))
+                    else:
+                        callback_val.append(float(re_iter_info.group(6)))
     
     df = pd.DataFrame(
         columns=(
@@ -132,6 +133,7 @@ if __name__ == "__main__":
 
     df_tuples = []
     for fname in tqdm(expt_out_files):
+        print(f"fname: {fname}")
         df_tuples.append(create_df_from_log(fname))
 
     dropped_data_paths = set([x[1] for x in df_tuples if x[0] is None])
@@ -151,3 +153,6 @@ if __name__ == "__main__":
     with open(slim_summary_df_fname, "wb") as f:
         pickle.dump(slim_merged_df, f)
     print("Done.")
+
+    embed()
+    exit()
