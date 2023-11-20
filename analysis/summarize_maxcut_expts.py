@@ -95,12 +95,12 @@ def create_df_from_log(log_fname):
         print(f"Failed: {log_fname}, dataset: {hparam_dict['data_path']}")
         return None, hparam_dict["data_path"]
 
-    log_indices = [j*(2**i) for j in range(2) for i in range(int(math.log2(len(iteration))) + 1)]
-    log_indices = set(log_indices)
-    log_indices = sorted([i for i in log_indices if i < len(iteration)])
-    log_indices.append(len(iteration) - 1)
+    #log_indices = [j*(2**i) for j in range(2) for i in range(int(math.log2(len(iteration))) + 1)]
+    #log_indices = set(log_indices)
+    #log_indices = sorted([i for i in log_indices if i < len(iteration)])
+    #log_indices.append(len(iteration) - 1)
 
-    #log_indices = list(range(len(iteration)))
+    log_indices = list(range(len(iteration)))
 
     time = [t - time[0] + 1.0 for t in time]
     df["time (sec)"] = [time[i] for i in log_indices]

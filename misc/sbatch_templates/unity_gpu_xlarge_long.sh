@@ -10,10 +10,13 @@
 #SBATCH -n 8
 #SBATCH -G 1
 #SBATCH --mem=128G
-#SBATCH --time=48:10:00         
+#SBATCH --time=6-00:10:00         
 
 export PYTHONPATH=$(pwd):$PYTHONPATH
 source ~/.bashrc
 eval "$(conda shell.bash hook)"
 conda activate specbm-gpu
+
+module load cudnn/8.7.0.84-11.8
+
 __cmd_str__
