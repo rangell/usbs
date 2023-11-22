@@ -5,9 +5,9 @@
 #SBATCH -e __out_path__.err
 #SBATCH --partition=longq
 #
-#SBATCH -n 32
+#SBATCH -n 16
 #SBATCH --mem=128G
-#SBATCH --time=49:00:00         
+#SBATCH --time=06-00:10:00         
 
 export PYTHONPATH=$(pwd):$PYTHONPATH
 source ~/.bashrc
