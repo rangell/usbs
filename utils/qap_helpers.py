@@ -182,8 +182,7 @@ def get_all_problem_data(C: BCOO) -> Tuple[BCOO, Array, Array, Array]:
     b = jnp.array([1.0])
     b_ineq_mask = jnp.array([0.0])
 
-    # TODO: change this from "P" to some other variable depending on paper
-    # constraint: diag(Y) = vec(P)
+    # constraint: diag(Y) = vec(B)
     # equivalent to the following:
     #   for j in range(1, n):
     #       _A_indices.append([_i, j, 0])
@@ -203,8 +202,7 @@ def get_all_problem_data(C: BCOO) -> Tuple[BCOO, Array, Array, Array]:
     b = jnp.concatenate([b, jnp.zeros((n-1,))], axis=0)
     b_ineq_mask = jnp.concatenate([b_ineq_mask, jnp.zeros((n-1,))], axis=0)
 
-    # TODO: change this from "P" to some other variable depending on paper
-    # constraint: P1 = 1
+    # constraint: B1 = 1
     # equivalent to the following:
     #   for j1 in range(l):
     #       for j2 in range(l):
@@ -227,8 +225,7 @@ def get_all_problem_data(C: BCOO) -> Tuple[BCOO, Array, Array, Array]:
     b_ineq_mask = jnp.concatenate([b_ineq_mask, jnp.zeros((l,))], axis=0)
 
 
-    ## TODO: change this from "P" to some other variable depending on paper
-    # constraint: 1'P = 1'
+    # constraint: 1'B = 1'
     # equivalent to the following:
     #   for j1 in range(l):
     #       for j2 in range(l):
