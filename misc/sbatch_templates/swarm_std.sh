@@ -6,7 +6,7 @@
 #SBATCH --partition=longq
 #
 #SBATCH -n 16
-#SBATCH --mem=128G
+#SBATCH --mem=24G
 #SBATCH --time=06-00:10:00         
 
 export PYTHONPATH=$(pwd):$PYTHONPATH
