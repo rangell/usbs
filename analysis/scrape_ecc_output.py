@@ -145,25 +145,28 @@ if __name__ == "__main__":
     plt.clf()
     os.system("convert zbmath.png -trim zbmath.png")
 
-    #df = pd.concat([pubmed_df, qian_df, zbmath_df]).reset_index(drop=True)
-    #warm_start_df = df[df["warm-start"] == "True"]
+    df = pd.concat([pubmed_df, qian_df, zbmath_df]).reset_index(drop=True)
+    warm_start_df = df[df["warm-start"] == "True"]
 
-    #g = sns.catplot(
-    #    data=warm_start_df,
-    #    x="solver",
-    #    y="speedup",
-    #    col="dataset",
-    #    kind="bar",
-    #    aspect=0.5,
-    #    capsize=0.1,
-    #    errwidth=3.0)
-    #g.set_axis_labels("", "warm-start solve time \nfold change")
-    #g.set_titles("{col_name}")
-    #plt.yscale("log")
-    #plt.tight_layout()
-    #plt.savefig("warm_start_time_reduction.png")
-    #plt.clf()
-    #os.system("convert warm_start_time_reduction.png -trim warm_start_time_reduction.png")
+    embed()
+    exit()
+
+    g = sns.catplot(
+        data=warm_start_df,
+        x="solver",
+        y="speedup",
+        col="dataset",
+        kind="bar",
+        aspect=0.5,
+        capsize=0.1,
+        errwidth=3.0)
+    g.set_axis_labels("", "warm-start solve time \nfold change")
+    g.set_titles("{col_name}")
+    plt.yscale("log")
+    plt.tight_layout()
+    plt.savefig("warm_start_time_reduction.png")
+    plt.clf()
+    os.system("convert warm_start_time_reduction.png -trim warm_start_time_reduction.png")
 
     embed()
     exit()

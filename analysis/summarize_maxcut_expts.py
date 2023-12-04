@@ -2,7 +2,6 @@ import argparse
 import ast
 from collections import defaultdict
 import glob
-import math
 import pandas as pd
 import pickle
 import re
@@ -141,7 +140,7 @@ if __name__ == "__main__":
 
     merged_df = pd.concat(dfs).reset_index(drop=True)
     slim_merged_df = pd.concat([df.iloc[-1:] for df in dfs]).reset_index(drop=True)
-    
+
     summary_df_fname = f"results/maxcut/{hparams.expt_name}.pkl"
     print(f"Writing summary df: {summary_df_fname}...")
     with open(summary_df_fname, "wb") as f:
@@ -153,6 +152,3 @@ if __name__ == "__main__":
     with open(slim_summary_df_fname, "wb") as f:
         pickle.dump(slim_merged_df, f)
     print("Done.")
-
-    embed()
-    exit()

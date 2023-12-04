@@ -1,9 +1,13 @@
 import argparse
+from collections import defaultdict
+from mat73 import loadmat as mat73_loadmat
 import matplotlib.pyplot as plt
 from matplotlib.ticker import MaxNLocator
 import numpy as np
+import pandas as pd
 import pickle
 import re
+from scipy.io import loadmat  # type: ignore
 import seaborn as sns
 import os
 
@@ -30,15 +34,44 @@ if __name__ == "__main__":
     df["temp"] = df["warm-start"].apply(lambda x: "warm" if x else "cold")
     df["solve_strategy"] = df[["solver", "temp"]].apply(lambda x: "/".join(x.astype(str)), axis=1)
 
-    select_datasets = np.array(sorted([s for s in df["dataset name"].unique().tolist()
-                                       if int(re.sub("[a-z,A-Z]+", "", s)) > 121
-                                       and s not in ["pr124", "si175", "brg180",
-                                                     "bier127", "tho150", "ch130", "u159"]]))
+    subset_df = df
 
-    subset_df = df[df["dataset name"].isin(select_datasets.tolist())]
-    subset_df = subset_df.sort_values(by="dataset name", kind="quicksort")
-    subset_df = subset_df.sort_values(by="solve_strategy", kind="quicksort")
+    num_vertices_dict = defaultdict()
+    nnz_dict = defaultdict()
+    for data_path in subset_df["data_path"].unique():
+        try:
+            problem = loadmat(data_path)
+            dict_format = False
+        except:
+            problem = mat73_loadmat(data_path)
+            dict_format = True
+        if "Gset" in data_path:
+            C = problem["Problem"][0][0][1]
+        elif "DIMACS" in data_path and not dict_format:
+            C = problem["Problem"][0][0][2]
+        elif "DIMACS" in data_path and dict_format:
+            C = problem["Problem"]["A"]
+        else:
+            raise ValueError("Unknown path type")
+        
+        num_vertices_dict[data_path] = C.shape[0]
+        nnz_dict[data_path] = C.nnz
 
+    # sort the df the correct way
+    data_paths = list(subset_df["data_path"].unique())
+    data_paths.sort(key=lambda s: num_vertices_dict[s])
+
+    dfs = []
+    for data_path in data_paths:
+        dfs.append(subset_df[subset_df["data_path"] == data_path].sort_values(
+            by="solve_strategy", kind="quicksort"))
+
+    subset_df = pd.concat(dfs).reset_index(drop=True)
+
+    embed()
+    exit()
+
+    # make the figure
     palette = sns.color_palette()
     ax = sns.barplot(
         data=subset_df,
@@ -57,7 +90,7 @@ if __name__ == "__main__":
         # update the existing legend, use twice the hatching pattern to make it denser
         legend_handle.set_hatch(hatch + hatch)
 
-    plt.xlabel("dataset")
+    plt.xlabel("")
     plt.yscale("log")
     sns.despine()
     ax.set_ylim((0, 16))

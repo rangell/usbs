@@ -2,6 +2,7 @@ import argparse
 import matplotlib.pyplot as plt
 from matplotlib.ticker import MaxNLocator
 import pickle
+import re
 import seaborn as sns
 import os
 
@@ -33,7 +34,10 @@ if __name__ == "__main__":
             for k_past in [k for k in df["k_past"].unique() if k is not None]:
                 dataset_basename = os.path.basename(data_path).split(".")[0]
 
-                if dataset_basename not in ["tai150b", "pr124", "kroA150"]:
+                #if int(re.sub("[^0-9]", "", dataset_basename)) < 100:
+                #    continue
+
+                if dataset_basename not in ["pr144", "pr152", "kroA150", "brg180"]:
                     continue
 
                 cgal_mask = (df["solver"] == "CGAL")
@@ -44,6 +48,9 @@ if __name__ == "__main__":
                 subset_mask = cgal_mask | (k_curr_mask & k_past_mask)
                 subset_mask &= data_path_mask
                 subset_df = df[subset_mask]
+
+                if len(subset_df) == 0:
+                    continue
 
                 #ax = sns.lineplot(
                 #    subset_df,
@@ -95,7 +102,7 @@ if __name__ == "__main__":
                     linewidth=2)
 
                 ax.xaxis.set_major_locator(MaxNLocator(integer=True))
-                if dataset_basename != "pr124":
+                if dataset_basename != "pr144":
                     ax.get_legend().set_visible(False)
                 plt.xscale("log")
                 plt.grid()
@@ -117,7 +124,7 @@ if __name__ == "__main__":
                     linewidth=2)
 
                 ax.xaxis.set_major_locator(MaxNLocator(integer=True))
-                if dataset_basename != "pr124":
+                if dataset_basename != "pr144":
                     ax.get_legend().set_visible(False)
                 plt.xscale("log")
                 plt.grid()
