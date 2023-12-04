@@ -14,6 +14,11 @@ $ pip install equinox numpy scipy scikit-learn numba GitPython IPython mat73
 All of the data can be accessed [here](https://drive.google.com/uc?id=12spD7qZ_6NFVAlTlqxrykGh3VomRHPYy&export=download). The max-cut data was aggregated from [Gset](https://www.cise.ufl.edu/research/sparse/matrices/Gset/) and [DIMACS10](https://www.cise.ufl.edu/research/sparse/matrices/DIMACS10/index.html).
 The QAP data was aggregated from [QAPLIB](https://qaplib.mgi.polymtl.ca/) and [TSPLIB](http://comopt.ifi.uni-heidelberg.de/software/TSPLIB95/tsp/).
 
+From the root of the repo, the following command with extract the data:
+```bash
+$ tar xzvf data.tgz
+```
+
 ### Examples
 
 ### Paper Citation
