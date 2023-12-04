@@ -6,9 +6,9 @@
 #SBATCH --partition=cpu-long
 #
 #SBATCH -N 1
-#SBATCH -n 64
+#SBATCH -n 16
 #SBATCH --mem=128G
-#SBATCH --time=48:10:00         
+#SBATCH --time=06-00:10:00         
 
 export PYTHONPATH=$(pwd):$PYTHONPATH
 source ~/.bashrc
