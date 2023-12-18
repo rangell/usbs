@@ -34,7 +34,7 @@ PYTHONPATH="." python -u scripts/warm_start_maxcut_specbm.py --data_path=data/ma
 
 ### QAP
 ```bash
-PYTHONPATH="." python -u scripts/warm_start_qap_specbm.py --data_path=data/qap/qapdata/chr12a.dat --max_iters=5000 --max_time=360 --trace_factor=2.0 --rho=0.01 --beta=0.25 --k_curr=2 --k_past=0 --obj_gap_eps=1e-07 --infeas_gap_eps=1e-07 --max_infeas_eps=1e-07 --subprob_max_iters=100 --subprob_eps=1e-15 --lanczos_max_restarts=100 --warm_start_strategy="none"
+PYTHONPATH="." python -u scripts/warm_start_qap_specbm.py --data_path=data/qap/qapdata/chr12a.dat --max_iters=5000 --max_time=360 --trace_factor=2.0 --rho=0.005 --beta=0.25 --k_curr=2 --k_past=0 --obj_gap_eps=1e-07 --infeas_gap_eps=1e-07 --max_infeas_eps=1e-07 --subprob_max_iters=100 --subprob_eps=1e-7 --lanczos_max_restarts=10 --warm_start_strategy="none"
 ```
 
 ### Interactive Entity Resolution with $\exists$-constraints
