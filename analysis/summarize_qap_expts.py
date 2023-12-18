@@ -105,11 +105,9 @@ def create_df_from_log(log_fname):
         )
     )
 
-    #log_indices = [j*(2**i) for j in range(10) for i in range(int(math.log2(len(iteration))))]
-    #log_indices = set(log_indices)
-    #log_indices = sorted([i for i in log_indices if i < len(iteration)])
-
-    log_indices = list(range(len(iteration)))
+    log_indices = [j*(2**i) for j in range(10) for i in range(int(math.log2(len(iteration))))]
+    log_indices = set(log_indices)
+    log_indices = sorted([i for i in log_indices if i < len(iteration)])
 
     time = [t - time[0] + 0.1 for t in time]
 
@@ -195,6 +193,3 @@ if __name__ == "__main__":
     with open(slim_summary_df_fname, "wb") as f:
         pickle.dump(slim_merged_df, f)
     print("Done.")
-
-    embed()
-    exit()

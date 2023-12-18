@@ -22,7 +22,7 @@ def get_hparams():
 
 
 if __name__ == "__main__":
-    plt.rcParams.update({"font.size": 18, "figure.figsize": (20, 6)})
+    plt.rcParams.update({"font.size": 18, "figure.figsize": (20, 8)})
 
     hparams = get_hparams()
 
@@ -68,15 +68,12 @@ if __name__ == "__main__":
 
     subset_df = pd.concat(dfs).reset_index(drop=True)
 
-    embed()
-    exit()
-
     # make the figure
     palette = sns.color_palette()
     ax = sns.barplot(
         data=subset_df,
         x="dataset name",
-        y="best relative gap",
+        y="time (sec)",
         hue="solve_strategy",
         palette=[palette[0], palette[0], palette[1], palette[1]],
         width=0.8,
@@ -93,12 +90,13 @@ if __name__ == "__main__":
     plt.xlabel("")
     plt.yscale("log")
     sns.despine()
-    ax.set_ylim((0, 16))
+    ax.set_ylim((1, 5000000))
     ax.legend(loc='upper center', bbox_to_anchor=(0.5, 1.05),
           ncol=4, fancybox=True, shadow=True)
     ax.tick_params(width=2)
+    plt.xticks(rotation=45)
     plt.setp(ax.spines.values(), linewidth=2)
     plt.tight_layout()
-    plt.savefig("qap_bar_chart.png")
+    plt.savefig("maxcut_warm-start_bar_chart.png")
     plt.clf()
-    os.system("convert qap_bar_chart.png -trim qap_bar_chart.png")
+    os.system("convert maxcut_warm-start_bar_chart.png -trim maxcut_warm-start_bar_chart.png")

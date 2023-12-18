@@ -68,7 +68,6 @@ if __name__ == "__main__":
                         plt.xscale("log")
                         plt.yscale("log")
                         plt.grid()
-                        #plt.show()
                         imgname = "time-vs-obj-{}-{}-{}-{}-{}.png".format(
                             dataset_basename, rho_str, k_curr, k_past, warm_start_str)
                         print(f"Saving plot to {imgname}...")
@@ -90,7 +89,6 @@ if __name__ == "__main__":
                         plt.xscale("log")
                         plt.yscale("log")
                         plt.grid()
-                        #plt.show()
                         imgname = "time-vs-infeas-{}-{}-{}-{}-{}.png".format(
                             dataset_basename, rho_str, k_curr, k_past, warm_start_str)
                         print(f"Saving plot to {imgname}...")
@@ -98,24 +96,23 @@ if __name__ == "__main__":
                         plt.clf()
                         os.system(f"convert {imgname} -trim {imgname}")
 
-                        #ax = sns.lineplot(
-                        #    subset_df,
-                        #    x="time (sec)",
-                        #    y="callback value",
-                        #    hue="solver",
-                        #    hue_order=["CGAL", "SpecBM"],
-                        #    style="warm-start",
-                        #    style_order=[False, True],
-                        #    linewidth=2)
+                        ax = sns.lineplot(
+                            subset_df,
+                            x="time (sec)",
+                            y="callback value",
+                            hue="solver",
+                            hue_order=["CGAL", "SpecBM"],
+                            style="warm-start",
+                            style_order=[False, True],
+                            linewidth=2)
 
-                        #ax.get_legend().set_visible(False)
-                        #plt.xscale("log")
-                        #plt.ylabel("weight of cut")
-                        #plt.grid()
-                        ##plt.show()
-                        #imgname = "time-vs-cut-{}-{}-{}-{}-{}.png".format(
-                        #    dataset_basename, rho_str, k_curr, k_past, warm_start_str)
-                        #print(f"Saving plot to {imgname}...")
-                        #plt.savefig(imgname)
-                        #plt.clf()
-                        #os.system(f"convert {imgname} -trim {imgname}")
+                        ax.get_legend().set_visible(False)
+                        plt.xscale("log")
+                        plt.ylabel("weight of cut")
+                        plt.grid()
+                        imgname = "time-vs-cut-{}-{}-{}-{}-{}.png".format(
+                            dataset_basename, rho_str, k_curr, k_past, warm_start_str)
+                        print(f"Saving plot to {imgname}...")
+                        plt.savefig(imgname)
+                        plt.clf()
+                        os.system(f"convert {imgname} -trim {imgname}")
