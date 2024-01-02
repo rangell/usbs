@@ -1,6 +1,10 @@
 # Spectral Bundle Method with Sketching
 
-Code for TODO: link Fast and Scalable Semidefinite Programming with Warm-Starting
+Code for the paper:
+
+> [Fast, Scalable, Warm-Start Semidefinite Programming with Spectral Bundling and Sketching](https://arxiv.org/abs/2312.11801)\
+> Rico Angell and Andrew McCallum\
+> _arXiv:2312.11801_
 
 ## Overview
 
@@ -46,7 +50,14 @@ PYTHONPATH="." python -u scripts/warm_start_ecc.py --seed=0 --debug --output_dir
 
 If you use SpecBM in your work, please cite the following paper:  
 ```bibtex
-TODO: add citation
+@misc{angell2023fast,
+      title={Fast, Scalable, Warm-Start Semidefinite Programming with Spectral Bundling and Sketching}, 
+      author={Rico Angell and Andrew McCallum},
+      year={2023},
+      eprint={2312.11801},
+      archivePrefix={arXiv},
+      primaryClass={math.OC}
+}
 ```
 ## Questions / Feedback
 
