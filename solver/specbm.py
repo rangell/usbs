@@ -105,8 +105,7 @@ def solve_quad_subprob_ipm(
                                       + jnp.dot(svec_I, svec(ipm_state.S))
                                       + ipm_state.eta - 1))
                           / (kappa_1 * kappa_2 + 1)) * svec_I
-        #delta_svec_S = jnp.linalg.solve(coeff_mx, ordinate_vals)
-        delta_svec_S = jnp.linalg.lstsq(coeff_mx, ordinate_vals, rcond=None)[0]
+        delta_svec_S = jnp.linalg.lstsq(coeff_mx, ordinate_vals, rcond=-1)[0]
 
         # substitute back in to get all of the other update directions
         delta_eta = (-jnp.dot(kappa_1 * q_12 + svec_I, delta_svec_S)
@@ -244,8 +243,7 @@ def compute_lb_spec_est_ipm(
             + ipm_state.eta - 1) / (-kappa_1 * ipm_state.zeta / ipm_state.eta - 1) * svec_I
         ordinate_vals += (g_2 - ipm_state.mu / ipm_state.eta) * svec_I - g_1
         ordinate_vals += ipm_state.mu * svec(S_inv)
-        #delta_svec_S = jnp.linalg.solve(coeff_mx, ordinate_vals)
-        delta_svec_S = jnp.linalg.lstsq(coeff_mx, ordinate_vals, rcond=None)[0]
+        delta_svec_S = jnp.linalg.lstsq(coeff_mx, ordinate_vals, rcond=-1)[0]
 
         ## substitute back in to get all of the other update directions
         delta_eta = (jnp.dot(svec_I, delta_svec_S) 
