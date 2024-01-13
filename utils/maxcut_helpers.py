@@ -81,6 +81,11 @@ def initialize_state(C: csc_matrix, sketch_dim: int) -> SDPState:
         SCALE_X=SCALE_X,
         SCALE_A=SCALE_A)
 
+    print("SCALE_C: ", SCALE_C)
+    print("SCALE_X: ", SCALE_X)
+    print("min(SCALE_A): ", jnp.min(SCALE_A))
+    print("max(SCALE_A): ", jnp.max(SCALE_A))
+
     sdp_state = scale_sdp_state(sdp_state)
     return sdp_state
 
