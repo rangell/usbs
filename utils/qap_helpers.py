@@ -453,6 +453,11 @@ def get_implicit_warm_start_state(old_sdp_state: SDPState, C: BCOO, sketch_dim: 
         SCALE_X=SCALE_X,
         SCALE_A=SCALE_A)
 
+    print("SCALE_C: ", SCALE_C)
+    print("SCALE_X: ", SCALE_X)
+    print("min(SCALE_A): ", jnp.min(SCALE_A))
+    print("max(SCALE_A): ", jnp.max(SCALE_A))
+
     sdp_state = scale_sdp_state(sdp_state)
     return sdp_state
 
@@ -528,6 +533,11 @@ def get_explicit_warm_start_state(old_sdp_state: SDPState, C: BCOO, sketch_dim: 
         SCALE_X=SCALE_X,
         SCALE_A=SCALE_A)
 
+    print("SCALE_C: ", SCALE_C)
+    print("SCALE_X: ", SCALE_X)
+    print("min(SCALE_A): ", jnp.min(SCALE_A))
+    print("max(SCALE_A): ", jnp.max(SCALE_A))
+
     sdp_state = scale_sdp_state(sdp_state)
     return sdp_state
 
@@ -596,6 +606,11 @@ def get_dual_only_warm_start_state(old_sdp_state: SDPState, C: BCOO, sketch_dim:
         SCALE_C=SCALE_C,
         SCALE_X=SCALE_X,
         SCALE_A=SCALE_A)
+
+    print("SCALE_C: ", SCALE_C)
+    print("SCALE_X: ", SCALE_X)
+    print("min(SCALE_A): ", jnp.min(SCALE_A))
+    print("max(SCALE_A): ", jnp.max(SCALE_A))
 
     sdp_state = scale_sdp_state(sdp_state)
     return sdp_state
