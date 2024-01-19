@@ -182,7 +182,7 @@ def solve_quad_subprob_ipm(
         i=0, S=S_init, eta=eta_init, T=T_init, zeta=zeta_init, omega=omega_init, mu=mu_init, step_size=1.0)
     
     final_ipm_state = bounded_while_loop(
-        lambda ipm_state: jnp.logical_and(ipm_state.mu.squeeze() > ipm_eps, ipm_state.step_size > ipm_eps),
+        lambda ipm_state: jnp.logical_and(ipm_state.mu.squeeze() > ipm_eps, ipm_state.step_size > ipm_eps**2),
         body_func, 
         init_ipm_state,
         max_steps=ipm_max_iters)
