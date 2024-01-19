@@ -77,7 +77,7 @@ def solve_quad_subprob_ipm(
                + eta_init * zeta_init
                + omega_init * (1 - jnp.dot(svec_I, svec(S_init)) - eta_init)) / (2*k + 4.0)
 
-    IPMState = namedtuple("IPMState", ["i", "S", "eta", "T", "zeta", "omega", "mu"])
+    IPMState = namedtuple("IPMState", ["i", "S", "eta", "T", "zeta", "omega", "mu", "step_size"])
 
     @jax.jit
     def body_func(ipm_state: IPMState) -> IPMState:
@@ -160,7 +160,8 @@ def solve_quad_subprob_ipm(
             T=T_next,
             zeta=zeta_next,
             omega=omega_next,
-            mu=mu_next)
+            mu=mu_next,
+            step_size=step_size)
 
         jax.debug.print(
             "\t i: {i} - S: {S} - eta: {eta} - T:{T} - zeta: {zeta} - omega: {omega} - mu: {mu}"
@@ -178,10 +179,10 @@ def solve_quad_subprob_ipm(
         return next_ipm_state
 
     init_ipm_state = IPMState(
-        i=0, S=S_init, eta=eta_init, T=T_init, zeta=zeta_init, omega=omega_init, mu=mu_init)
+        i=0, S=S_init, eta=eta_init, T=T_init, zeta=zeta_init, omega=omega_init, mu=mu_init, step_size=1.0)
     
     final_ipm_state = bounded_while_loop(
-        lambda ipm_state: ipm_state.mu.squeeze() > ipm_eps,
+        lambda ipm_state: jnp.logical_and(ipm_state.mu.squeeze() > ipm_eps, ipm_state.step_size > ipm_eps),
         body_func, 
         init_ipm_state,
         max_steps=ipm_max_iters)
