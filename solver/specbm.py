@@ -1,3 +1,4 @@
+import cloudpickle
 from collections import namedtuple
 from equinox.internal._loop.bounded import bounded_while_loop # type: ignore
 from functools import partial
@@ -9,7 +10,6 @@ from jax.experimental.sparse import BCOO
 import jax.numpy as jnp
 from jax import lax
 import numpy as np
-import pickle
 import time
 from typing import Callable, Tuple, Union, Any
 
@@ -709,12 +709,12 @@ def specbm(
     final_state = bounded_while_loop(cond_func, body_func, init_state, max_steps=max_iters)
 
     with open("state_dump.pkl", "wb") as f:
-        pickle.dump(dict(final_state), f)
+        cloudpickle.dump(final_state, f)
 
     #with open("state_dump.pkl", "rb") as f:
-    #    init_state = SDPState(pickle.load(f))
+    #    init_state = cloudpickle.load(f)
     
-    state1 = cond_func(init_state)
+    #state1 = body_func(init_state)
 
     embed()
     exit()
