@@ -187,7 +187,7 @@ def _thick_restart_lanczos(
     m = inner_iterations
 
     def cond_fun(state):
-        return state.num_converged < num_desired
+        return state.num_converged < 1
 
     def body_fun(state):
         Q, alpha, beta, restart, k, _ = state
@@ -199,10 +199,9 @@ def _thick_restart_lanczos(
         ritz_values, Y = jnp.linalg.eigh(T)
 
         residual_norm = beta[-1] * abs(Y[-1, :])
-        converged = residual_norm[0] < tolerance
+        converged = residual_norm < tolerance
 
-        jax.debug.print("*************** residual_norm: {residual_norm} ***************",
-                        residual_norm=residual_norm)
+        jax.debug.print("********** residual_norm: {residual_norm} **********", residual_norm=residual_norm)
 
         num_converged = jnp.where(
                 converged.all(), inner_iterations, jnp.argmin(converged))
