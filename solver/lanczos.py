@@ -199,7 +199,7 @@ def _thick_restart_lanczos(
         ritz_values, Y = jnp.linalg.eigh(T)
 
         residual_norm = beta[-1] * abs(Y[-1, :])
-        converged = residual_norm < tolerance
+        converged = residual_norm[0] < tolerance
 
         jax.debug.print("*************** residual_norm: {residual_norm} ***************",
                         residual_norm=residual_norm)
