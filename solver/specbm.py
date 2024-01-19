@@ -153,7 +153,7 @@ def solve_quad_subprob_ipm(
                    + omega_next * (1 - jnp.dot(svec_I, svec(S_next)) - eta_next)) / (2*k + 4.0)
         mu_next *= lax.cond(step_size > 0.2, lambda _: 0.5 - 0.4 * step_size**2, lambda _: 1.0, None)
         mu_next = jnp.clip(mu_next, a_max=ipm_state.mu)
-        return IPMState(
+        next_ipm_state = IPMState(
             i=ipm_state.i+1,
             S=S_next,
             eta=eta_next,
@@ -161,6 +161,17 @@ def solve_quad_subprob_ipm(
             zeta=zeta_next,
             omega=omega_next,
             mu=mu_next)
+
+        jax.debug.print("\t i: {i} - S: {S} - eta: {eta} - T:{T} - zeta: {zeta} - omega: {omega} - mu: {mu}",
+              i=next_ipm_state.i,
+              S=next_ipm_state.S,
+              eta=next_ipm_state.eta,
+              T=next_ipm_state.T,
+              zeta=next_ipm_state.zeta,
+              omega=next_ipm_state.omega,
+              mu=next_ipm_state.mu)
+        
+        return next_ipm_state
 
     init_ipm_state = IPMState(
         i=0, S=S_init, eta=eta_init, T=T_init, zeta=zeta_init, omega=omega_init, mu=mu_init)
