@@ -53,7 +53,10 @@ from solver.utils import apply_A_adjoint_slim
 from IPython import embed
 
 
-def _iterative_classical_gram_schmidt(Q, x):
+_dot = partial(jnp.dot, precision=lax.Precision.HIGHEST)
+
+
+def _iterative_classical_gram_schmidt(Q, x, iterations=2):
     """Orthogonalize x against the columns of Q."""
     # "twice is enough"
     # http://slepc.upv.es/documentation/reports/str1.pdf
@@ -62,33 +65,13 @@ def _iterative_classical_gram_schmidt(Q, x):
     r = 0
 
     # iteration 1
-    h = jnp.dot(Q.T.conj(), q)
-    q = q - jnp.dot(Q, h)
+    h = _dot(Q.T.conj(), q)
+    q = q - _dot(Q, h)
     r = r + h
 
     #iteration 2
-    h = jnp.dot(Q.T.conj(), q)
-    q = q - jnp.dot(Q, h)
-    r = r + h
-
-    #iteration 3
-    h = jnp.dot(Q.T.conj(), q)
-    q = q - jnp.dot(Q, h)
-    r = r + h
-
-    #iteration 3
-    h = jnp.dot(Q.T.conj(), q)
-    q = q - jnp.dot(Q, h)
-    r = r + h
-
-    #iteration 3
-    h = jnp.dot(Q.T.conj(), q)
-    q = q - jnp.dot(Q, h)
-    r = r + h
-
-    #iteration 3
-    h = jnp.dot(Q.T.conj(), q)
-    q = q - jnp.dot(Q, h)
+    h = _dot(Q.T.conj(), q)
+    q = q - _dot(Q, h)
     r = r + h
 
     return r, q
@@ -120,7 +103,7 @@ def _lanczos_restart(n, C, A_data, A_indices, adjoint_left_vec, k, m, Q, alpha, 
         r, q = _iterative_classical_gram_schmidt(Q_valid, q)
         alpha = r[i]
         beta = jnp.linalg.norm(q)
-        # TODO: handle beta=0 by resetting q to a random vector
+        # TODO(shoyer): handle beta=0 by resetting q to a random vector
         q = q / beta
         Q = Q.at[:, i+1].set(q)
         alphas = alphas.at[i].set(alpha)
@@ -156,7 +139,7 @@ def _pick_saved_ritz_values(lambda_, num_converged, num_desired):
         saved: a boolean index marking Ritz values to save.
         gamma: array of gamma values, for debugging.
     """
-    # TODO: verify that these heuristics make sense for other
+    # TODO(shoyer): verify that these heuristics make sense for other
     # applications beyond eletronic structure theory
     m = lambda_.size
     n_eig = num_desired
@@ -197,7 +180,7 @@ def _thick_restart_lanczos(
     m = inner_iterations
 
     def cond_fun(state):
-        return state.num_converged < 1
+        return state.num_converged < num_desired
 
     def body_fun(state):
         Q, alpha, beta, restart, k, _ = state
@@ -210,9 +193,6 @@ def _thick_restart_lanczos(
 
         residual_norm = beta[-1] * abs(Y[-1, :])
         converged = residual_norm < tolerance
-
-        jax.debug.print("********** residual_norm: {residual_norm} **********", residual_norm=residual_norm)
-
         num_converged = jnp.where(
                 converged.all(), inner_iterations, jnp.argmin(converged))
 
@@ -226,7 +206,7 @@ def _thick_restart_lanczos(
         updated = k_next > jnp.arange(m)
         alpha_hat = jnp.where(updated, ritz_values, jnp.zeros_like(alpha))
         beta_hat = jnp.where(updated, beta[-1] * Y[-1, :], jnp.zeros_like(beta))
-        Q_hat = Q.at[:, :-1].set(jnp.where(updated, jnp.dot(Q[:, :-1], Y), Q[:, :-1]))
+        Q_hat = Q.at[:, :-1].set(jnp.where(updated, _dot(Q[:, :-1], Y), Q[:, :-1]))
         Q_hat = Q_hat.at[:, k_next].set(Q[:, -1])
 
         return _ThickRestartState(
@@ -288,4 +268,8 @@ def eigsh_smallest(
         tolerance)
     eigenvalues = state.alpha[:num_desired]
     eigenvectors = state.Q[:, :num_desired]
+
+    jax.debug.print("*************** eigenvalues: {eigenvalues} ***************", eigenvalues=eigenvalues)
+    jax.debug.print("*************** eigenvector_shape: {eigenvector_shape} ***************", eigenvector_shape=eigenvectors.shape)
+
     return eigenvalues, eigenvectors
