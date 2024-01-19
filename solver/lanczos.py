@@ -53,9 +53,6 @@ from solver.utils import apply_A_adjoint_slim
 from IPython import embed
 
 
-_dot = partial(jnp.dot, precision=lax.Precision.HIGHEST)
-
-
 def _iterative_classical_gram_schmidt(Q, x, iterations=2):
     """Orthogonalize x against the columns of Q."""
     # "twice is enough"
@@ -65,13 +62,13 @@ def _iterative_classical_gram_schmidt(Q, x, iterations=2):
     r = 0
 
     # iteration 1
-    h = _dot(Q.T.conj(), q)
-    q = q - _dot(Q, h)
+    h = jnp.dot(Q.T.conj(), q)
+    q = q - jnp.dot(Q, h)
     r = r + h
 
     #iteration 2
-    h = _dot(Q.T.conj(), q)
-    q = q - _dot(Q, h)
+    h = jnp.dot(Q.T.conj(), q)
+    q = q - jnp.dot(Q, h)
     r = r + h
 
     return r, q
@@ -206,7 +203,7 @@ def _thick_restart_lanczos(
         updated = k_next > jnp.arange(m)
         alpha_hat = jnp.where(updated, ritz_values, jnp.zeros_like(alpha))
         beta_hat = jnp.where(updated, beta[-1] * Y[-1, :], jnp.zeros_like(beta))
-        Q_hat = Q.at[:, :-1].set(jnp.where(updated, _dot(Q[:, :-1], Y), Q[:, :-1]))
+        Q_hat = Q.at[:, :-1].set(jnp.where(updated, jnp.dot(Q[:, :-1], Y), Q[:, :-1]))
         Q_hat = Q_hat.at[:, k_next].set(Q[:, -1])
 
         return _ThickRestartState(
