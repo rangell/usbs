@@ -273,6 +273,7 @@ def eigsh_smallest(
     jax.debug.print("*************** eigenvector_shape: {eigenvector_shape} ***************", eigenvector_shape=eigenvectors.shape)
 
     computed_eigenvalues = eigenvectors.T @ C @ eigenvectors + eigenvectors.T @ apply_A_adjoint_batched(n, A_data, A_indices, adjoint_left_vec, eigenvectors)
+    computed_eigenvalues = jnp.diag(computed_eigenvalues)
     jax.debug.print("*************** computed_eigenvalues: {computed_eigenvalues} ***************", computed_eigenvalues=computed_eigenvalues)
 
     return eigenvalues, eigenvectors
