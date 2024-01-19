@@ -71,6 +71,26 @@ def _iterative_classical_gram_schmidt(Q, x):
     q = q - jnp.dot(Q, h)
     r = r + h
 
+    #iteration 3
+    h = jnp.dot(Q.T.conj(), q)
+    q = q - jnp.dot(Q, h)
+    r = r + h
+
+    #iteration 3
+    h = jnp.dot(Q.T.conj(), q)
+    q = q - jnp.dot(Q, h)
+    r = r + h
+
+    #iteration 3
+    h = jnp.dot(Q.T.conj(), q)
+    q = q - jnp.dot(Q, h)
+    r = r + h
+
+    #iteration 3
+    h = jnp.dot(Q.T.conj(), q)
+    q = q - jnp.dot(Q, h)
+    r = r + h
+
     return r, q
 
 
@@ -100,7 +120,7 @@ def _lanczos_restart(n, C, A_data, A_indices, adjoint_left_vec, k, m, Q, alpha, 
         r, q = _iterative_classical_gram_schmidt(Q_valid, q)
         alpha = r[i]
         beta = jnp.linalg.norm(q)
-        # TODO(shoyer): handle beta=0 by resetting q to a random vector
+        # TODO: handle beta=0 by resetting q to a random vector
         q = q / beta
         Q = Q.at[:, i+1].set(q)
         alphas = alphas.at[i].set(alpha)
@@ -136,7 +156,7 @@ def _pick_saved_ritz_values(lambda_, num_converged, num_desired):
         saved: a boolean index marking Ritz values to save.
         gamma: array of gamma values, for debugging.
     """
-    # TODO(shoyer): verify that these heuristics make sense for other
+    # TODO: verify that these heuristics make sense for other
     # applications beyond eletronic structure theory
     m = lambda_.size
     n_eig = num_desired
