@@ -163,18 +163,18 @@ def solve_quad_subprob_ipm(
             mu=mu_next,
             step_size=step_size)
 
-        jax.debug.print(
-            "\t i: {i} - S: {S} - eta: {eta} - T:{T} - zeta: {zeta} - omega: {omega} - mu: {mu}"
-            " - delta_omega: {delta_omega} - step_size: {step_size}",
-            i=next_ipm_state.i,
-            S=next_ipm_state.S,
-            eta=next_ipm_state.eta,
-            T=next_ipm_state.T,
-            zeta=next_ipm_state.zeta,
-            omega=next_ipm_state.omega,
-            mu=next_ipm_state.mu,
-            delta_omega=delta_omega,
-            step_size=step_size)
+        #jax.debug.print(
+        #    "\t i: {i} - S: {S} - eta: {eta} - T:{T} - zeta: {zeta} - omega: {omega} - mu: {mu}"
+        #    " - delta_omega: {delta_omega} - step_size: {step_size}",
+        #    i=next_ipm_state.i,
+        #    S=next_ipm_state.S,
+        #    eta=next_ipm_state.eta,
+        #    T=next_ipm_state.T,
+        #    zeta=next_ipm_state.zeta,
+        #    omega=next_ipm_state.omega,
+        #    mu=next_ipm_state.mu,
+        #    delta_omega=delta_omega,
+        #    step_size=step_size)
         
         return next_ipm_state
 
@@ -507,7 +507,6 @@ def specbm(
         jax.debug.print("start_time: {time}",
                         time=hcb.call(lambda _: time.time(), arg=0, result_shape=float))
 
-        jax.debug.print("----- before -----")
         eta, S, upsilon_next = solve_step_subprob(
                     C=state.C,
                     A_data=state.A_data,
@@ -528,7 +527,6 @@ def specbm(
                     k=k,
                     subprob_eps=subprob_eps,
                     subprob_max_iters=subprob_max_iters)
-        jax.debug.print("----- after -----")
 
         S_eigvals, S_eigvecs = jnp.linalg.eigh(S)
         S_eigvals = jnp.clip(S_eigvals, a_min=0)    # numerical instability handling

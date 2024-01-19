@@ -268,13 +268,4 @@ def eigsh_smallest(
         0.1)
     eigenvalues = state.alpha[:num_desired]
     eigenvectors = state.Q[:, :num_desired]
-
-    jax.debug.print("*************** eigenvalues: {eigenvalues} ***************", eigenvalues=eigenvalues)
-    jax.debug.print("*************** eigenvector_shape: {eigenvector_shape} ***************", eigenvector_shape=eigenvectors.shape)
-
-    computed_eigenvalues = eigenvectors.T @ C @ eigenvectors + eigenvectors.T @ apply_A_adjoint_batched(n, A_data, A_indices, adjoint_left_vec, eigenvectors)
-    computed_eigenvalues = jnp.diag(computed_eigenvalues)
-    jax.debug.print("*************** computed_eigenvalues: {computed_eigenvalues} ***************", computed_eigenvalues=computed_eigenvalues)
-    jax.debug.print("*************** diff: {diff} ***************", diff=computed_eigenvalues - eigenvalues)
-
     return eigenvalues, eigenvectors
