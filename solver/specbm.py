@@ -491,6 +491,7 @@ def specbm(
         jax.debug.print("start_time: {time}",
                         time=hcb.call(lambda _: time.time(), arg=0, result_shape=float))
 
+        jax.debug.print("----- before -----")
         eta, S, upsilon_next = solve_step_subprob(
                     C=state.C,
                     A_data=state.A_data,
@@ -511,6 +512,7 @@ def specbm(
                     k=k,
                     subprob_eps=subprob_eps,
                     subprob_max_iters=subprob_max_iters)
+        jax.debug.print("----- after -----")
 
         S_eigvals, S_eigvecs = jnp.linalg.eigh(S)
         S_eigvals = jnp.clip(S_eigvals, a_min=0)    # numerical instability handling
@@ -714,7 +716,9 @@ def specbm(
     with open("state_dump.pkl", "rb") as f:
         init_state = cloudpickle.load(f)
     
-    state1 = body_func(init_state)
+    state = body_func(init_state)
+    state = body_func(state)
+    
 
     embed()
     exit()
