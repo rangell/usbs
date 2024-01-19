@@ -71,16 +71,6 @@ def _iterative_classical_gram_schmidt(Q, x):
     q = q - jnp.dot(Q, h)
     r = r + h
 
-    #iteration 3
-    h = jnp.dot(Q.T.conj(), q)
-    q = q - jnp.dot(Q, h)
-    r = r + h
-
-    #iteration 4
-    h = jnp.dot(Q.T.conj(), q)
-    q = q - jnp.dot(Q, h)
-    r = r + h
-
     return r, q
 
 
