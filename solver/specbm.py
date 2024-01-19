@@ -162,14 +162,18 @@ def solve_quad_subprob_ipm(
             omega=omega_next,
             mu=mu_next)
 
-        jax.debug.print("\t i: {i} - S: {S} - eta: {eta} - T:{T} - zeta: {zeta} - omega: {omega} - mu: {mu}",
-              i=next_ipm_state.i,
-              S=next_ipm_state.S,
-              eta=next_ipm_state.eta,
-              T=next_ipm_state.T,
-              zeta=next_ipm_state.zeta,
-              omega=next_ipm_state.omega,
-              mu=next_ipm_state.mu)
+        jax.debug.print(
+            "\t i: {i} - S: {S} - eta: {eta} - T:{T} - zeta: {zeta} - omega: {omega} - mu: {mu}"
+            " - delta_omega: {delta_omega} - step_size: {step_size}",
+            i=next_ipm_state.i,
+            S=next_ipm_state.S,
+            eta=next_ipm_state.eta,
+            T=next_ipm_state.T,
+            zeta=next_ipm_state.zeta,
+            omega=next_ipm_state.omega,
+            mu=next_ipm_state.mu,
+            delta_omega=delta_omega,
+            step_size=step_size)
         
         return next_ipm_state
 
