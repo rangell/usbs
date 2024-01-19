@@ -265,7 +265,7 @@ def eigsh_smallest(
         num_desired,
         inner_iterations,
         max_restarts,
-        0.1)
+        0.00001)
     eigenvalues = state.alpha[:num_desired]
     eigenvectors = state.Q[:, :num_desired]
     return eigenvalues, eigenvectors
