@@ -330,7 +330,7 @@ def compute_lb_spec_est_ipm(
     return lb_spec_est.squeeze()
 
 
-@partial(jax.jit, static_argnames=["n", "m", "k", "subprob_eps", "subprob_max_iters"])
+#@partial(jax.jit, static_argnames=["n", "m", "k", "subprob_eps", "subprob_max_iters"])
 def solve_step_subprob(
     C: BCOO,
     A_data: Array,
@@ -709,7 +709,12 @@ def specbm(
     final_state = bounded_while_loop(cond_func, body_func, init_state, max_steps=max_iters)
 
     with open("state_dump.pkl", "wb") as f:
-        pickle.dump(final_state, f)
+        pickle.dump(dict(final_state), f)
+
+    #with open("state_dump.pkl", "rb") as f:
+    #    init_state = SDPState(pickle.load(f))
+    
+    state1 = cond_func(init_state)
 
     embed()
     exit()
