@@ -201,7 +201,7 @@ def _thick_restart_lanczos(
         residual_norm = beta[-1] * abs(Y[-1, :])
         converged = residual_norm < tolerance
 
-        jax.print.debug("*************** residual_norm: {residual_norm} ***************",
+        jax.debug.print("*************** residual_norm: {residual_norm} ***************",
                         residual_norm=residual_norm)
 
         num_converged = jnp.where(
