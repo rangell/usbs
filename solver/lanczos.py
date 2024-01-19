@@ -48,7 +48,7 @@ import jax
 from jax import lax
 import jax.numpy as jnp
 
-from solver.utils import apply_A_adjoint_slim
+from solver.utils import apply_A_adjoint_slim, apply_A_adjoint_batched
 
 from IPython import embed
 
@@ -271,5 +271,8 @@ def eigsh_smallest(
 
     jax.debug.print("*************** eigenvalues: {eigenvalues} ***************", eigenvalues=eigenvalues)
     jax.debug.print("*************** eigenvector_shape: {eigenvector_shape} ***************", eigenvector_shape=eigenvectors.shape)
+
+    computed_eigenvalues = eigenvectors.T @ C @ eigenvectors + eigenvectors.T @ apply_A_adjoint_batched(n, A_data, A_indices, adjoint_left_vec, eigenvectors)
+    jax.debug.print("*************** computed_eigenvalues: {computed_eigenvalues} ***************", computed_eigenvalues=computed_eigenvalues)
 
     return eigenvalues, eigenvectors
