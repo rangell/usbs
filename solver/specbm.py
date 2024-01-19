@@ -9,6 +9,7 @@ from jax.experimental.sparse import BCOO
 import jax.numpy as jnp
 from jax import lax
 import numpy as np
+import pickle
 import time
 from typing import Callable, Tuple, Union, Any
 
@@ -706,6 +707,12 @@ def specbm(
         obj_ub=jnp.inf)
 
     final_state = bounded_while_loop(cond_func, body_func, init_state, max_steps=max_iters)
+
+    with open("state_dump.pkl", "wb") as f:
+        pickle.dump(final_state, f)
+
+    embed()
+    exit()
 
     return SDPState(
         C=sdp_state.C,
