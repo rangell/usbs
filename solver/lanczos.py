@@ -180,12 +180,12 @@ def _thick_restart_lanczos(
     m = inner_iterations
 
     def cond_fun(state):
-        jax.debug.print("**** cond restart: {restart} ****", restart=state.restart)
+        #jax.debug.print("**** cond restart: {restart} ****", restart=state.restart)
         return state.num_converged < num_desired
 
     def body_fun(state):
         Q, alpha, beta, restart, k, _ = state
-        jax.debug.print("**** body restart: {restart} ****", restart=state.restart)
+        #jax.debug.print("**** body restart: {restart} ****", restart=state.restart)
 
         Q, alpha, beta = _lanczos_restart(
             n, C, A_data, A_indices, adjoint_left_vec, k, m, Q, alpha, beta)
