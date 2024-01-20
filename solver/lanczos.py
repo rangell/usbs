@@ -180,6 +180,7 @@ def _thick_restart_lanczos(
     m = inner_iterations
 
     def cond_fun(state):
+        jax.debug.print("**** restart: {restart} ****", state.restart)
         return state.num_converged < num_desired
 
     def body_fun(state):
