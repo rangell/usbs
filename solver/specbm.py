@@ -188,6 +188,8 @@ def solve_quad_subprob_ipm(
         init_ipm_state,
         max_steps=ipm_max_iters)
 
+    jax.debug.print("*** ipm_iters: {ipm_iters} ****", ipm_iters=final_ipm_state.i)
+
     return ((trace_ub / tr_X_bar) * final_ipm_state.eta.squeeze(),
             trace_ub * final_ipm_state.S)
 
