@@ -407,7 +407,6 @@ def solve_step_subprob(
         upsilon_gap = jnp.max(jnp.abs(state.upsilon - upsilon_next))
         _subprob_state = SubprobStateStruct(
             i=state.i + 1, eta=eta_next, S=S_next, upsilon=upsilon_next, upsilon_gap=upsilon_gap)
-        jax.debug.print("**** alternating max step: {i} ****", i=state.i)
         return _subprob_state
 
     
