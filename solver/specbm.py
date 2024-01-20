@@ -106,7 +106,6 @@ def solve_quad_subprob_ipm(
                                       + jnp.dot(svec_I, svec(ipm_state.S))
                                       + ipm_state.eta - 1))
                           / (kappa_1 * kappa_2 + 1)) * svec_I
-        #delta_svec_S = jnp.linalg.lstsq(coeff_mx, ordinate_vals, rcond=None)[0]
         delta_svec_S = jnp.linalg.solve(coeff_mx, ordinate_vals)
 
         # substitute back in to get all of the other update directions
@@ -164,19 +163,6 @@ def solve_quad_subprob_ipm(
             mu=mu_next,
             step_size=step_size)
 
-        #jax.debug.print(
-        #    "\t i: {i} - S: {S} - eta: {eta} - T:{T} - zeta: {zeta} - omega: {omega} - mu: {mu}"
-        #    " - delta_omega: {delta_omega} - step_size: {step_size}",
-        #    i=next_ipm_state.i,
-        #    S=next_ipm_state.S,
-        #    eta=next_ipm_state.eta,
-        #    T=next_ipm_state.T,
-        #    zeta=next_ipm_state.zeta,
-        #    omega=next_ipm_state.omega,
-        #    mu=next_ipm_state.mu,
-        #    delta_omega=delta_omega,
-        #    step_size=step_size)
-        
         return next_ipm_state
 
     init_ipm_state = IPMState(
@@ -263,7 +249,6 @@ def compute_lb_spec_est_ipm(
             + ipm_state.eta - 1) / (-kappa_1 * ipm_state.zeta / ipm_state.eta - 1) * svec_I
         ordinate_vals += (g_2 - ipm_state.mu / ipm_state.eta) * svec_I - g_1
         ordinate_vals += ipm_state.mu * svec(S_inv)
-        #delta_svec_S = jnp.linalg.lstsq(coeff_mx, ordinate_vals, rcond=None)[0]
         delta_svec_S = jnp.linalg.solve(coeff_mx, ordinate_vals)
 
         ## substitute back in to get all of the other update directions
