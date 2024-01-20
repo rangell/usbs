@@ -723,10 +723,10 @@ def specbm(
         lb_spec_est=jnp.array(0.0),
         obj_ub=jnp.inf)
 
-    #final_state = bounded_while_loop(cond_func, body_func, init_state, max_steps=max_iters)
+    final_state = bounded_while_loop(cond_func, body_func, init_state, max_steps=max_iters)
 
-    #with open("state_dump.pkl", "wb") as f:
-    #    cloudpickle.dump(final_state, f)
+    with open("state_dump.pkl", "wb") as f:
+        cloudpickle.dump(final_state, f)
 
     with open("state_dump.pkl", "rb") as f:
         init_state = cloudpickle.load(f)
