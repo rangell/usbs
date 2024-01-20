@@ -136,12 +136,12 @@ def solve_quad_subprob_ipm(
             lambda step_size: jnp.linalg.eigh(ipm_state.S + step_size * delta_S)[0][0] < 0.0,
             lambda step_size: step_size * 0.8, 
             step_size,
-            max_steps=100)
+            max_steps=ipm_max_iters)
         step_size = bounded_while_loop(
             lambda step_size: jnp.linalg.eigh(ipm_state.T + step_size * delta_T)[0][0] < 0.0,
             lambda step_size: step_size * 0.8, 
             step_size,
-            max_steps=100)
+            max_steps=ipm_max_iters)
 
         S_next = ipm_state.S + step_size * delta_S
         eta_next = ipm_state.eta + step_size * delta_eta
@@ -291,13 +291,13 @@ def compute_lb_spec_est_ipm(
             lambda step_size: jnp.linalg.eigh(ipm_state.S + step_size * delta_S)[0][0] < 0.0,
             lambda step_size: step_size * 0.8, 
             step_size,
-            max_steps=100)
+            max_steps=ipm_max_iters)
 
         step_size = bounded_while_loop(
             lambda step_size: jnp.linalg.eigh(ipm_state.T + step_size * delta_T)[0][0] < 0.0,
             lambda step_size: step_size * 0.8, 
             step_size,
-            max_steps=100)
+            max_steps=ipm_max_iters)
 
         S_next = ipm_state.S + step_size * delta_S
         eta_next = ipm_state.eta + step_size * delta_eta
