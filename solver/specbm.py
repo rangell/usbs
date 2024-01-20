@@ -188,7 +188,7 @@ def solve_quad_subprob_ipm(
         init_ipm_state,
         max_steps=ipm_max_iters)
 
-    jax.debug.print("*** ipm_iters: {ipm_iters} ****", ipm_iters=final_ipm_state.i)
+    jax.debug.print("*** quad_ipm_iters: {ipm_iters} ****", ipm_iters=final_ipm_state.i)
 
     return ((trace_ub / tr_X_bar) * final_ipm_state.eta.squeeze(),
             trace_ub * final_ipm_state.S)
@@ -344,6 +344,8 @@ def compute_lb_spec_est_ipm(
         body_func, 
         init_ipm_state,
         max_steps=ipm_max_iters)
+
+    jax.debug.print("*** lb_spec_ipm_iters: {ipm_iters} ****", ipm_iters=final_ipm_state.i)
 
     lb_spec_est = (jnp.dot(b, y) - jnp.dot(g_1, svec(final_ipm_state.S))
                    - final_ipm_state.eta.squeeze() * g_2)
