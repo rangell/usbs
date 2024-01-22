@@ -174,8 +174,6 @@ def solve_quad_subprob_ipm(
         init_ipm_state,
         max_steps=ipm_max_iters)
 
-    jax.debug.print("*** quad_ipm_iters: {ipm_iters} ****", ipm_iters=final_ipm_state.i)
-
     return ((trace_ub / tr_X_bar) * final_ipm_state.eta.squeeze(),
             trace_ub * final_ipm_state.S)
 
@@ -329,8 +327,6 @@ def compute_lb_spec_est_ipm(
         body_func, 
         init_ipm_state,
         max_steps=ipm_max_iters)
-
-    jax.debug.print("*** lb_spec_ipm_iters: {ipm_iters} ****", ipm_iters=final_ipm_state.i)
 
     lb_spec_est = (jnp.dot(b, y) - jnp.dot(g_1, svec(final_ipm_state.S))
                    - final_ipm_state.eta.squeeze() * g_2)
@@ -714,34 +710,6 @@ def specbm(
         obj_ub=jnp.inf)
 
     final_state = bounded_while_loop(cond_func, body_func, init_state, max_steps=max_iters)
-
-    with open("state_dump.pkl", "wb") as f:
-        cloudpickle.dump(final_state, f)
-
-    with open("state_dump.pkl", "rb") as f:
-        init_state = cloudpickle.load(f)
-
-    q0 = jax.random.normal(jax.random.PRNGKey(0), shape=(n,))
-    q0 /= jnp.linalg.norm(q0)
-    init_eigvals, init_eigvecs = eigsh_smallest(
-        n=n,
-        C=-init_state.C,
-        A_data=init_state.A_data,
-        A_indices=init_state.A_indices,
-        adjoint_left_vec=init_state.y,
-        q0=q0,
-        num_desired=k,
-        inner_iterations=lanczos_inner_iterations,
-        max_restarts=lanczos_max_restarts,
-        tolerance=subprob_eps)
-    init_eigvals = -init_eigvals
-    
-    #state = body_func(init_state)
-    #state = body_func(state)
-    
-
-    embed()
-    exit()
 
     return SDPState(
         C=sdp_state.C,
