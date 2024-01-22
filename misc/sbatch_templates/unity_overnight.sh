@@ -13,5 +13,5 @@
 export PYTHONPATH=$(pwd):$PYTHONPATH
 source ~/.bashrc
 eval "$(conda shell.bash hook)"
-conda activate specbm
+conda activate specbm-gpu
 __cmd_str__
