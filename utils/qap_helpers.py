@@ -332,7 +332,7 @@ def initialize_state(C: BCOO, sketch_dim: int) -> SDPState:
     A_matrix = SCALE_A[:, None] * A_tensor.reshape(m, n**2)
     A_matrix = coo_matrix(
         (A_matrix.data, (A_matrix.indices[:,0], A_matrix.indices[:,1])), shape=A_matrix.shape)
-    norm_A = jnp.sqrt(eigsh(A_matrix @ A_matrix.T, k=1, which="LM", return_eigenvectors=False)[0])
+    norm_A = jnp.sqrt(eigsh(A_matrix @ A_matrix.T, k=1, which="LM", return_eigenvectors=False, maxiter=np.iinfo(np.int32).max)[0])
     SCALE_A /= norm_A
 
     if sketch_dim == -1:
@@ -433,7 +433,8 @@ def get_implicit_warm_start_state(old_sdp_state: SDPState, C: BCOO, sketch_dim: 
     A_matrix = SCALE_A[:, None] * A_tensor.reshape(m, n**2)
     A_matrix = coo_matrix(
         (A_matrix.data, (A_matrix.indices[:,0], A_matrix.indices[:,1])), shape=A_matrix.shape)
-    norm_A = jnp.sqrt(eigsh(A_matrix @ A_matrix.T, k=1, which="LM", return_eigenvectors=False)[0])
+    maxiter = np.iinfo(np.int32).max + 1
+    norm_A = jnp.sqrt(eigsh(A_matrix @ A_matrix.T, k=1, which="LM", return_eigenvectors=False, maxiter=np.iinfo(np.int32).max)[0])
     SCALE_A /= norm_A
 
     sdp_state = SDPState(
@@ -513,7 +514,7 @@ def get_explicit_warm_start_state(old_sdp_state: SDPState, C: BCOO, sketch_dim: 
     A_matrix = SCALE_A[:, None] * A_tensor.reshape(m, n**2)
     A_matrix = coo_matrix(
         (A_matrix.data, (A_matrix.indices[:,0], A_matrix.indices[:,1])), shape=A_matrix.shape)
-    norm_A = jnp.sqrt(eigsh(A_matrix @ A_matrix.T, k=1, which="LM", return_eigenvectors=False)[0])
+    norm_A = jnp.sqrt(eigsh(A_matrix @ A_matrix.T, k=1, which="LM", return_eigenvectors=False, maxiter=np.iinfo(np.int32).max)[0])
     SCALE_A /= norm_A
 
     sdp_state = SDPState(
@@ -571,7 +572,7 @@ def get_dual_only_warm_start_state(old_sdp_state: SDPState, C: BCOO, sketch_dim:
     A_matrix = SCALE_A[:, None] * A_tensor.reshape(m, n**2)
     A_matrix = coo_matrix(
         (A_matrix.data, (A_matrix.indices[:,0], A_matrix.indices[:,1])), shape=A_matrix.shape)
-    norm_A = jnp.sqrt(eigsh(A_matrix @ A_matrix.T, k=1, which="LM", return_eigenvectors=False)[0])
+    norm_A = jnp.sqrt(eigsh(A_matrix @ A_matrix.T, k=1, which="LM", return_eigenvectors=False, maxiter=np.iinfo(np.int32).max)[0])
     SCALE_A /= norm_A
 
     if sketch_dim == -1:
