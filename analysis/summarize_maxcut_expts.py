@@ -78,7 +78,7 @@ def create_df_from_log(log_fname):
                         callback_val.append(float(-1.0))
                     else:
                         callback_val.append(float(re_iter_info.group(6)))
-    
+
     df = pd.DataFrame(
         columns=(
             *hparam_names,
@@ -95,10 +95,12 @@ def create_df_from_log(log_fname):
         print(f"Failed: {log_fname}, dataset: {hparam_dict['data_path']}")
         return None, hparam_dict["data_path"]
 
-    log_indices = [j*(2**i) for j in range(3) for i in range(int(math.log2(len(iteration))) + 1)]
+    log_indices = [j*(2**i) for j in range(5) for i in range(int(math.log2(len(iteration))) + 1)]
     log_indices = set(log_indices)
     log_indices = sorted([i for i in log_indices if i < len(iteration)])
     log_indices.append(len(iteration) - 1)
+
+    #log_indices = list(range(len(time)))
 
     time = [t - time[0] + 1.0 for t in time]
     df["time (sec)"] = [time[i] for i in log_indices]
@@ -132,13 +134,17 @@ if __name__ == "__main__":
     df_tuples = []
     for fname in tqdm(expt_out_files):
         print(f"fname: {fname}")
-        df_tuples.append(create_df_from_log(fname))
+        _df, _dataset = create_df_from_log(fname)
+        df_tuples.append((_df, fname))
 
     dropped_data_paths = set([x[1] for x in df_tuples if x[0] is None])
     dfs = [x[0] for x in df_tuples if x[1] not in dropped_data_paths]
 
     merged_df = pd.concat(dfs).reset_index(drop=True)
     slim_merged_df = pd.concat([df.iloc[-1:] for df in dfs]).reset_index(drop=True)
+
+    merged_df = merged_df[merged_df["subprob_eps"] == 1e-15]
+    slim_merged_df = slim_merged_df[slim_merged_df["subprob_eps"] == 1e-15]
 
     summary_df_fname = f"results/maxcut/{hparams.expt_name}.pkl"
     print(f"Writing summary df: {summary_df_fname}...")
@@ -151,3 +157,6 @@ if __name__ == "__main__":
     with open(slim_summary_df_fname, "wb") as f:
         pickle.dump(slim_merged_df, f)
     print("Done.")
+
+    embed()
+    exit()

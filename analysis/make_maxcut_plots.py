@@ -60,6 +60,7 @@ if __name__ == "__main__":
                             hue_order=["CGAL", "SpecBM"],
                             style="warm-start",
                             style_order=[False, True],
+                            palette="colorblind",
                             linewidth=2)
 
                         rho_str = str(rho).replace(".", "_")
@@ -83,6 +84,7 @@ if __name__ == "__main__":
                             hue_order=["CGAL", "SpecBM"],
                             style="warm-start",
                             style_order=[False, True],
+                            palette="colorblind",
                             linewidth=2)
 
                         ax.get_legend().set_visible(False)
@@ -104,6 +106,7 @@ if __name__ == "__main__":
                             hue_order=["CGAL", "SpecBM"],
                             style="warm-start",
                             style_order=[False, True],
+                            palette="colorblind",
                             linewidth=2)
 
                         ax.get_legend().set_visible(False)
