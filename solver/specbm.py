@@ -1,4 +1,3 @@
-import cloudpickle
 from collections import namedtuple
 from equinox.internal._loop.bounded import bounded_while_loop # type: ignore
 from functools import partial
