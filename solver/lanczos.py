@@ -56,7 +56,7 @@ from IPython import embed
 _dot = partial(jnp.dot, precision=lax.Precision.HIGHEST)
 
 
-def _iterative_classical_gram_schmidt(Q, x, iterations=2):
+def _iterative_classical_gram_schmidt(Q, x):
     """Orthogonalize x against the columns of Q."""
     # "twice is enough"
     # http://slepc.upv.es/documentation/reports/str1.pdf
@@ -103,8 +103,18 @@ def _lanczos_restart(n, C, A_data, A_indices, adjoint_left_vec, k, m, Q, alpha, 
         r, q = _iterative_classical_gram_schmidt(Q_valid, q)
         alpha = r[i]
         beta = jnp.linalg.norm(q)
-        # TODO(shoyer): handle beta=0 by resetting q to a random vector
-        q = q / beta
+
+        # handle the case where a Krylov subspace has been found
+        def _gen_random_ortho_vec():
+            _, _q = _iterative_classical_gram_schmidt(
+                Q_valid, jax.random.normal(jax.random.PRNGKey(i+1), shape=(n,)))
+            return _q / jnp.linalg.norm(_q)
+        q = lax.cond(
+            beta < 1e-15,
+            lambda _: _gen_random_ortho_vec(),
+            lambda _: q / beta,
+            None)
+
         Q = Q.at[:, i+1].set(q)
         alphas = alphas.at[i].set(alpha)
         betas = betas.at[i].set(beta)
@@ -223,7 +233,7 @@ def _thick_restart_lanczos(
         max_steps=max_restarts)
 
 
-@partial(jax.jit, static_argnames=["n", "num_desired", "inner_iterations", "max_restarts", "tolerance"])
+#@partial(jax.jit, static_argnames=["n", "num_desired", "inner_iterations", "max_restarts", "tolerance"])
 def eigsh_smallest(
     n,
     C,
@@ -268,4 +278,5 @@ def eigsh_smallest(
         tolerance)
     eigenvalues = state.alpha[:num_desired]
     eigenvectors = state.Q[:, :num_desired]
+
     return eigenvalues, eigenvectors
