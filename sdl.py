@@ -6,10 +6,12 @@ import jax.numpy as jnp
 import json
 import numpy as np
 import pickle
+from scipy.sparse import coo_matrix
+from scipy.sparse.linalg import eigsh
 import sys
 
 from solver.specbm import specbm
-from utils.common import SDPState
+from utils.common import SDPState, scale_sdp_state
 
 from IPython import embed
 
@@ -91,11 +93,25 @@ if __name__ == "__main__":
     actv = activations[0]
 
     # the only variables that change in every iteration are `A_data` and `b`
+    A_data=jnp.array(dictionary.reshape(-1,))
+
+    n = C.shape[0]
+    m = activation_dim
+    SCALE_X = 1.0
+    SCALE_C = 1.0
+    SCALE_A = 1.0 / jnp.sqrt(jnp.zeros((m,)).at[A_indices[:,0]].add(A_data**2))
+    A_tensor = BCOO((A_data, A_indices), shape=(m, n, n))
+    A_matrix = SCALE_A[:, None] * A_tensor.reshape(m, n**2)
+    A_matrix = coo_matrix(
+        (A_matrix.data, (A_matrix.indices[:,0], A_matrix.indices[:,1])), shape=A_matrix.shape)
+    maxiter = np.iinfo(np.int32).max + 1
+    norm_A = jnp.sqrt(eigsh(A_matrix @ A_matrix.T, k=1, which="LM", return_eigenvectors=False, maxiter=np.iinfo(np.int32).max)[0])
+    SCALE_A /= norm_A
 
     sdp_state = SDPState(
         C=C,
         A_indices=A_indices,
-        A_data=jnp.array(dictionary.reshape(-1,)),
+        A_data=A_data,
         b=jnp.array(actv),
         b_ineq_mask=jnp.zeros((activation_dim,)),
         X=None,
@@ -105,9 +121,12 @@ if __name__ == "__main__":
         z=jnp.zeros((activation_dim,)),
         tr_X=0.0,
         primal_obj=0.0,
-        SCALE_C=1.0,
-        SCALE_X=1.0,
-        SCALE_A=jnp.ones((activation_dim,)))
+        SCALE_C=SCALE_C,
+        SCALE_X=SCALE_X,
+        SCALE_A=SCALE_A)
+
+    # scale the state
+    sdp_state = scale_sdp_state(sdp_state)
 
     trace_ub = hparams.trace_factor * float(sdp_state.C.shape[0]) * sdp_state.SCALE_X
 
