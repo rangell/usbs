@@ -518,7 +518,10 @@ def specbm(
         S_eigvals = jnp.clip(S_eigvals, a_min=0)    # numerical instability handling
         VSV_T_factor = (state.V @ S_eigvecs) * jnp.sqrt(S_eigvals).reshape(1, -1)
         A_operator_VSV_T = apply_A_operator_batched(m, state.A_data, state.A_indices, VSV_T_factor)
-        if state.Omega is None:
+        if state.Omega is None and state.X is None:
+            X_next = None
+            P_next = eta * state.P_bar + jnp.sum(VSV_T_factor * VSV_T_factor, axis=1)
+        elif state.X_bar is not None:
             X_next = eta * state.X_bar + state.V @ S @ state.V.T
             P_next = None
         else:
@@ -572,7 +575,10 @@ def specbm(
             None)
 
         curr_VSV_T_factor = (state.V @ S_eigvecs[:, :k_curr]) * jnp.sqrt(S_eigvals[:k_curr]).reshape(1, -1)
-        if state.Omega is None:
+        if state.Omega is None and state.X is None:
+            X_bar_next = None
+            P_bar_next = eta * state.P_bar + jnp.sum(curr_VSV_T_factor * curr_VSV_T_factor, axis=1)
+        elif state.X_bar is not None:
             X_bar_next = eta * state.X_bar + curr_VSV_T_factor @ curr_VSV_T_factor.T
             P_bar_next = None
         else:
