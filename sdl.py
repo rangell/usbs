@@ -66,7 +66,7 @@ if __name__ == "__main__":
     activations = np.concatenate(activation_batches, axis=0)
 
     activation_dim = activations.shape[1]
-    dict_size = 64 * activation_dim
+    dict_size = 8 * activation_dim
 
     dictionary = jax.random.normal(jax.random.PRNGKey(seed), shape=(activation_dim, dict_size))
     dictionary /= jnp.linalg.norm(dictionary, axis=0, keepdims=True)
