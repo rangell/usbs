@@ -8,6 +8,7 @@ import numpy as np
 import pickle
 from scipy.sparse import coo_matrix
 from scipy.sparse.linalg import eigsh
+from sklearn.linear_model import LassoLars
 import sys
 
 from solver.specbm import specbm
@@ -68,11 +69,17 @@ if __name__ == "__main__":
     activations = np.concatenate(activation_batches, axis=0)
 
     activation_dim = activations.shape[1]
-    dict_size = 8 * activation_dim
+    dict_size = 64 * activation_dim
 
-    dictionary = jax.random.normal(jax.random.PRNGKey(seed), shape=(activation_dim, dict_size))
+    #dictionary = jax.random.normal(jax.random.PRNGKey(seed), shape=(activation_dim, dict_size))
+
+    dictionary = activations[:dict_size,:].T
     dictionary /= jnp.linalg.norm(dictionary, axis=0, keepdims=True)
 
+    # TEST
+    dictionary = dictionary.at[:,1].set(dictionary[:,0])
+    dictionary = dictionary.at[256:, 0].set(0)
+    dictionary = dictionary.at[:256, 1].set(0)
 
     #### START: constant throughout optimization ####
 
@@ -91,6 +98,14 @@ if __name__ == "__main__":
     #### START: dynamic throughout optimization ####
 
     actv = activations[0]
+
+    # LARS-Lasso
+    #  model = LassoLars(alpha=0.001)
+    #  model.fit(dictionary, actv)
+    #  model.coef_
+    
+
+    # IDEA: should we learn this with CVXPY as well? Will this be slower?
 
     # the only variables that change in every iteration are `A_data` and `b`
     A_data=jnp.array(dictionary.reshape(-1,))
