@@ -1,4 +1,4 @@
-# Spectral Bundle Method with Sketching
+# Unified Spectral Bundling with Sketching
 
 Code for the paper:
 
@@ -8,7 +8,7 @@ Code for the paper:
 
 ## Overview
 
-SpecBM is an optimization algorithm for solving large semidefinite programs.
+USBS is an optimization algorithm for solving large semidefinite programs.
 
 ## Setting up
 This repo requires Python 3.9+. To install Python dependencies, the first package that needs to be installed is [JAX](https://github.com/google/jax) 0.4.13+. Follow the instructions [here](https://jax.readthedocs.io/en/latest/installation.html) to install the version of JAX needed for the desired hardware (CPU/GPU/TPU).
@@ -48,7 +48,7 @@ PYTHONPATH="." python -u scripts/warm_start_ecc.py --seed=0 --debug --output_dir
 
 ## Citing
 
-If you use SpecBM in your work, please cite the following paper:  
+If you use USBS in your work, please cite the following paper:  
 ```bibtex
 @misc{angell2023fast,
       title={Fast, Scalable, Warm-Start Semidefinite Programming with Spectral Bundling and Sketching}, 
@@ -65,4 +65,4 @@ If you have any questions, comments, or feedback on our work, please reach out a
 [rangell@cs.umass.edu](mailto:rangell@cs.umass.edu)! (or open a GitHub issue)
 
 ## Licence
-SpecBM is MIT licensed. See the [LICENSE](LICENSE) file for details.
+USBS is MIT licensed. See the [LICENSE](LICENSE) file for details.
