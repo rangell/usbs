@@ -77,7 +77,7 @@ def cgal(
     @jax.jit
     def body_func(state: StateStruct) -> StateStruct:
         jax.debug.print("start_time: {time}",
-                        time=hcb.call(lambda _: time.time(), arg=0, result_shape=float))
+                        time=jax.pure_callback(lambda : time.time(), result_shape_dtypes=jnp.array(0.0)))
         beta = beta0 * jnp.sqrt(state.t + 1)
 
         proj_b = (1 - state.b_ineq_mask) * state.b
@@ -160,7 +160,7 @@ def cgal(
         else:
             callback_val = None
 
-        end_time = hcb.call(lambda _: time.time(), arg=0, result_shape=float)
+        end_time = jax.pure_callback(lambda : time.time(), result_shape_dtypes=jnp.array(0.0))
         jax.debug.print("t: {t} - end_time: {end_time} - primal_obj: {primal_obj} - obj_gap: {obj_gap}"
                         " - infeas_gap: {infeas_gap} - max_infeas: {max_infeas}"
                         " - callback_val: {callback_val}",

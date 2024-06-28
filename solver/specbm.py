@@ -491,7 +491,7 @@ def specbm(
     def body_func(state: StateStruct) -> StateStruct:
 
         jax.debug.print("start_time: {time}",
-                        time=hcb.call(lambda _: time.time(), arg=0, result_shape=float))
+                        time=jax.pure_callback(lambda : time.time(), result_shape_dtypes=jnp.array(0.0)))
 
         eta, S, upsilon_next = solve_step_subprob(
                     C=state.C,
@@ -610,7 +610,7 @@ def specbm(
         else:
             callback_val = None
 
-        end_time = hcb.call(lambda _: time.time(), arg=0, result_shape=float)
+        end_time = jax.pure_callback(lambda : time.time(), result_shape_dtypes=jnp.array(0.0))
         jax.debug.print("t: {t} - end_time: {end_time} - pen_dual_obj: {pen_dual_obj}"
                         " - cand_pen_dual_obj: {cand_pen_dual_obj} - lb_spec_est: {lb_spec_est}"
                         " - pen_dual_obj_next: {pen_dual_obj_next} - primal_obj: {primal_obj}"
