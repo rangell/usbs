@@ -18,6 +18,23 @@ import jax
 import jax.numpy as jnp
 
 
+def _while_loop_scan_select(cond_fun, body_fun, init_val, max_iter):
+  """Scan-based implementation (jit ok, reverse-mode autodiff ok)."""
+  def _iter(val):
+    next_val = body_fun(val)
+    next_cond = cond_fun(next_val)
+    return next_val, next_cond
+
+  def _fun(tup, it):
+    val, cond = tup
+    next_val, next_cond = _iter(val)
+    next_val = jax.tree.map(lambda t, f: jax.lax.select(cond, t, f), next_val, val)
+    return (next_val, next_cond), it
+
+  init = (init_val, cond_fun(init_val))
+  return jax.lax.scan(_fun, init, None, length=max_iter)[0][0]
+
+
 def _while_loop_scan(cond_fun, body_fun, init_val, max_iter):
   """Scan-based implementation (jit ok, reverse-mode autodiff ok)."""
   def _iter(val):
@@ -27,8 +44,8 @@ def _while_loop_scan(cond_fun, body_fun, init_val, max_iter):
 
   def _fun(tup, it):
     val, cond = tup
-    # When cond is met, we start doing no-ops.
-    return jax.lax.cond(cond, _iter, lambda x: (x, False), val), it
+    next_val, next_cond = jax.lax.cond(cond, _iter, lambda x: (x, False), val)
+    return (next_val, next_cond), it
 
   init = (init_val, cond_fun(init_val))
   return jax.lax.scan(_fun, init, None, length=max_iter)[0][0]
@@ -60,12 +77,15 @@ def _while_loop_lax(cond_fun, body_fun, init_val, maxiter):
   return jax.lax.while_loop(_cond_fun, _body_fun, (0, init_val))[1]
 
 
-def while_loop(cond_fun, body_fun, init_val, maxiter, unroll=False, jit=False):
+def while_loop(cond_fun, body_fun, init_val, maxiter, unroll=False, jit=False, select=False):
   """A while loop with a bounded number of iterations."""
 
   if unroll:
     if jit:
-      fun = _while_loop_scan
+      if select:
+        fun = _while_loop_scan_select
+      else:
+        fun = _while_loop_scan
     else:
       fun = _while_loop_python
   else:

@@ -43,12 +43,13 @@ Future improvements:
 
 from collections import namedtuple
 from functools import partial
-from equinox.internal._loop.bounded import bounded_while_loop # type: ignore
+#from equinox.internal._loop.bounded import bounded_while_loop # type: ignore
 import jax
 from jax import lax
 import jax.numpy as jnp
 
 from solver.utils import apply_A_adjoint_slim, apply_A_adjoint_batched
+from utils.loop import while_loop
 
 from IPython import embed
 
@@ -120,6 +121,7 @@ def _lanczos_restart(n, C, A_data, A_indices, adjoint_left_vec, k, m, Q, alpha, 
         betas = betas.at[i].set(beta)
         return (Q, alphas, betas)
 
+    # TODO(rangell): convert this to a scan
     (Q, alpha, beta) = lax.fori_loop(k, m, body_fun, (Q, alpha, beta))
     return Q, alpha, beta
 
@@ -199,7 +201,8 @@ def _thick_restart_lanczos(
             n, C, A_data, A_indices, adjoint_left_vec, k, m, Q, alpha, beta)
 
         T = _build_arrowhead_matrix(alpha, beta, k)
-        ritz_values, Y = jnp.linalg.eigh(T)
+        ritz_values, Y = jax.jit(jnp.linalg.eigh, backend="cpu")(T)
+        #ritz_values, Y = jnp.linalg.eigh(T)
 
         residual_norm = beta[-1] * abs(Y[-1, :])
         converged = residual_norm < tolerance
@@ -226,11 +229,18 @@ def _thick_restart_lanczos(
     alpha = jnp.zeros(m)
     beta = jnp.zeros(m)
 
-    return bounded_while_loop(
+    #return bounded_while_loop(
+    #    cond_fun,
+    #    body_fun,
+    #    _ThickRestartState(Q, alpha, beta, 0, 0, 0),
+    #    max_steps=max_restarts)
+    return while_loop(
         cond_fun,
         body_fun,
         _ThickRestartState(Q, alpha, beta, 0, 0, 0),
-        max_steps=max_restarts)
+        max_restarts,
+        unroll=True,
+        jit=True)
 
 
 #@partial(jax.jit, static_argnames=["n", "num_desired", "inner_iterations", "max_restarts", "tolerance"])
