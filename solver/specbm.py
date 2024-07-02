@@ -1,5 +1,4 @@
 from collections import namedtuple
-#from equinox.internal._loop.bounded import bounded_while_loop # type: ignore
 from functools import partial
 import jax
 from jax._src.abstract_arrays import ShapedArray
@@ -51,7 +50,6 @@ def solve_quad_subprob_ipm(
     svec_inv = lambda vec: (U.T @ vec).reshape(k, k)
 
     # create problem constants
-    #tr_X_bar = lax.cond(tr_X_bar > 0.0, lambda _: tr_X_bar, lambda _: trace_ub, None)
     tr_X_bar = lax.select(tr_X_bar > 0.0, tr_X_bar, trace_ub)
     Q_11 = (trace_ub**2 / rho) * create_Q_base(m, k, U, A_data, A_indices, V)
     q_12 = (trace_ub**2 / (rho * tr_X_bar)) * svec(
@@ -90,7 +88,7 @@ def solve_quad_subprob_ipm(
         F_2 += -ipm_state.zeta + ipm_state.omega
 
         # create and solve linear system for S update direction
-        S_inv = jax.jit(jnp.linalg.inv, backend="cpu")(ipm_state.S)
+        S_inv = jnp.linalg.inv(ipm_state.S)
         T_sym_kron_S_inv = 0.5 * U @ (jnp.kron(ipm_state.T, S_inv)
                                       + jnp.kron(S_inv, ipm_state.T)) @ U.T
         coeff_mx = Q_11 + T_sym_kron_S_inv
@@ -107,7 +105,7 @@ def solve_quad_subprob_ipm(
                                       + jnp.dot(svec_I, svec(ipm_state.S))
                                       + ipm_state.eta - 1))
                           / (kappa_1 * kappa_2 + 1)) * svec_I
-        delta_svec_S = jax.jit(jnp.linalg.solve, backend="cpu")(coeff_mx, ordinate_vals)
+        delta_svec_S = jnp.linalg.solve(coeff_mx, ordinate_vals)
 
         # substitute back in to get all of the other update directions
         delta_eta = (-jnp.dot(kappa_1 * q_12 + svec_I, delta_svec_S)
@@ -131,34 +129,29 @@ def solve_quad_subprob_ipm(
         step_size_denoms = jnp.concatenate([delta_eta, delta_zeta, delta_omega])
 
         step_size = jnp.clip(-1.0 / jnp.min(step_size_denoms / step_size_numers), a_max=1.0)
-        #step_size = 0.99 * lax.cond(step_size <= 0.0, lambda _: 1.0, lambda _: step_size, None)
         step_size = 0.99 * lax.select(step_size <= 0.0, 1.0, step_size)
-        #step_size = bounded_while_loop(
-        #    lambda step_size: jnp.linalg.eigh(ipm_state.S + step_size * delta_S)[0][0] < 0.0,
-        #    lambda step_size: step_size * 0.8, 
-        #    step_size,
-        #    max_steps=ipm_max_iters)
-        step_size = while_loop(
-            lambda step_size: jax.jit(jnp.linalg.eigh, backend="cpu")(ipm_state.S + step_size * delta_S)[0][0] < 0.0,
-            lambda step_size: step_size * 0.8, 
+        step_size = lax.select(
+            jnp.linalg.eigh(delta_S)[0][0] >= 0,
             step_size,
-            ipm_max_iters,
-            unroll=True,
-            jit=True,
-            select=False)
-        #step_size = bounded_while_loop(
-        #    lambda step_size: jnp.linalg.eigh(ipm_state.T + step_size * delta_T)[0][0] < 0.0,
-        #    lambda step_size: step_size * 0.8, 
-        #    step_size,
-        #    max_steps=ipm_max_iters)
-        step_size = while_loop(
-            lambda step_size: jax.jit(jnp.linalg.eigh, backend="cpu")(ipm_state.T + step_size * delta_T)[0][0] < 0.0,
-            lambda step_size: step_size * 0.8, 
+            while_loop(
+                lambda step_size: jnp.linalg.eigh(ipm_state.S + step_size * delta_S)[0][0] < 0.0,
+                lambda step_size: step_size * 0.8, 
+                step_size,
+                ipm_max_iters,
+                unroll=True,
+                jit=True,
+                select=False))
+        step_size = lax.select(
+            jnp.linalg.eigh(delta_T)[0][0] >= 0,
             step_size,
-            ipm_max_iters,
-            unroll=True,
-            jit=True,
-            select=False)
+            while_loop(
+                lambda step_size: jnp.linalg.eigh(ipm_state.T + step_size * delta_T)[0][0] < 0.0,
+                lambda step_size: step_size * 0.8, 
+                step_size,
+                ipm_max_iters,
+                unroll=True,
+                jit=True,
+                select=False))
 
         S_next = ipm_state.S + step_size * delta_S
         eta_next = ipm_state.eta + step_size * delta_eta
@@ -169,7 +162,6 @@ def solve_quad_subprob_ipm(
         mu_next = (jnp.dot(svec(S_next), svec(T_next))
                    + eta_next * zeta_next
                    + omega_next * (1 - jnp.dot(svec_I, svec(S_next)) - eta_next)) / (2*k + 4.0)
-        #mu_next *= lax.cond(step_size > 0.2, lambda _: 0.5 - 0.4 * step_size**2, lambda _: 1.0, None)
         mu_next *= lax.select(step_size > 0.2, 0.5 - 0.4 * step_size**2, 1.0)
         mu_next = jnp.clip(mu_next, a_max=ipm_state.mu)
         next_ipm_state = IPMState(
@@ -187,11 +179,6 @@ def solve_quad_subprob_ipm(
     init_ipm_state = IPMState(
         i=0, S=S_init, eta=eta_init, T=T_init, zeta=zeta_init, omega=omega_init, mu=mu_init, step_size=1.0)
     
-    #final_ipm_state = bounded_while_loop(
-    #    lambda ipm_state: jnp.logical_and(ipm_state.mu.squeeze() > ipm_eps, ipm_state.step_size > ipm_eps**2),
-    #    body_func, 
-    #    init_ipm_state,
-    #    max_steps=ipm_max_iters)
     final_ipm_state = while_loop(
         lambda ipm_state: jnp.logical_and(ipm_state.mu.squeeze() > ipm_eps, ipm_state.step_size > ipm_eps**2),
         body_func, 
@@ -228,7 +215,6 @@ def compute_lb_spec_est_ipm(
     svec_inv = lambda vec: (U.T @ vec).reshape(k, k)
 
     # create problem constants
-    #tr_X_bar = lax.cond(tr_X_bar > 0.0, lambda _: tr_X_bar, lambda _: trace_ub, None)
     tr_X_bar = lax.select(tr_X_bar > 0.0, tr_X_bar, trace_ub)
     g_1 = trace_ub * svec(V.T @ apply_A_adjoint_batched(n, A_data, A_indices, y, V)
                           - V.T @ (C @ V))
@@ -237,11 +223,6 @@ def compute_lb_spec_est_ipm(
 
     # initialize all Lagrangian variables
     S_init = 0.99 * (jnp.eye(k) / (k + 1.0))
-    #eta_init = lax.cond(
-    #    bar_primal_obj == 0.0,
-    #    lambda _: jnp.asarray([0.00001]),
-    #    lambda _: jnp.asarray([0.99 * (1.0 / (k + 1.0))]),
-    #    None)
     eta_init = lax.select(bar_primal_obj == 0.0, jnp.asarray([0.00001]), jnp.asarray([0.99 * (1.0 / (k + 1.0))]))
 
     T_init = svec_inv(g_1)
@@ -263,7 +244,7 @@ def compute_lb_spec_est_ipm(
         kappa_1 = (1 - jnp.dot(svec_I, svec(ipm_state.S)) - ipm_state.eta) / ipm_state.omega
 
         # create and solve linear system for S update direction
-        S_inv = jax.jit(jnp.linalg.inv, backend="cpu")(ipm_state.S)
+        S_inv = jnp.linalg.inv(ipm_state.S)
         T_sym_kron_S_inv = 0.5 * U @ (jnp.kron(ipm_state.T, S_inv)
                                       + jnp.kron(S_inv, ipm_state.T)) @ U.T
         coeff_mx = T_sym_kron_S_inv
@@ -276,7 +257,7 @@ def compute_lb_spec_est_ipm(
             + ipm_state.eta - 1) / (-kappa_1 * ipm_state.zeta / ipm_state.eta - 1) * svec_I
         ordinate_vals += (g_2 - ipm_state.mu / ipm_state.eta) * svec_I - g_1
         ordinate_vals += ipm_state.mu * svec(S_inv)
-        delta_svec_S = jax.jit(jnp.linalg.solve, backend="cpu")(coeff_mx, ordinate_vals)
+        delta_svec_S = jnp.linalg.solve(coeff_mx, ordinate_vals)
 
         ## substitute back in to get all of the other update directions
         delta_eta = (jnp.dot(svec_I, delta_svec_S) 
@@ -297,36 +278,29 @@ def compute_lb_spec_est_ipm(
         step_size_denoms = jnp.concatenate([delta_eta, delta_zeta, delta_omega])
 
         step_size = jnp.clip(-1.0 / jnp.min(step_size_denoms / step_size_numers), a_max=1.0)
-        #step_size = 0.99 * lax.cond(step_size <= 0.0, lambda _: 1.0, lambda _: step_size, None)
         step_size = 0.99 * lax.select(step_size <= 0.0, 1.0, step_size)
-
-        #step_size = bounded_while_loop(
-        #    lambda step_size: jnp.linalg.eigh(ipm_state.S + step_size * delta_S)[0][0] < 0.0,
-        #    lambda step_size: step_size * 0.8, 
-        #    step_size,
-        #    max_steps=ipm_max_iters)
-        step_size = while_loop(
-            lambda step_size: jax.jit(jnp.linalg.eigh, backend="cpu")(ipm_state.S + step_size * delta_S)[0][0] < 0.0,
-            lambda step_size: step_size * 0.8, 
+        step_size = lax.select(
+            jnp.linalg.eigh(delta_S)[0][0] >= 0,
             step_size,
-            ipm_max_iters,
-            unroll=True,
-            jit=True,
-            select=False)
-
-        #step_size = bounded_while_loop(
-        #    lambda step_size: jnp.linalg.eigh(ipm_state.T + step_size * delta_T)[0][0] < 0.0,
-        #    lambda step_size: step_size * 0.8, 
-        #    step_size,
-        #    max_steps=ipm_max_iters)
-        step_size = while_loop(
-            lambda step_size: jax.jit(jnp.linalg.eigh, backend="cpu")(ipm_state.T + step_size * delta_T)[0][0] < 0.0,
-            lambda step_size: step_size * 0.8, 
+            while_loop(
+                lambda step_size: jnp.linalg.eigh(ipm_state.S + step_size * delta_S)[0][0] < 0.0,
+                lambda step_size: step_size * 0.8, 
+                step_size,
+                ipm_max_iters,
+                unroll=True,
+                jit=True,
+                select=False))
+        step_size = lax.select(
+            jnp.linalg.eigh(delta_T)[0][0] >= 0,
             step_size,
-            ipm_max_iters,
-            unroll=True,
-            jit=True,
-            select=False)
+            while_loop(
+                lambda step_size: jnp.linalg.eigh(ipm_state.T + step_size * delta_T)[0][0] < 0.0,
+                lambda step_size: step_size * 0.8, 
+                step_size,
+                ipm_max_iters,
+                unroll=True,
+                jit=True,
+                select=False))
 
         S_next = ipm_state.S + step_size * delta_S
         eta_next = ipm_state.eta + step_size * delta_eta
@@ -337,7 +311,6 @@ def compute_lb_spec_est_ipm(
         mu_next = (jnp.dot(svec(S_next), svec(T_next))
                    + eta_next * zeta_next
                    + omega_next * (1 - jnp.dot(svec_I, svec(S_next)) - eta_next)) / (2*k + 4.0)
-        #mu_next *= lax.cond(step_size > 0.2, lambda _: 0.5 - 0.4 * step_size**2, lambda _: 1.0, None)
         mu_next *= lax.select(step_size > 0.2, 0.5 - 0.4 * step_size**2, 1.0)
         mu_next = jnp.clip(mu_next, a_max=ipm_state.mu)
 
@@ -369,11 +342,6 @@ def compute_lb_spec_est_ipm(
         mu=mu_init,
         obj_gap=1.0)
 
-    #final_ipm_state = bounded_while_loop(
-    #    lambda ipm_state: ipm_state.mu.squeeze() > ipm_eps,
-    #    body_func, 
-    #    init_ipm_state,
-    #    max_steps=ipm_max_iters)
     final_ipm_state = while_loop(
         lambda ipm_state: ipm_state.mu.squeeze() > ipm_eps,
         body_func, 
@@ -438,7 +406,7 @@ def solve_step_subprob(
             S_init=state.S,
             ipm_eps=subprob_eps,
             ipm_max_iters=subprob_max_iters)
-        S_eigvals, S_eigvecs = jax.jit(jnp.linalg.eigh, backend="cpu")(S_next)
+        S_eigvals, S_eigvecs = jnp.linalg.eigh(S_next)
         S_eigvals = jnp.clip(S_eigvals, a_min=0)    # numerical instability handling
         VSV_T_factor = (V @ S_eigvecs) * jnp.sqrt(S_eigvals).reshape(1, -1)
         A_operator_VSV_T = apply_A_operator_batched(m, A_data, A_indices, VSV_T_factor)
@@ -450,14 +418,8 @@ def solve_step_subprob(
         return _subprob_state
 
     
-    #tr_X_bar = lax.cond(tr_X_bar > 0.0, lambda _: tr_X_bar, lambda _: trace_ub, None)
     tr_X_bar = lax.select(tr_X_bar > 0.0, tr_X_bar, trace_ub)
     S_init = 0.99 * (jnp.eye(k) / (k + 1.0))
-    #eta_init = lax.cond(
-    #    bar_primal_obj == 0.0,
-    #    lambda _: jnp.asarray([0.00001]),
-    #    lambda _: jnp.asarray([0.99 * (1.0 / (k + 1.0))]),
-    #    None)
     eta_init = lax.select(bar_primal_obj == 0.0, jnp.asarray([0.00001]), jnp.asarray([0.99 * (1.0 / (k + 1.0))]))
 
     eta_init = (trace_ub / tr_X_bar) * eta_init.squeeze()
@@ -465,7 +427,6 @@ def solve_step_subprob(
 
     init_state = SubprobStateStruct(
         i=0, eta=eta_init, S=S_init, upsilon=upsilon, upsilon_gap=jnp.array(1.0))
-    #final_state = bounded_while_loop(cond_func, body_func, init_state, max_steps=subprob_max_iters)
     final_state = while_loop(cond_func, body_func, init_state, subprob_max_iters, unroll=True, jit=True)
     return final_state.eta, final_state.S, final_state.upsilon
 
@@ -573,8 +534,8 @@ def specbm(
                     subprob_eps=subprob_eps,
                     subprob_max_iters=subprob_max_iters)
 
-        S_eigvals, S_eigvecs = jax.jit(jnp.linalg.eigh, backend="cpu")(S)
-        S_eigvals = jnp.clip(S_eigvals, a_min=0)    # numerical instability handling
+        S_eigvals, S_eigvecs = jnp.linalg.eigh(S)
+        #S_eigvals = jnp.clip(S_eigvals, a_min=0)    # numerical instability handling
         VSV_T_factor = (state.V @ S_eigvecs) * jnp.sqrt(S_eigvals).reshape(1, -1)
         A_operator_VSV_T = apply_A_operator_batched(m, state.A_data, state.A_indices, VSV_T_factor)
         if state.Omega is None and state.X is None:
@@ -627,11 +588,6 @@ def specbm(
             ipm_eps=subprob_eps,
             ipm_max_iters=subprob_max_iters)
 
-        #y_next, pen_dual_obj_next = lax.cond(
-        #    beta * (state.pen_dual_obj - lb_spec_est) <= state.pen_dual_obj - cand_pen_dual_obj,
-        #    lambda _: (y_cand, cand_pen_dual_obj),
-        #    lambda _: (state.y, state.pen_dual_obj),
-        #    None)
         descent_step_cond = beta * (state.pen_dual_obj - lb_spec_est) <= state.pen_dual_obj - cand_pen_dual_obj
         y_next = lax.select(descent_step_cond, y_cand, state.y)
         pen_dual_obj_next = lax.select(descent_step_cond, cand_pen_dual_obj, state.pen_dual_obj)
@@ -776,7 +732,6 @@ def specbm(
         lb_spec_est=jnp.array(0.0),
         obj_ub=jnp.inf)
 
-    #final_state = bounded_while_loop(cond_func, body_func, init_state, max_steps=max_iters)
     final_state = while_loop(cond_func, body_func, init_state, max_iters, unroll=True, jit=True, select=True)
 
     return SDPState(

@@ -1,5 +1,5 @@
 from collections import namedtuple
-from equinox.internal._loop.bounded import bounded_while_loop # type: ignore
+#from equinox.internal._loop.bounded import bounded_while_loop # type: ignore
 from functools import partial
 import jax
 import jax.experimental.host_callback as hcb
@@ -13,6 +13,7 @@ from typing import Any, Callable, Tuple, Union
 from solver.lanczos import eigsh_smallest
 from solver.utils import apply_A_operator_slim, apply_A_adjoint_slim
 from utils.common import SDPState
+from utils.loop import while_loop
 
 from IPython import embed
 
@@ -215,7 +216,7 @@ def cgal(
         max_infeas=1.1*max_infeas_eps,
         primal_obj=sdp_state.primal_obj)
 
-    final_state = bounded_while_loop(cond_func, body_func, init_state, max_steps=max_iters)
+    final_state = while_loop(cond_func, body_func, init_state, max_iters, jit=True, unroll=True)
 
     return SDPState(
         C=sdp_state.C,

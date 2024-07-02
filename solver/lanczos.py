@@ -201,8 +201,7 @@ def _thick_restart_lanczos(
             n, C, A_data, A_indices, adjoint_left_vec, k, m, Q, alpha, beta)
 
         T = _build_arrowhead_matrix(alpha, beta, k)
-        ritz_values, Y = jax.jit(jnp.linalg.eigh, backend="cpu")(T)
-        #ritz_values, Y = jnp.linalg.eigh(T)
+        ritz_values, Y = jnp.linalg.eigh(T)
 
         residual_norm = beta[-1] * abs(Y[-1, :])
         converged = residual_norm < tolerance
@@ -240,7 +239,8 @@ def _thick_restart_lanczos(
         _ThickRestartState(Q, alpha, beta, 0, 0, 0),
         max_restarts,
         unroll=True,
-        jit=True)
+        jit=True,
+        select=False)
 
 
 #@partial(jax.jit, static_argnames=["n", "num_desired", "inner_iterations", "max_restarts", "tolerance"])
