@@ -44,8 +44,10 @@ def initialize_state(C: csc_matrix, sketch_dim: int) -> SDPState:
     A_data, A_indices, b, b_ineq_mask = get_all_problem_data(C)
     m = b.shape[0]
 
-    SCALE_X = 1.0 / float(n)
-    SCALE_C = 1.0 / jnp.linalg.norm(C.data)  # equivalent to Frobenius norm
+    #SCALE_X = 1.0 / float(n)
+    #SCALE_C = 1.0 / jnp.linalg.norm(C.data)  # equivalent to Frobenius norm
+    SCALE_X = 1.0
+    SCALE_C = 1.0
     SCALE_A = jnp.ones_like(b)
 
     if sketch_dim == -1:

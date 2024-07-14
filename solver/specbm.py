@@ -130,28 +130,24 @@ def solve_quad_subprob_ipm(
 
         step_size = jnp.clip(-1.0 / jnp.min(step_size_denoms / step_size_numers), a_max=1.0)
         step_size = 0.99 * lax.select(step_size <= 0.0, 1.0, step_size)
-        step_size = lax.select(
-            jnp.linalg.eigh(delta_S)[0][0] >= 0,
+
+        step_size = while_loop(
+            lambda step_size: jnp.linalg.eigvalsh(ipm_state.S + step_size * delta_S)[0] < 0.0,
+            lambda step_size: step_size * 0.9, 
             step_size,
-            while_loop(
-                lambda step_size: jnp.linalg.eigh(ipm_state.S + step_size * delta_S)[0][0] < 0.0,
-                lambda step_size: step_size * 0.8, 
-                step_size,
-                ipm_max_iters,
-                unroll=True,
-                jit=True,
-                select=False))
-        step_size = lax.select(
-            jnp.linalg.eigh(delta_T)[0][0] >= 0,
+            10,
+            unroll=True,
+            jit=True,
+            select=False)
+
+        step_size = while_loop(
+            lambda step_size: jnp.linalg.eigvalsh(ipm_state.T + step_size * delta_T)[0] < 0.0,
+            lambda step_size: step_size * 0.9, 
             step_size,
-            while_loop(
-                lambda step_size: jnp.linalg.eigh(ipm_state.T + step_size * delta_T)[0][0] < 0.0,
-                lambda step_size: step_size * 0.8, 
-                step_size,
-                ipm_max_iters,
-                unroll=True,
-                jit=True,
-                select=False))
+            10,
+            unroll=True,
+            jit=True,
+            select=False)
 
         S_next = ipm_state.S + step_size * delta_S
         eta_next = ipm_state.eta + step_size * delta_eta
@@ -279,28 +275,24 @@ def compute_lb_spec_est_ipm(
 
         step_size = jnp.clip(-1.0 / jnp.min(step_size_denoms / step_size_numers), a_max=1.0)
         step_size = 0.99 * lax.select(step_size <= 0.0, 1.0, step_size)
-        step_size = lax.select(
-            jnp.linalg.eigh(delta_S)[0][0] >= 0,
+
+        step_size = while_loop(
+            lambda step_size: jnp.linalg.eigvalsh(ipm_state.S + step_size * delta_S)[0] < 0.0,
+            lambda step_size: step_size * 0.9, 
             step_size,
-            while_loop(
-                lambda step_size: jnp.linalg.eigh(ipm_state.S + step_size * delta_S)[0][0] < 0.0,
-                lambda step_size: step_size * 0.8, 
-                step_size,
-                ipm_max_iters,
-                unroll=True,
-                jit=True,
-                select=False))
-        step_size = lax.select(
-            jnp.linalg.eigh(delta_T)[0][0] >= 0,
+            10,
+            unroll=True,
+            jit=True,
+            select=False)
+
+        step_size = while_loop(
+            lambda step_size: jnp.linalg.eigvalsh(ipm_state.T + step_size * delta_T)[0] < 0.0,
+            lambda step_size: step_size * 0.9, 
             step_size,
-            while_loop(
-                lambda step_size: jnp.linalg.eigh(ipm_state.T + step_size * delta_T)[0][0] < 0.0,
-                lambda step_size: step_size * 0.8, 
-                step_size,
-                ipm_max_iters,
-                unroll=True,
-                jit=True,
-                select=False))
+            10,
+            unroll=True,
+            jit=True,
+            select=False)
 
         S_next = ipm_state.S + step_size * delta_S
         eta_next = ipm_state.eta + step_size * delta_eta
@@ -417,7 +409,6 @@ def solve_step_subprob(
             i=state.i + 1, eta=eta_next, S=S_next, upsilon=upsilon_next, upsilon_gap=upsilon_gap)
         return _subprob_state
 
-    
     tr_X_bar = lax.select(tr_X_bar > 0.0, tr_X_bar, trace_ub)
     S_init = 0.99 * (jnp.eye(k) / (k + 1.0))
     eta_init = lax.select(bar_primal_obj == 0.0, jnp.asarray([0.00001]), jnp.asarray([0.99 * (1.0 / (k + 1.0))]))
@@ -511,7 +502,7 @@ def specbm(
     def body_func(state: StateStruct) -> StateStruct:
 
         jax.debug.print("start_time: {time}",
-                        time=jax.pure_callback(lambda : time.time(), result_shape_dtypes=jnp.array(0.0)))
+                        time=jax.experimental.io_callback(lambda : time.time(), result_shape_dtypes=jnp.array(0.0)))
 
         eta, S, upsilon_next = solve_step_subprob(
                     C=state.C,
@@ -534,8 +525,8 @@ def specbm(
                     subprob_eps=subprob_eps,
                     subprob_max_iters=subprob_max_iters)
 
-        S_eigvals, S_eigvecs = jnp.linalg.eigh(S)
-        #S_eigvals = jnp.clip(S_eigvals, a_min=0)    # numerical instability handling
+        S_eigvals, S_eigvecs = jnp.linalg.eigh(S)#
+        S_eigvals = jnp.clip(S_eigvals, a_min=0)    # numerical instability handling
         VSV_T_factor = (state.V @ S_eigvecs) * jnp.sqrt(S_eigvals).reshape(1, -1)
         A_operator_VSV_T = apply_A_operator_batched(m, state.A_data, state.A_indices, VSV_T_factor)
         if state.Omega is None and state.X is None:
@@ -628,7 +619,7 @@ def specbm(
         else:
             callback_val = None
 
-        end_time = jax.pure_callback(lambda : time.time(), result_shape_dtypes=jnp.array(0.0))
+        end_time = jax.experimental.io_callback(lambda : time.time(), result_shape_dtypes=jnp.array(0.0))
         jax.debug.print("t: {t} - end_time: {end_time} - pen_dual_obj: {pen_dual_obj}"
                         " - cand_pen_dual_obj: {cand_pen_dual_obj} - lb_spec_est: {lb_spec_est}"
                         " - pen_dual_obj_next: {pen_dual_obj_next} - primal_obj: {primal_obj}"
@@ -732,7 +723,7 @@ def specbm(
         lb_spec_est=jnp.array(0.0),
         obj_ub=jnp.inf)
 
-    final_state = while_loop(cond_func, body_func, init_state, max_iters, unroll=True, jit=True, select=True)
+    final_state = while_loop(cond_func, body_func, init_state, max_iters, unroll=True, jit=True)
 
     return SDPState(
         C=sdp_state.C,

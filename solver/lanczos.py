@@ -78,7 +78,7 @@ def _iterative_classical_gram_schmidt(Q, x):
     return r, q
 
 
-def _lanczos_restart(n, C, A_data, A_indices, adjoint_left_vec, k, m, Q, alpha, beta):
+def _lanczos_restart(n, C, A_data, A_indices, adjoint_left_vec, k, m, Q, alpha, beta, tolerance):
     """The inner loop of the restarted Lanzcos method."""
 
     def body_fun(i, carray):
@@ -110,8 +110,9 @@ def _lanczos_restart(n, C, A_data, A_indices, adjoint_left_vec, k, m, Q, alpha, 
             _, _q = _iterative_classical_gram_schmidt(
                 Q_valid, jax.random.normal(jax.random.PRNGKey(i+1), shape=(n,)))
             return _q / jnp.linalg.norm(_q)
+
         q = lax.cond(
-            beta < 1e-15,
+            beta < tolerance,
             lambda _: _gen_random_ortho_vec(),
             lambda _: q / beta,
             None)
@@ -198,7 +199,7 @@ def _thick_restart_lanczos(
         Q, alpha, beta, restart, k, _ = state
 
         Q, alpha, beta = _lanczos_restart(
-            n, C, A_data, A_indices, adjoint_left_vec, k, m, Q, alpha, beta)
+            n, C, A_data, A_indices, adjoint_left_vec, k, m, Q, alpha, beta, tolerance)
 
         T = _build_arrowhead_matrix(alpha, beta, k)
         ritz_values, Y = jnp.linalg.eigh(T)
@@ -228,11 +229,6 @@ def _thick_restart_lanczos(
     alpha = jnp.zeros(m)
     beta = jnp.zeros(m)
 
-    #return bounded_while_loop(
-    #    cond_fun,
-    #    body_fun,
-    #    _ThickRestartState(Q, alpha, beta, 0, 0, 0),
-    #    max_steps=max_restarts)
     return while_loop(
         cond_fun,
         body_fun,
@@ -243,7 +239,6 @@ def _thick_restart_lanczos(
         select=False)
 
 
-#@partial(jax.jit, static_argnames=["n", "num_desired", "inner_iterations", "max_restarts", "tolerance"])
 def eigsh_smallest(
     n,
     C,
