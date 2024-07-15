@@ -131,24 +131,29 @@ def solve_quad_subprob_ipm(
         step_size = jnp.clip(-1.0 / jnp.min(step_size_denoms / step_size_numers), a_max=1.0)
         step_size = 0.99 * lax.select(step_size <= 0.0, 1.0, step_size)
 
-        step_size = while_loop(
-            lambda step_size: jnp.linalg.eigvalsh(ipm_state.S + step_size * delta_S)[0] < 0.0,
-            lambda step_size: step_size * 0.9, 
-            step_size,
-            10,
-            unroll=True,
-            jit=True,
-            select=False)
+        # parallelize line search (much faster than looping)
+        possible_step_sizes = (0.9 ** jnp.arange(10))
+    
+        min_eigvals_S_update = jax.vmap(
+            lambda _s: jnp.linalg.eigvalsh(ipm_state.S + _s * delta_S)[0])(possible_step_sizes)
 
-        step_size = while_loop(
-            lambda step_size: jnp.linalg.eigvalsh(ipm_state.T + step_size * delta_T)[0] < 0.0,
-            lambda step_size: step_size * 0.9, 
-            step_size,
-            10,
-            unroll=True,
-            jit=True,
-            select=False)
+        min_eigvals_T_update = jax.vmap(
+            lambda _s: jnp.linalg.eigvalsh(ipm_state.T + _s * delta_T)[0])(possible_step_sizes)
 
+        _cand_step_size_S = jnp.max(possible_step_sizes * (min_eigvals_S_update > 0))
+        _cand_step_size_T = jnp.max(possible_step_sizes * (min_eigvals_T_update > 0))
+
+        _cand_step_size = lax.select(
+            _cand_step_size_S < _cand_step_size_T,
+            _cand_step_size_S,
+            _cand_step_size_T)
+
+        step_size = lax.select(
+            step_size < _cand_step_size,
+            step_size,
+            _cand_step_size)
+        
+        # update variables
         S_next = ipm_state.S + step_size * delta_S
         eta_next = ipm_state.eta + step_size * delta_eta
         T_next = ipm_state.T + step_size * delta_T
@@ -255,7 +260,7 @@ def compute_lb_spec_est_ipm(
         ordinate_vals += ipm_state.mu * svec(S_inv)
         delta_svec_S = jnp.linalg.solve(coeff_mx, ordinate_vals)
 
-        ## substitute back in to get all of the other update directions
+        # substitute back in to get all of the other update directions
         delta_eta = (jnp.dot(svec_I, delta_svec_S) 
                      -kappa_1 * (ipm_state.mu / ipm_state.eta - g_2 - ipm_state.omega)
                      + ipm_state.mu / ipm_state.omega
@@ -276,24 +281,29 @@ def compute_lb_spec_est_ipm(
         step_size = jnp.clip(-1.0 / jnp.min(step_size_denoms / step_size_numers), a_max=1.0)
         step_size = 0.99 * lax.select(step_size <= 0.0, 1.0, step_size)
 
-        step_size = while_loop(
-            lambda step_size: jnp.linalg.eigvalsh(ipm_state.S + step_size * delta_S)[0] < 0.0,
-            lambda step_size: step_size * 0.9, 
-            step_size,
-            10,
-            unroll=True,
-            jit=True,
-            select=False)
+        # parallelize line search (much faster than looping)
+        possible_step_sizes = (0.9 ** jnp.arange(10))
+    
+        min_eigvals_S_update = jax.vmap(
+            lambda _s: jnp.linalg.eigvalsh(ipm_state.S + _s * delta_S)[0])(possible_step_sizes)
 
-        step_size = while_loop(
-            lambda step_size: jnp.linalg.eigvalsh(ipm_state.T + step_size * delta_T)[0] < 0.0,
-            lambda step_size: step_size * 0.9, 
-            step_size,
-            10,
-            unroll=True,
-            jit=True,
-            select=False)
+        min_eigvals_T_update = jax.vmap(
+            lambda _s: jnp.linalg.eigvalsh(ipm_state.T + _s * delta_T)[0])(possible_step_sizes)
 
+        _cand_step_size_S = jnp.max(possible_step_sizes * (min_eigvals_S_update > 0))
+        _cand_step_size_T = jnp.max(possible_step_sizes * (min_eigvals_T_update > 0))
+
+        _cand_step_size = lax.select(
+            _cand_step_size_S < _cand_step_size_T,
+            _cand_step_size_S,
+            _cand_step_size_T)
+
+        step_size = lax.select(
+            step_size < _cand_step_size,
+            step_size,
+            _cand_step_size)
+
+        # update variables
         S_next = ipm_state.S + step_size * delta_S
         eta_next = ipm_state.eta + step_size * delta_eta
         T_next = ipm_state.T + step_size * delta_T
@@ -524,7 +534,7 @@ def specbm(
                     k=k,
                     subprob_eps=subprob_eps,
                     subprob_max_iters=subprob_max_iters)
-
+                    
         S_eigvals, S_eigvecs = jnp.linalg.eigh(S)#
         S_eigvals = jnp.clip(S_eigvals, a_min=0)    # numerical instability handling
         VSV_T_factor = (state.V @ S_eigvecs) * jnp.sqrt(S_eigvals).reshape(1, -1)
@@ -543,6 +553,7 @@ def specbm(
         y_cand = state.y - (1.0 / rho) * (state.b - z_next - upsilon_next)
         primal_obj_next = eta * state.bar_primal_obj
         primal_obj_next += jnp.trace(VSV_T_factor.T @ (state.C @ VSV_T_factor))
+
 
         cand_eigvals, cand_eigvecs = eigsh_smallest(
             n=n,
