@@ -19,7 +19,7 @@ import jax.numpy as jnp
 
 
 def _while_loop_scan_select(cond_fun, body_fun, init_val, max_iter):
-  """Scan-based implementation (jit ok, reverse-mode autodiff ok)."""
+  """Scan-based implementation always executing max_iter without returning to CPU (jit ok, reverse-mode autodiff ok)."""
   def _iter(val):
     next_val = body_fun(val)
     next_cond = cond_fun(next_val)

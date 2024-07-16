@@ -493,11 +493,39 @@ def specbm(
          "primal_obj",
          "bar_primal_obj",
          "pen_dual_obj",
+         "cand_pen_dual_obj",
          "lb_spec_est",
          "obj_ub"])
 
     @jax.jit
     def cond_func(state: StateStruct) -> Array:
+
+        if state.Omega is not None and callback_fn is not None:
+            callback_val = callback_fn(
+                state.P,
+                state.Omega,
+                callback_static_args,
+                state.callback_nonstatic_args)
+        else:
+            callback_val = None
+
+        jax.debug.print("t: {t} - end_time: {end_time} - pen_dual_obj: {pen_dual_obj}"
+                        " - cand_pen_dual_obj: {cand_pen_dual_obj} - lb_spec_est: {lb_spec_est}"
+                        " - primal_obj: {primal_obj} - obj_ub: {obj_ub} - obj_gap: {obj_gap}"
+                        " - infeas_gap: {infeas_gap} - max_infeas: {max_infeas}"
+                        " - callback_val: {callback_val}",
+                        t=state.t,
+                        end_time=state.curr_time,
+                        pen_dual_obj=state.pen_dual_obj,
+                        cand_pen_dual_obj=state.cand_pen_dual_obj,
+                        lb_spec_est=state.lb_spec_est,
+                        primal_obj=state.primal_obj / (SCALE_C * SCALE_X),
+                        obj_ub=state.obj_ub,
+                        obj_gap=state.obj_gap,
+                        infeas_gap=state.infeas_gap,
+                        max_infeas=state.max_infeas,
+                        callback_val=callback_val)
+
         # while_loop takes care of max_iters
         return jnp.logical_or(
                 state.t == 0,
@@ -621,33 +649,7 @@ def specbm(
         infeas_gap /= 1.0 + jnp.linalg.norm((state.b / SCALE_A) / SCALE_X)
         max_infeas = jnp.max(jnp.abs(infeas) / SCALE_A) / SCALE_X
 
-        if state.Omega is not None and callback_fn is not None:
-            callback_val = callback_fn(
-                state.P,
-                state.Omega,
-                callback_static_args,
-                state.callback_nonstatic_args)
-        else:
-            callback_val = None
-
         end_time = jax.experimental.io_callback(lambda : time.time(), result_shape_dtypes=jnp.array(0.0))
-        jax.debug.print("t: {t} - end_time: {end_time} - pen_dual_obj: {pen_dual_obj}"
-                        " - cand_pen_dual_obj: {cand_pen_dual_obj} - lb_spec_est: {lb_spec_est}"
-                        " - pen_dual_obj_next: {pen_dual_obj_next} - primal_obj: {primal_obj}"
-                        " - obj_ub: {obj_ub} - obj_gap: {obj_gap} - infeas_gap: {infeas_gap}"
-                        " - max_infeas: {max_infeas} - callback_val: {callback_val}",
-                        t=state.t,
-                        end_time=end_time,
-                        pen_dual_obj=state.pen_dual_obj,
-                        cand_pen_dual_obj=cand_pen_dual_obj,
-                        lb_spec_est=lb_spec_est,
-                        pen_dual_obj_next=pen_dual_obj_next,
-                        primal_obj=primal_obj_next / (SCALE_C * SCALE_X),
-                        obj_ub=obj_ub,
-                        obj_gap=obj_gap,
-                        infeas_gap=infeas_gap,
-                        max_infeas=max_infeas,
-                        callback_val=callback_val)
 
         return StateStruct(
             t=state.t+1,
@@ -679,6 +681,7 @@ def specbm(
             primal_obj=primal_obj_next,
             bar_primal_obj=bar_primal_obj_next,
             pen_dual_obj=pen_dual_obj_next,
+            cand_pen_dual_obj=cand_pen_dual_obj,
             lb_spec_est=lb_spec_est,
             obj_ub=obj_ub)
 
@@ -731,6 +734,7 @@ def specbm(
         primal_obj=sdp_state.primal_obj,
         bar_primal_obj=sdp_state.primal_obj,
         pen_dual_obj=init_pen_dual_obj,
+        cand_pen_dual_obj=init_pen_dual_obj,
         lb_spec_est=jnp.array(0.0),
         obj_ub=jnp.inf)
 
