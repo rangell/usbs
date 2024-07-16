@@ -29,6 +29,7 @@ def _while_loop_scan_select(cond_fun, body_fun, init_val, max_iter):
     val, cond = tup
     next_val, next_cond = _iter(val)
     next_val = jax.tree.map(lambda t, f: jax.lax.select(cond, t, f), next_val, val)
+    next_cond = jax.tree.map(lambda t, f: jax.lax.select(cond, t, f), next_cond, cond)
     return (next_val, next_cond), it
 
   init = (init_val, cond_fun(init_val))

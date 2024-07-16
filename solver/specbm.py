@@ -132,7 +132,7 @@ def solve_quad_subprob_ipm(
         step_size = 0.99 * lax.select(step_size <= 0.0, 1.0, step_size)
 
         # parallelize line search (much faster than looping)
-        possible_step_sizes = (0.9 ** jnp.arange(10))
+        possible_step_sizes = (0.9 ** jnp.arange(ipm_max_iters))
     
         min_eigvals_S_update = jax.vmap(
             lambda _s: jnp.linalg.eigvalsh(ipm_state.S + _s * delta_S)[0])(possible_step_sizes)
@@ -187,7 +187,7 @@ def solve_quad_subprob_ipm(
         ipm_max_iters,
         unroll=True,
         jit=True,
-        select=False)
+        select=True)
 
     return ((trace_ub / tr_X_bar) * final_ipm_state.eta.squeeze(),
             trace_ub * final_ipm_state.S)
@@ -282,7 +282,7 @@ def compute_lb_spec_est_ipm(
         step_size = 0.99 * lax.select(step_size <= 0.0, 1.0, step_size)
 
         # parallelize line search (much faster than looping)
-        possible_step_sizes = (0.9 ** jnp.arange(10))
+        possible_step_sizes = (0.9 ** jnp.arange(ipm_max_iters))
     
         min_eigvals_S_update = jax.vmap(
             lambda _s: jnp.linalg.eigvalsh(ipm_state.S + _s * delta_S)[0])(possible_step_sizes)
@@ -351,7 +351,7 @@ def compute_lb_spec_est_ipm(
         ipm_max_iters,
         unroll=True,
         jit=True,
-        select=False)
+        select=True)
 
     lb_spec_est = (jnp.dot(b, y) - jnp.dot(g_1, svec(final_ipm_state.S))
                    - final_ipm_state.eta.squeeze() * g_2)
@@ -498,7 +498,7 @@ def specbm(
 
     @jax.jit
     def cond_func(state: StateStruct) -> Array:
-        # NOTE: bounded_while_loop takes care of max_iters
+        # while_loop takes care of max_iters
         return jnp.logical_or(
                 state.t == 0,
                 jnp.logical_and(

@@ -111,6 +111,9 @@ if __name__ == "__main__":
         lanczos_max_restarts=hparams.lanczos_max_restarts,
         subprob_eps=hparams.subprob_eps,
         subprob_max_iters=hparams.subprob_max_iters,
+        #callback_fn=None,
+        #callback_static_args=None,
+        #callback_nonstatic_args=None)
         callback_fn=qap_round,
         callback_static_args=callback_static_args,
         callback_nonstatic_args=callback_nonstatic_args)

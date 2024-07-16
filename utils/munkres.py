@@ -1,10 +1,11 @@
 from collections import namedtuple
 from functools import partial
-from equinox.internal._loop.bounded import bounded_while_loop # type: ignore
 import jax
 import jax.numpy as jnp
 from jax import lax
 from jax._src.typing import Array
+
+from utils.loop import while_loop
 
 from IPython import embed
 
@@ -38,6 +39,7 @@ def munkres(n: int, cost_mx: Array) -> Array:
             jnp.clip(star_entry, a_min=state.col_cover.at[col].get()))
         return StateStruct(state.M, next_mask_mx, next_row_cover, next_col_cover)
     init_state = StateStruct(M, jnp.zeros_like(M), jnp.zeros((n,), dtype=bool), jnp.zeros((n,), dtype=bool))
+    # TODO: convert this to scan?
     final_state = lax.fori_loop(0, n**2, initial_star_body, init_state)
 
     # hard assignment body_func helper functions
@@ -74,7 +76,7 @@ def munkres(n: int, cost_mx: Array) -> Array:
             return AugPathStateStruct(aug_path_next, aug_path_state.mask_mx, row, col)
 
         aug_path_state = AugPathStateStruct(aug_path, state.mask_mx, row, col)
-        aug_path_state = bounded_while_loop(cond_func, body_func, aug_path_state, max_steps=n)
+        aug_path_state = while_loop(cond_func, body_func, aug_path_state, n, unroll=True, jit=True, select=False)
         mask_mx_next = state.mask_mx - aug_path_state.aug_path
         mask_mx_next = jnp.where(mask_mx_next == 2, 0, mask_mx_next)
         col_cover = jnp.sum(mask_mx_next == 1, axis=0).astype(bool)
@@ -95,19 +97,19 @@ def munkres(n: int, cost_mx: Array) -> Array:
                 row, col = flattened_idx // n, flattened_idx % n
                 mask_mx_updated = state.mask_mx.at[row, col].set(2)
                 next_state = StateStruct(state.M, mask_mx_updated, state.row_cover, state.col_cover)
-                next_state = lax.cond(
-                    jnp.sum(mask_mx_updated[row] == 1) >= 1, adjust_cover, aug_path, next_state, row, col)
+                next_state = jax.tree.map(
+                    lambda t, f: jax.lax.select(jnp.sum(mask_mx_updated[row] == 1) >= 1, t, f),
+                    adjust_cover(next_state, row, col),
+                    aug_path(next_state, row, col))
                 return next_state
 
-            next_state = lax.cond(
-                jnp.sum(uncovered_zero_mask) == 0,
-                lambda state, _: shift_zeros(state),
-                lambda state, uncovered_zero_mask: prime_or_aug_path(state, uncovered_zero_mask),
-                state,
-                uncovered_zero_mask)
+            next_state = jax.tree.map(
+                lambda t, f: jax.lax.select(jnp.sum(uncovered_zero_mask) == 0, t, f),
+                shift_zeros(state),
+                prime_or_aug_path(state, uncovered_zero_mask))
             return next_state
 
-        return bounded_while_loop(cond_func, body_func, state, max_steps=(n**2)).mask_mx
+        return while_loop(cond_func, body_func, state, n**2, unroll=True, jit=True, select=False).mask_mx
 
     state = StateStruct(
         final_state.M,

@@ -335,6 +335,10 @@ def initialize_state(C: BCOO, sketch_dim: int) -> SDPState:
     norm_A = jnp.sqrt(eigsh(A_matrix @ A_matrix.T, k=1, which="LM", return_eigenvectors=False, maxiter=np.iinfo(np.int32).max)[0])
     SCALE_A /= norm_A
 
+    #SCALE_X = 1.0
+    #SCALE_C = 1.0
+    #SCALE_A = jnp.ones_like(SCALE_A)
+
     if sketch_dim == -1:
         X = jnp.zeros((n, n))
         Omega = None
@@ -628,16 +632,22 @@ def qap_round(
     D = callback_nonstatic_args["D"]
     W = callback_nonstatic_args["W"]
     E, _ = reconstruct_from_sketch(Omega, P)
-    def body_func(i: int, best_assign_obj: float) -> float:
+
+    def pos_body_func(i: int) -> float:
         cost_mx = E[1:, i].reshape(l, l)
         cost_mx = jnp.max(cost_mx) - cost_mx
         perm_mx = munkres(l, cost_mx)
-        best_assign_obj = jnp.clip(jnp.trace(W @ perm_mx @ D @ perm_mx.T), a_max=best_assign_obj)
+        return jnp.clip(jnp.trace(W @ perm_mx @ D @ perm_mx.T))
+
+    def neg_body_func(i: int) -> float:
         # try negative too
         cost_mx = -E[1:, i].reshape(l, l)
         cost_mx = jnp.max(cost_mx) - cost_mx
         perm_mx = munkres(l, cost_mx)
-        best_assign_obj = jnp.clip(jnp.trace(W @ perm_mx @ D @ perm_mx.T), a_max=best_assign_obj)
-        return best_assign_obj
-    best_assign_obj = lax.fori_loop(0, l, body_func, jnp.inf)
+        return jnp.trace(W @ perm_mx @ D @ perm_mx.T)
+
+    # want minimum
+    min_pos = jnp.min(jax.vmap(pos_body_func)(jnp.arange(l, dtype=int)))
+    min_neg = jnp.min(jax.vmap(neg_body_func)(jnp.arange(l, dtype=int)))
+    best_assign_obj = lax.select(min_pos < min_neg, min_pos, min_neg)
     return best_assign_obj
