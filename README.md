@@ -5,6 +5,7 @@ Code for the paper:
 > [Fast, Scalable, Warm-Start Semidefinite Programming with Spectral Bundling and Sketching](https://arxiv.org/abs/2312.11801)\
 > Rico Angell and Andrew McCallum\
 > _arXiv:2312.11801_
+> To appear ICML 2024
 
 ## Overview
 
