@@ -186,8 +186,7 @@ def solve_quad_subprob_ipm(
         init_ipm_state,
         ipm_max_iters,
         unroll=True,
-        jit=True,
-        select=True)
+        jit=True)
 
     return ((trace_ub / tr_X_bar) * final_ipm_state.eta.squeeze(),
             trace_ub * final_ipm_state.S)
@@ -350,8 +349,7 @@ def compute_lb_spec_est_ipm(
         init_ipm_state,
         ipm_max_iters,
         unroll=True,
-        jit=True,
-        select=True)
+        jit=True)
 
     lb_spec_est = (jnp.dot(b, y) - jnp.dot(g_1, svec(final_ipm_state.S))
                    - final_ipm_state.eta.squeeze() * g_2)
@@ -509,13 +507,13 @@ def specbm(
         else:
             callback_val = None
 
-        jax.debug.print("t: {t} - end_time: {end_time} - pen_dual_obj: {pen_dual_obj}"
+        jax.debug.print("t: {t} - curr_time: {curr_time} - pen_dual_obj: {pen_dual_obj}"
                         " - cand_pen_dual_obj: {cand_pen_dual_obj} - lb_spec_est: {lb_spec_est}"
                         " - primal_obj: {primal_obj} - obj_ub: {obj_ub} - obj_gap: {obj_gap}"
                         " - infeas_gap: {infeas_gap} - max_infeas: {max_infeas}"
                         " - callback_val: {callback_val}",
                         t=state.t,
-                        end_time=state.curr_time,
+                        curr_time=state.curr_time,
                         pen_dual_obj=state.pen_dual_obj,
                         cand_pen_dual_obj=state.cand_pen_dual_obj,
                         lb_spec_est=state.lb_spec_est,
@@ -536,11 +534,9 @@ def specbm(
                         jnp.logical_or(state.infeas_gap > infeas_gap_eps,
                                     state.max_infeas > max_infeas_eps))))
 
+
     @jax.jit
     def body_func(state: StateStruct) -> StateStruct:
-
-        jax.debug.print("start_time: {time}",
-                        time=jax.experimental.io_callback(lambda : time.time(), result_shape_dtypes=jnp.array(0.0)))
 
         eta, S, upsilon_next = solve_step_subprob(
                     C=state.C,
@@ -649,7 +645,7 @@ def specbm(
         infeas_gap /= 1.0 + jnp.linalg.norm((state.b / SCALE_A) / SCALE_X)
         max_infeas = jnp.max(jnp.abs(infeas) / SCALE_A) / SCALE_X
 
-        end_time = jax.experimental.io_callback(lambda : time.time(), result_shape_dtypes=jnp.array(0.0))
+        curr_time = jax.experimental.io_callback(lambda : time.time(), result_shape_dtypes=jnp.array(0.0))
 
         return StateStruct(
             t=state.t+1,
@@ -674,7 +670,7 @@ def specbm(
             q0=state.q0,
             callback_nonstatic_args=state.callback_nonstatic_args,
             start_time=state.start_time,
-            curr_time=end_time,
+            curr_time=curr_time,
             obj_gap=obj_gap,
             infeas_gap=infeas_gap,
             max_infeas=max_infeas,
@@ -738,7 +734,7 @@ def specbm(
         lb_spec_est=jnp.array(0.0),
         obj_ub=jnp.inf)
 
-    final_state = while_loop(cond_func, body_func, init_state, max_iters, unroll=True, jit=True)
+    final_state = while_loop(cond_func, body_func, init_state, max_iters, unroll=True, jit=True, cond_exp_base=2.0)
 
     return SDPState(
         C=sdp_state.C,

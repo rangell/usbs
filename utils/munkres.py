@@ -76,7 +76,7 @@ def munkres(n: int, cost_mx: Array) -> Array:
             return AugPathStateStruct(aug_path_next, aug_path_state.mask_mx, row, col)
 
         aug_path_state = AugPathStateStruct(aug_path, state.mask_mx, row, col)
-        aug_path_state = while_loop(cond_func, body_func, aug_path_state, n, unroll=True, jit=True, select=False)
+        aug_path_state = while_loop(cond_func, body_func, aug_path_state, n, unroll=True, jit=True)
         mask_mx_next = state.mask_mx - aug_path_state.aug_path
         mask_mx_next = jnp.where(mask_mx_next == 2, 0, mask_mx_next)
         col_cover = jnp.sum(mask_mx_next == 1, axis=0).astype(bool)
@@ -109,7 +109,7 @@ def munkres(n: int, cost_mx: Array) -> Array:
                 prime_or_aug_path(state, uncovered_zero_mask))
             return next_state
 
-        return while_loop(cond_func, body_func, state, n**2, unroll=True, jit=True, select=False).mask_mx
+        return while_loop(cond_func, body_func, state, n**2, unroll=True, jit=True).mask_mx
 
     state = StateStruct(
         final_state.M,

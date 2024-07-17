@@ -236,8 +236,7 @@ def _thick_restart_lanczos(
         _ThickRestartState(Q, alpha, beta, 0, 0, 0),
         max_restarts,
         unroll=True,
-        jit=True,
-        select=False)
+        jit=True)
 
 
 def eigsh_smallest(
