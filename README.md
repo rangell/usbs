@@ -15,15 +15,15 @@ This repo was developed with Python 3.12.4. To get started we recommend creating
 
 We build JAX from source in order to run USBS on a single NVIDIA A100 GPU which uses different versions of CUDA and CUDNN than the pre-built versions of JAX available [here](https://storage.googleapis.com/jax-releases/jax_cuda_releases.html). We see a massive performance improvement from using a GPU, and thus, were inclined to build JAX from source. In the case that you have access to a GPU and want to get the most out of USBS, we provide some tips for building JAX from source for GPU use to augment the official build instructions. As a note, we built JAX on a Linux machine running Ubuntu 20.04.6 LTS. You should be able to ignore the following tips if there exists a pre-built version of JAX that suites your available hardware.
 
-  1) Before building, we add the file paths to both CUDA and CUDNN to the enviornment variable `LD_LIBRARY_PATH` using the following commands:
-  ```bash
-  export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/path/to/cuda/
-  export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/path/to/cudnn/
-  ```
+    1) Before building, we add the file paths to both CUDA and CUDNN to the enviornment variable `LD_LIBRARY_PATH` using the following commands:
+    ```bash
+    export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/path/to/cuda/
+    export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/path/to/cudnn/
+    ```
 
-  2) We found success building `jaxlib` using the `clang` compiler instead of `gcc`. It seems that this has something to due with builing XLA (see [this](https://openxla.org/xla/build_from_source)). Assuming `clang` is already installed on your system you can use it to build `jaxlib` using `clang` by adding the `--use_clang` flag to the end of the `python build/build.py ... ` command.
+    2) We found success building `jaxlib` using the `clang` compiler instead of `gcc`. It seems that this has something to due with builing XLA (see [this](https://openxla.org/xla/build_from_source)). Assuming `clang` is already installed on your system you can use it to build `jaxlib` using `clang` by adding the `--use_clang` flag to the end of the `python build/build.py ... ` command.
   
-  3) We found that after `jax` and `jaxlib` are built and installed into the virtual environment we needed to install the `bitsandbytes` package using the following command:
+    3) We found that after `jax` and `jaxlib` are built and installed into the virtual environment we needed to install the `bitsandbytes` package using the following command:
     ```bash
     pip install -U bitsandbytes
     ```
