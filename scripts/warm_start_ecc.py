@@ -21,7 +21,7 @@ from sklearn.metrics import adjusted_rand_score as rand_idx
 from sklearn.metrics import homogeneity_completeness_v_measure as cluster_f1
 
 from solver.cgal import cgal
-from solver.specbm import specbm
+from solver.usbs import usbs
 from utils.common import unscale_sdp_state, SDPState, reconstruct_from_sketch
 from utils.ecc_helpers import (initialize_state,
                                cold_start_add_constraint,
@@ -176,11 +176,11 @@ class EccClusterer(object):
 
     def _call_sdp_solver(self, sdp_state: SDPState, solver_name: str) -> None:
         print(">>>>> START: ", solver_name)
-        if "specbm" in solver_name:
+        if "usbs" in solver_name:
             trace_ub = (self.hparams.trace_factor
                         * float(sdp_state.C.shape[0])
                         * sdp_state.SCALE_X)
-            out_sdp_state = specbm(
+            out_sdp_state = usbs(
                 sdp_state=sdp_state,
                 n=sdp_state.C.shape[0],
                 m=sdp_state.b.shape[0],
@@ -230,8 +230,8 @@ class EccClusterer(object):
     def build_and_solve_sdp(self):
         _ = self._call_sdp_solver(self.cold_start_sdp_state, "cgal/cold")
         _ = self._call_sdp_solver(self.warm_start_sdp_state, "cgal/warm")
-        self.cold_start_sdp_state = self._call_sdp_solver(self.cold_start_sdp_state, "specbm/cold")
-        _ = self._call_sdp_solver(self.warm_start_sdp_state, "specbm/warm")
+        self.cold_start_sdp_state = self._call_sdp_solver(self.cold_start_sdp_state, "usbs/cold")
+        _ = self._call_sdp_solver(self.warm_start_sdp_state, "usbs/usbs")
 
         modified_sdp_state = copy.deepcopy(self.cold_start_sdp_state)
 
@@ -795,7 +795,7 @@ def get_hparams() -> argparse.Namespace:
     parser.add_argument("--data_path", default=None, type=str, required=True,
                         help="Path to preprocessed data.")
 
-    # for specbm
+    # for usbs
     parser.add_argument("--max_iters", type=int, required=True,
                         help="number of iterations to run solver")
     parser.add_argument("--max_time", type=float, default=jnp.inf,
