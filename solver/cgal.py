@@ -32,6 +32,7 @@ def cgal(
     lanczos_inner_iterations: int,
     lanczos_max_restarts: int,
     subprob_eps: float,
+    cond_exp_base: float,
     callback_fn: Union[Callable[[Array, Array], Array], None],
     callback_static_args: bytes,
     callback_nonstatic_args: Any
@@ -65,7 +66,27 @@ def cgal(
 
     @jax.jit
     def cond_func(state: StateStruct) -> bool:
-        # NOTE: bounded_while_loop takes care of max_iters
+        if state.Omega is not None and callback_fn is not None:
+            callback_val = callback_fn(
+                state.P,
+                state.Omega,
+                callback_static_args,
+                state.callback_nonstatic_args)
+        else:
+            callback_val = None
+
+        curr_time = jax.experimental.io_callback(lambda : time.time(), result_shape_dtypes=jnp.array(0.0))
+        jax.debug.print("t: {t} - curr_time: {end_time} - primal_obj: {primal_obj} - obj_gap: {obj_gap}"
+                        " - infeas_gap: {infeas_gap} - max_infeas: {max_infeas}"
+                        " - callback_val: {callback_val}",
+                        t=state.t,
+                        end_time=curr_time,
+                        primal_obj=state.primal_obj / (SCALE_C * SCALE_X),
+                        obj_gap=state.obj_gap,
+                        infeas_gap=state.infeas_gap,
+                        max_infeas=state.max_infeas,
+                        callback_val=callback_val)
+
         return jnp.logical_or(
             state.t == 0,
             jnp.logical_and(
@@ -77,8 +98,6 @@ def cgal(
 
     @jax.jit
     def body_func(state: StateStruct) -> StateStruct:
-        jax.debug.print("start_time: {time}",
-                        time=jax.experimental.io_callback(lambda : time.time(), result_shape_dtypes=jnp.array(0.0)))
         beta = beta0 * jnp.sqrt(state.t + 1)
 
         proj_b = (1 - state.b_ineq_mask) * state.b
@@ -152,26 +171,7 @@ def cgal(
         primal_obj_next = (1 - eta) * state.primal_obj
         primal_obj_next += eta * trace_ub * jnp.dot(min_eigvec, state.C @ min_eigvec)
 
-        if state.Omega is not None and callback_fn is not None:
-            callback_val = callback_fn(
-                state.P,
-                state.Omega,
-                callback_static_args,
-                state.callback_nonstatic_args)
-        else:
-            callback_val = None
-
-        end_time = jax.experimental.io_callback(lambda : time.time(), result_shape_dtypes=jnp.array(0.0))
-        jax.debug.print("t: {t} - end_time: {end_time} - primal_obj: {primal_obj} - obj_gap: {obj_gap}"
-                        " - infeas_gap: {infeas_gap} - max_infeas: {max_infeas}"
-                        " - callback_val: {callback_val}",
-                        t=state.t,
-                        end_time=end_time,
-                        primal_obj=state.primal_obj / (SCALE_C * SCALE_X),
-                        obj_gap=obj_gap,
-                        infeas_gap=infeas_gap,
-                        max_infeas=max_infeas,
-                        callback_val=callback_val)
+        curr_time = jax.experimental.io_callback(lambda : time.time(), result_shape_dtypes=jnp.array(0.0))
 
         return StateStruct(
             t=state.t+1,
@@ -188,7 +188,7 @@ def cgal(
             tr_X=tr_X_next,
             callback_nonstatic_args=state.callback_nonstatic_args,
             start_time=state.start_time,
-            curr_time=end_time,
+            curr_time=curr_time,
             obj_gap=obj_gap,
             infeas_gap=infeas_gap,
             max_infeas=max_infeas,
@@ -216,7 +216,14 @@ def cgal(
         max_infeas=1.1*max_infeas_eps,
         primal_obj=sdp_state.primal_obj)
 
-    final_state = while_loop(cond_func, body_func, init_state, max_iters, jit=True, unroll=True)
+    final_state = while_loop(
+        cond_func, 
+        body_func,
+        init_state,
+        max_iters,
+        jit=True,
+        unroll=True,
+        cond_exp_base=cond_exp_base)
 
     return SDPState(
         C=sdp_state.C,

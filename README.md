@@ -51,12 +51,12 @@ The following are example commands to execute for each of the three problem type
 
 ### Max Cut
 ```bash
-PYTHONPATH="." python -u scripts/warm_start_maxcut_specbm.py --data_path=data/maxcut/Gset/G1.mat --max_iters=5000 --max_time=360 --trace_factor=2.0 --rho=0.01 --beta=0.25 --k_curr=10 --k_past=1 --sketch_dim=10 --obj_gap_eps=1e-07 --infeas_gap_eps=1e-07 --max_infeas_eps=1e-07 --subprob_max_iters=100 --subprob_eps=1e-15 --lanczos_max_restarts=10 --warm_start_strategy="none" 
+PYTHONPATH="." python -u scripts/warm_start_maxcut_usbs.py --data_path=data/maxcut/Gset/G1.mat --max_iters=5000 --max_time=360 --trace_factor=2.0 --rho=0.01 --beta=0.25 --k_curr=10 --k_past=1 --sketch_dim=10 --obj_gap_eps=1e-07 --infeas_gap_eps=1e-07 --max_infeas_eps=1e-07 --subprob_max_iters=100 --subprob_eps=1e-15 --lanczos_max_restarts=10 --warm_start_strategy="none" 
 ```
 
 ### QAP
 ```bash
-PYTHONPATH="." python -u scripts/warm_start_qap_specbm.py --data_path=data/qap/qapdata/chr12a.dat --max_iters=5000 --max_time=360 --trace_factor=2.0 --rho=0.005 --beta=0.25 --k_curr=2 --k_past=0 --obj_gap_eps=1e-07 --infeas_gap_eps=1e-07 --max_infeas_eps=1e-07 --subprob_max_iters=100 --subprob_eps=1e-7 --lanczos_max_restarts=10 --warm_start_strategy="none"
+PYTHONPATH="." python -u scripts/warm_start_qap_usbs.py --data_path=data/qap/qapdata/chr12a.dat --max_iters=5000 --max_time=360 --trace_factor=2.0 --rho=0.005 --beta=0.25 --k_curr=2 --k_past=0 --obj_gap_eps=1e-07 --infeas_gap_eps=1e-07 --max_infeas_eps=1e-07 --subprob_max_iters=100 --subprob_eps=1e-7 --lanczos_max_restarts=10 --warm_start_strategy="none"
 ```
 
 ### Interactive Entity Resolution with $\exists$-constraints
@@ -86,11 +86,10 @@ If you have any questions, comments, or feedback on our work, please reach out a
 USBS is MIT licensed. See the [LICENSE](LICENSE) file for details.
 
 ## TODO:
-* add documentation for intermittent cond evaluation
-* add fixed frequency cond evaluation
-* “specbm” -> “usbs” throughout repo
-* Move callback and print to cond in cgal (also time stuff)
-* Figure out the best default params
+* Add fixed frequency cond evaluation
+* Move callback and print to cond in cgal (also time and intermittent evaluation stuff)
+* Add the best default params
+* Add better timing and diagnostic information
 * README
   * GPU non-determinism note: https://github.com/google/jax/discussions/10674
   * Explanation of how to specify problem data
@@ -100,5 +99,6 @@ USBS is MIT licensed. See the [LICENSE](LICENSE) file for details.
     * While loop primitives
     * Thick Restart Lanczos
     * Munkres’ algorithm
+  * Fix citation to official ICML
 * Convert problem from ineq (prob) -> eq [prob -> soln] -> ineq (soln)
 * SDPLR(+)

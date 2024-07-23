@@ -37,6 +37,9 @@ def get_hparams():
                         help="error tolerance for IPM, alternating minimization, and lanczos")
     parser.add_argument("--subprob_max_iters", type=int, default=15,
                         help="max iters for IPM and alternating minimization")
+    parser.add_argument("--cond_exp_base", type=float, default=2.0,
+                        help="incremental multiplicative factor on number of iterations "
+                             "before next condition check and callback")
     parser.add_argument("--trace_factor", type=float, default=1.0,
                         help="how much space to give trace")
     parser.add_argument("--num_drop", type=int, default=0,
@@ -95,6 +98,7 @@ if __name__ == "__main__":
         lanczos_inner_iterations=min(sdp_state.C.shape[0], 32),
         lanczos_max_restarts=hparams.lanczos_max_restarts,
         subprob_eps=hparams.subprob_eps,
+        cond_exp_base=hparams.cond_exp_base,
         callback_fn=qap_round,
         callback_static_args=callback_static_args,
         callback_nonstatic_args=callback_nonstatic_args)
@@ -140,6 +144,7 @@ if __name__ == "__main__":
         lanczos_inner_iterations=min(sdp_state.C.shape[0], 32),
         lanczos_max_restarts=hparams.lanczos_max_restarts,
         subprob_eps=hparams.subprob_eps,
+        cond_exp_base=hparams.cond_exp_base,
         callback_fn=qap_round,
         callback_static_args=callback_static_args,
         callback_nonstatic_args=callback_nonstatic_args)
