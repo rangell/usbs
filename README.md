@@ -1,11 +1,13 @@
 # Unified Spectral Bundling with Sketching
 
+<span style="color:red">Changes coming soon!</span>
+
 Code for the paper:
 
 > [Fast, Scalable, Warm-Start Semidefinite Programming with Spectral Bundling and Sketching](https://arxiv.org/abs/2312.11801)\
 > Rico Angell and Andrew McCallum\
-> _arXiv:2312.11801_
-> To appear ICML 2024
+> _arXiv:2312.11801_ \
+> ICML 2024
 
 ## Overview
 
@@ -82,3 +84,21 @@ If you have any questions, comments, or feedback on our work, please reach out a
 
 ## Licence
 USBS is MIT licensed. See the [LICENSE](LICENSE) file for details.
+
+## TODO:
+* add documentation for intermittent cond evaluation
+* add fixed frequency cond evaluation
+* “specbm” -> “usbs” throughout repo
+* Move callback and print to cond in cgal (also time stuff)
+* Figure out the best default params
+* README
+  * GPU non-determinism note: https://github.com/google/jax/discussions/10674
+  * Explanation of how to specify problem data
+  * Explanation of parameters
+  * Maxcut walkthrough example
+  * Useful snippets contained in repo:
+    * While loop primitives
+    * Thick Restart Lanczos
+    * Munkres’ algorithm
+* Convert problem from ineq (prob) -> eq [prob -> soln] -> ineq (soln)
+* SDPLR(+)
