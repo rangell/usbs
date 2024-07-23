@@ -87,7 +87,6 @@ USBS is MIT licensed. See the [LICENSE](LICENSE) file for details.
 
 ## TODO:
 * Add fixed frequency cond evaluation
-* Move callback and print to cond in cgal (also time and intermittent evaluation stuff)
 * Add the best default params
 * Add better timing and diagnostic information
 * README
