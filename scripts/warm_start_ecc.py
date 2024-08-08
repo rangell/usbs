@@ -728,9 +728,9 @@ def simulate(edge_weights: csr_matrix,
         matching_mx = np.empty((gold_cluster_feats.shape[0],
                                 pred_cluster_feats.shape[0]))
         set_matching_matrix(
-                gold_cluster_feats.indptr, gold_cluster_feats.indices,
-                pred_cluster_feats.indptr, pred_cluster_feats.indices,
-                matching_mx
+            gold_cluster_feats.indptr, gold_cluster_feats.indices,
+            pred_cluster_feats.indptr, pred_cluster_feats.indices,
+            matching_mx
         )
 
         # handle some metric stuffs

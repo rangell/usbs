@@ -225,10 +225,11 @@ def warm_start_add_constraint(
     constraint_triples = jnp.array([(b.shape[0] + i, u, v)
                                     for i, pairs in enumerate(sum_gt_one_constraints)
                                     for u, v in pairs])
-    constraint_triples = jnp.concatenate(
-        [constraint_triples, constraint_triples[:, [0, 2, 1]]], axis=0)
+
+    #constraint_triples = jnp.concatenate(
+    #    [constraint_triples, constraint_triples[:, [0, 2, 1]]], axis=0)
     A_indices = jnp.concatenate([A_indices, constraint_triples], axis=0)
-    A_data = jnp.concatenate([A_data, jnp.full((constraint_triples.shape[0],), -0.5)], axis=0)
+    A_data = jnp.concatenate([A_data, jnp.full((constraint_triples.shape[0],), -1.0)], axis=0)
     b = jnp.concatenate([b, jnp.full((num_hyperplanes,), -1.0)], axis=0)
     b_ineq_mask = jnp.concatenate([b_ineq_mask, jnp.full((num_hyperplanes,), 1.0)], axis=0)
 
