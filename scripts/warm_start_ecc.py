@@ -199,6 +199,7 @@ class EccClusterer(object):
                 lanczos_max_restarts=self.hparams.lanczos_max_restarts,
                 subprob_eps=float(self.hparams.subprob_eps * sdp_state.SCALE_C * sdp_state.SCALE_X),
                 subprob_max_iters=hparams.subprob_max_iters,
+                cond_exp_base=1.0,
                 callback_fn=None,
                 callback_static_args=None,
                 callback_nonstatic_args=None)
@@ -218,6 +219,7 @@ class EccClusterer(object):
                 lanczos_inner_iterations=min(sdp_state.C.shape[0], 32),
                 lanczos_max_restarts=self.hparams.lanczos_max_restarts,
                 subprob_eps=float(self.hparams.subprob_eps * sdp_state.SCALE_C * sdp_state.SCALE_X),
+                cond_exp_base=1.0,
                 callback_fn=None,
                 callback_static_args=None,
                 callback_nonstatic_args=None)
