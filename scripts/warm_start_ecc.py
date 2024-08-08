@@ -379,6 +379,8 @@ class EccClusterer(object):
     def pred(self):
         num_ecc = len(self.ecc_constraints)
 
+        # TODO: branch and bound here
+
         # Construct and solve SDP
         start_solve_time = time.time()
         sdp_obj_value, pw_probs = self.build_and_solve_sdp()
