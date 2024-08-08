@@ -104,20 +104,20 @@ def _lanczos_restart(n, C, A_data, A_indices, adjoint_left_vec, k, m, Q, alpha, 
         alpha = r[i]
         beta = jnp.linalg.norm(q)
 
-        ## handle the case where a Krylov subspace has been found (rare)
-        #def _gen_random_ortho_vec():
-        #    _, _q = _iterative_classical_gram_schmidt(
-        #        Q_valid, jax.random.normal(jax.random.PRNGKey(i+1), shape=(n,)))
-        #    return _q / jnp.linalg.norm(_q)
+        # handle the case where a Krylov subspace has been found (rare)
+        def _gen_random_ortho_vec():
+            _, _q = _iterative_classical_gram_schmidt(
+                Q_valid, jax.random.normal(jax.random.PRNGKey(i+1), shape=(n,)))
+            return _q / jnp.linalg.norm(_q)
 
-        #q = lax.cond(
-        #    beta < tolerance,
-        #    lambda _: _gen_random_ortho_vec(),
-        #    lambda _: q / beta,
-        #    None)
+        q = lax.cond(
+            beta < 1e-15,
+            lambda _: _gen_random_ortho_vec(),
+            lambda _: q / beta,
+            None)
 
-        # the following works in most cases
-        q = q / beta
+        ## the following works in most cases
+        #q = q / beta
 
         Q = Q.at[:, i+1].set(q)
         alphas = alphas.at[i].set(alpha)

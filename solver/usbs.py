@@ -413,6 +413,8 @@ def solve_step_subprob(
         z_next = eta_next * z_bar + A_operator_VSV_T
         upsilon_next = b_ineq_mask * jnp.clip(b - z_next - (rho * y), a_min=0.0)
         upsilon_gap = jnp.max(jnp.abs(state.upsilon - upsilon_next))
+
+
         _subprob_state = SubprobStateStruct(
             i=state.i + 1, eta=eta_next, S=S_next, upsilon=upsilon_next, upsilon_gap=upsilon_gap)
         return _subprob_state
@@ -427,6 +429,7 @@ def solve_step_subprob(
     init_state = SubprobStateStruct(
         i=0, eta=eta_init, S=S_init, upsilon=upsilon, upsilon_gap=jnp.array(1.0))
     final_state = while_loop(cond_func, body_func, init_state, subprob_max_iters, unroll=True, jit=True)
+    jax.debug.print("upsilon_gap: {upsilon_gap}", upsilon_gap=final_state.upsilon_gap)
     return final_state.eta, final_state.S, final_state.upsilon
 
 
@@ -510,8 +513,8 @@ def usbs(
 
         jax.debug.print("t: {t} - curr_time: {curr_time} - pen_dual_obj: {pen_dual_obj}"
                         " - cand_pen_dual_obj: {cand_pen_dual_obj} - lb_spec_est: {lb_spec_est}"
-                        " - primal_obj: {primal_obj} - obj_ub: {obj_ub} - obj_gap: {obj_gap}"
-                        " - infeas_gap: {infeas_gap} - max_infeas: {max_infeas}"
+                        " - primal_obj: {primal_obj} - dual_obj: {dual_obj} - primal_obj_ub: {obj_ub}"
+                        " - obj_gap: {obj_gap} - infeas_gap: {infeas_gap} - max_infeas: {max_infeas}"
                         " - callback_val: {callback_val}",
                         t=state.t,
                         curr_time=state.curr_time,
@@ -519,6 +522,7 @@ def usbs(
                         cand_pen_dual_obj=state.cand_pen_dual_obj,
                         lb_spec_est=state.lb_spec_est,
                         primal_obj=state.primal_obj / (SCALE_C * SCALE_X),
+                        dual_obj=jnp.dot(state.b, state.y),
                         obj_ub=state.obj_ub,
                         obj_gap=state.obj_gap,
                         infeas_gap=state.infeas_gap,
@@ -559,6 +563,7 @@ def usbs(
                     k=k,
                     subprob_eps=subprob_eps,
                     subprob_max_iters=subprob_max_iters)
+
                     
         S_eigvals, S_eigvecs = jnp.linalg.eigh(S)#
         S_eigvals = jnp.clip(S_eigvals, a_min=0)    # numerical instability handling
@@ -700,6 +705,28 @@ def usbs(
     init_pen_dual_obj = jnp.dot(sdp_state.b, sdp_state.y)
     init_pen_dual_obj += trace_ub*jnp.clip(init_eigvals[0], a_min=0)
 
+    upsilon_init = jnp.zeros((m,))
+    #_, _, upsilon_init = solve_step_subprob(
+    #            C=sdp_state.C,
+    #            A_data=sdp_state.A_data,
+    #            A_indices=sdp_state.A_indices,
+    #            U=U,
+    #            b=sdp_state.b,
+    #            b_ineq_mask=sdp_state.b_ineq_mask,
+    #            upsilon=jnp.zeros((m,)),
+    #            trace_ub=trace_ub,
+    #            rho=rho,
+    #            bar_primal_obj=sdp_state.primal_obj,
+    #            z_bar=sdp_state.z,
+    #            tr_X_bar=sdp_state.tr_X,
+    #            y=sdp_state.y,
+    #            V=init_eigvecs,
+    #            n=n,
+    #            m=m,
+    #            k=k,
+    #            subprob_eps=subprob_eps,
+    #            subprob_max_iters=subprob_max_iters)
+
     global_start_time = time.time()
     init_state = StateStruct(
         t=jnp.array(0),
@@ -708,7 +735,7 @@ def usbs(
         A_indices=sdp_state.A_indices,
         b=sdp_state.b,
         b_ineq_mask=sdp_state.b_ineq_mask,
-        upsilon=jnp.zeros((m,)),
+        upsilon=upsilon_init,
         Omega=sdp_state.Omega,
         U=U,
         X=sdp_state.X,
