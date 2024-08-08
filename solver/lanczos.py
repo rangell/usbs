@@ -116,9 +116,6 @@ def _lanczos_restart(n, C, A_data, A_indices, adjoint_left_vec, k, m, Q, alpha, 
             lambda _: q / beta,
             None)
 
-        ## the following works in most cases
-        #q = q / beta
-
         Q = Q.at[:, i+1].set(q)
         alphas = alphas.at[i].set(alpha)
         betas = betas.at[i].set(beta)

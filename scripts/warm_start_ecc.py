@@ -230,10 +230,10 @@ class EccClusterer(object):
         return out_sdp_state
 
     def build_and_solve_sdp(self):
-        _ = self._call_sdp_solver(self.cold_start_sdp_state, "cgal/cold")
-        _ = self._call_sdp_solver(self.warm_start_sdp_state, "cgal/warm")
+        #_ = self._call_sdp_solver(self.cold_start_sdp_state, "cgal/cold")
+        #_ = self._call_sdp_solver(self.warm_start_sdp_state, "cgal/warm")
         self.cold_start_sdp_state = self._call_sdp_solver(self.cold_start_sdp_state, "usbs/cold")
-        _ = self._call_sdp_solver(self.warm_start_sdp_state, "usbs/usbs")
+        #_ = self._call_sdp_solver(self.warm_start_sdp_state, "usbs/usbs")
 
         modified_sdp_state = copy.deepcopy(self.cold_start_sdp_state)
 
