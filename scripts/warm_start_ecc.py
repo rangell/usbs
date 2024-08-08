@@ -55,6 +55,8 @@ class EccClusterer(object):
         self.cold_start_sdp_state = initialize_state(C=-C, sketch_dim=self.hparams.sketch_dim)
         self.warm_start_sdp_state = copy.deepcopy(self.cold_start_sdp_state)
 
+        self.mixed_var_map = {}
+
     def add_constraint(self, ecc_constraint: csr_matrix):
         self.ecc_constraints.append(ecc_constraint)
         self.ecc_mx = sp_vstack(self.ecc_constraints)
@@ -100,18 +102,21 @@ class EccClusterer(object):
             if i == self.n - 1:
                 sum_gt_one_constraints.append([(i,j) for j in j_s])
 
-        self.warm_start_sdp_state = warm_start_add_constraint(
+        self.warm_start_sdp_state, _ = warm_start_add_constraint(
             old_sdp_state=self.cold_start_sdp_state,
             ortho_indices=ortho_indices,
             sum_gt_one_constraints=sum_gt_one_constraints,
             prev_pred_clusters=jnp.array(self.prev_pred_clusters),
             constraint_scale_factor=self.hparams.constraint_scale_factor,
             sketch_dim=self.hparams.sketch_dim)
-        self.cold_start_sdp_state = cold_start_add_constraint(
+        self.cold_start_sdp_state, _mixed_var_map = cold_start_add_constraint(
             old_sdp_state=self.cold_start_sdp_state,
             ortho_indices=ortho_indices,
             sum_gt_one_constraints=sum_gt_one_constraints,
             sketch_dim=self.hparams.sketch_dim)
+
+        for i, (_, v) in enumerate(_mixed_var_map.items()):
+            self.mixed_var_map[(len(self.ecc_constraints), i)] = v
 
     @staticmethod
     @nb.njit(parallel=True)
@@ -385,6 +390,10 @@ class EccClusterer(object):
         start_solve_time = time.time()
         sdp_obj_value, pw_probs = self.build_and_solve_sdp()
         end_solve_time = time.time()
+
+        if len(self.ecc_constraints) > 0:
+            embed()
+            exit()
 
         # Build trellis
         t = self.build_trellis(pw_probs)

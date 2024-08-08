@@ -1,3 +1,4 @@
+from collections import defaultdict
 from functools import partial
 import jax
 from jax import lax
@@ -139,6 +140,22 @@ def cold_start_add_constraint(
     b = jnp.concatenate([b, jnp.full((num_hyperplanes,), -1.0)], axis=0)
     b_ineq_mask = jnp.concatenate([b_ineq_mask, jnp.full((num_hyperplanes,), 1.0)], axis=0)
 
+    # add constraints for forcing to 1
+    mixed_var_tuples = [(u, v, pair_idx) for pair_idx, pairs in enumerate(sum_gt_one_constraints)
+                          for u, v in pairs if len(pairs) > 1]
+    mixed_var_map = defaultdict(list)
+    for i, (_, _, pair_idx) in enumerate(mixed_var_tuples):
+        mixed_var_map[pair_idx].append(b.shape[0] + i)
+
+    constraint_triples = jnp.array(
+        [(b.shape[0] + i, u, v) for i, (u, v, _) in enumerate(mixed_var_tuples)])
+    constraint_triples = jnp.concatenate(
+        [constraint_triples, constraint_triples[:, [0, 2, 1]]], axis=0)
+    A_indices = jnp.concatenate([A_indices, constraint_triples], axis=0)
+    A_data = jnp.concatenate([A_data, jnp.full((constraint_triples.shape[0],), -0.5)], axis=0)
+    b = jnp.concatenate([b, jnp.full((num_hyperplanes,), 0.0)], axis=0) # change this to -1.0 when we want to force
+    b_ineq_mask = jnp.concatenate([b_ineq_mask, jnp.full((num_hyperplanes,), 1.0)], axis=0)
+
     m = b.shape[0]
 
     if sketch_dim == -1:
@@ -184,7 +201,7 @@ def cold_start_add_constraint(
     print("max(SCALE_A): ", jnp.max(SCALE_A))
 
     sdp_state = scale_sdp_state(sdp_state)
-    return sdp_state
+    return sdp_state, mixed_var_map
 
 
 def warm_start_add_constraint(
@@ -225,12 +242,27 @@ def warm_start_add_constraint(
     constraint_triples = jnp.array([(b.shape[0] + i, u, v)
                                     for i, pairs in enumerate(sum_gt_one_constraints)
                                     for u, v in pairs])
-
-    #constraint_triples = jnp.concatenate(
-    #    [constraint_triples, constraint_triples[:, [0, 2, 1]]], axis=0)
+    constraint_triples = jnp.concatenate(
+        [constraint_triples, constraint_triples[:, [0, 2, 1]]], axis=0)
     A_indices = jnp.concatenate([A_indices, constraint_triples], axis=0)
-    A_data = jnp.concatenate([A_data, jnp.full((constraint_triples.shape[0],), -1.0)], axis=0)
+    A_data = jnp.concatenate([A_data, jnp.full((constraint_triples.shape[0],), -0.5)], axis=0)
     b = jnp.concatenate([b, jnp.full((num_hyperplanes,), -1.0)], axis=0)
+    b_ineq_mask = jnp.concatenate([b_ineq_mask, jnp.full((num_hyperplanes,), 1.0)], axis=0)
+
+    # add constraints for forcing to 1
+    mixed_var_tuples = [(u, v, pair_idx) for pair_idx, pairs in enumerate(sum_gt_one_constraints)
+                          for u, v in pairs if len(pairs) > 1]
+    mixed_var_map = defaultdict(list)
+    for i, (_, _, pair_idx) in enumerate(mixed_var_tuples):
+        mixed_var_map[pair_idx].append(b.shape[0] + i)
+
+    constraint_triples = jnp.array(
+        [(b.shape[0] + i, u, v) for i, (u, v, _) in enumerate(mixed_var_tuples)])
+    constraint_triples = jnp.concatenate(
+        [constraint_triples, constraint_triples[:, [0, 2, 1]]], axis=0)
+    A_indices = jnp.concatenate([A_indices, constraint_triples], axis=0)
+    A_data = jnp.concatenate([A_data, jnp.full((constraint_triples.shape[0],), -0.5)], axis=0)
+    b = jnp.concatenate([b, jnp.full((num_hyperplanes,), 0.0)], axis=0) # change this to -1.0 when we want to force
     b_ineq_mask = jnp.concatenate([b_ineq_mask, jnp.full((num_hyperplanes,), 1.0)], axis=0)
 
     m = b.shape[0]
@@ -311,7 +343,7 @@ def warm_start_add_constraint(
     print("max(SCALE_A): ", jnp.max(SCALE_A))
 
     sdp_state = scale_sdp_state(sdp_state)
-    return sdp_state
+    return sdp_state, mixed_var_map
 
 
 def create_sparse_laplacian(edge_weights: coo_matrix, eps: float) -> csr_matrix:

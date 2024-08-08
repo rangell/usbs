@@ -216,7 +216,7 @@ class BnBSparsePCA(object):
 
         sdp_state = self.init_sdp_state
 
-        trace_ub = float(self.k + 1 + self.k**2)
+        trace_ub = float(self.k + 1 + self.p**2)
         sdp_state = usbs(
             sdp_state=sdp_state,
             n=sdp_state.C.shape[0],
