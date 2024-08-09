@@ -1,5 +1,7 @@
 import argparse
+from collections import deque
 import copy
+from dataclasses import dataclass
 import git
 from itertools import product
 import json
@@ -16,13 +18,14 @@ import numba as nb
 from numba.typed import List
 import numpy as np
 from scipy.sparse import csr_matrix, coo_matrix, dok_matrix
+from scipy.sparse import triu as sparse_triu
 from scipy.sparse import vstack as sp_vstack
 from sklearn.metrics import adjusted_rand_score as rand_idx
 from sklearn.metrics import homogeneity_completeness_v_measure as cluster_f1
 
 from solver.cgal import cgal
 from solver.usbs import usbs
-from utils.common import unscale_sdp_state, SDPState, reconstruct_from_sketch
+from utils.common import scale_sdp_state, unscale_sdp_state, SDPState, reconstruct_from_sketch
 from utils.ecc_helpers import (initialize_state,
                                cold_start_add_constraint,
                                warm_start_add_constraint,
@@ -44,6 +47,9 @@ class EccClusterer(object):
         self.edge_weights.data
         self.sparse_laplacian = create_sparse_laplacian(
             edge_weights=edge_weights, eps=self.hparams.spectral_sparsifier_eps)
+
+        # NOTE: this is a smell for BnB
+        self.edge_weights = -sparse_triu(self.sparse_laplacian, k=1).tocoo()
 
         self.features = features
         self.n = self.features.shape[0]
@@ -234,43 +240,47 @@ class EccClusterer(object):
 
         return out_sdp_state
 
-    def build_and_solve_sdp(self):
+    def build_and_solve_sdp(self, start_sdp_state):
         #_ = self._call_sdp_solver(self.cold_start_sdp_state, "cgal/cold")
         #_ = self._call_sdp_solver(self.warm_start_sdp_state, "cgal/warm")
-        self.cold_start_sdp_state = self._call_sdp_solver(self.cold_start_sdp_state, "usbs/cold")
+        #self.cold_start_sdp_state = self._call_sdp_solver(self.cold_start_sdp_state, "usbs/cold")
         #_ = self._call_sdp_solver(self.warm_start_sdp_state, "usbs/usbs")
 
-        modified_sdp_state = copy.deepcopy(self.cold_start_sdp_state)
+        end_sdp_state = self._call_sdp_solver(start_sdp_state, "usbs/cold")
 
-        # reconstruct from sketch
-        if self.hparams.sketch_dim > 0:
-            E, Lambda = reconstruct_from_sketch(
-                self.cold_start_sdp_state.Omega, self.cold_start_sdp_state.P)
-            tr_offset = (self.cold_start_sdp_state.tr_X - jnp.sum(Lambda)) / Lambda.shape[0]
-            Lambda_tr_correct = Lambda + tr_offset
-            point_embeds = E * jnp.sqrt(Lambda_tr_correct)[None, :]
-            modified_sdp_state = SDPState(
-                C=modified_sdp_state.C,
-                A_indices=modified_sdp_state.A_indices,
-                A_data=modified_sdp_state.A_data,
-                b=modified_sdp_state.b,
-                b_ineq_mask=modified_sdp_state.b_ineq_mask,
-                X=(point_embeds @ point_embeds.T),
-                P=modified_sdp_state.P,
-                Omega=modified_sdp_state.Omega,
-                y=modified_sdp_state.y,
-                z=modified_sdp_state.z,
-                tr_X=modified_sdp_state.tr_X,
-                primal_obj=modified_sdp_state.primal_obj,
-                SCALE_C=modified_sdp_state.SCALE_C,
-                SCALE_X=modified_sdp_state.SCALE_X,
-                SCALE_A=modified_sdp_state.SCALE_A)
+        modified_sdp_state = copy.deepcopy(end_sdp_state)
+
+        assert self.hparams.sketch_dim == -1
+
+        ## reconstruct from sketch
+        #if self.hparams.sketch_dim > 0:
+        #    E, Lambda = reconstruct_from_sketch(
+        #        self.cold_start_sdp_state.Omega, self.cold_start_sdp_state.P)
+        #    tr_offset = (self.cold_start_sdp_state.tr_X - jnp.sum(Lambda)) / Lambda.shape[0]
+        #    Lambda_tr_correct = Lambda + tr_offset
+        #    point_embeds = E * jnp.sqrt(Lambda_tr_correct)[None, :]
+        #    modified_sdp_state = SDPState(
+        #        C=modified_sdp_state.C,
+        #        A_indices=modified_sdp_state.A_indices,
+        #        A_data=modified_sdp_state.A_data,
+        #        b=modified_sdp_state.b,
+        #        b_ineq_mask=modified_sdp_state.b_ineq_mask,
+        #        X=(point_embeds @ point_embeds.T),
+        #        P=modified_sdp_state.P,
+        #        Omega=modified_sdp_state.Omega,
+        #        y=modified_sdp_state.y,
+        #        z=modified_sdp_state.z,
+        #        tr_X=modified_sdp_state.tr_X,
+        #        primal_obj=modified_sdp_state.primal_obj,
+        #        SCALE_C=modified_sdp_state.SCALE_C,
+        #        SCALE_X=modified_sdp_state.SCALE_X,
+        #        SCALE_A=modified_sdp_state.SCALE_A)
 
         unscaled_state = unscale_sdp_state(modified_sdp_state)
-        sdp_obj_value = float(jnp.trace(-unscaled_state.C @ unscaled_state.X))
+        sdp_obj_value = float(jnp.trace(unscaled_state.C @ jnp.triu(unscaled_state.X, k=1)))
         pw_probs = np.array(jnp.clip(unscaled_state.X, a_min=0.0, a_max=1.0))
         
-        return sdp_obj_value, pw_probs
+        return end_sdp_state, sdp_obj_value, pw_probs
 
     def build_trellis(self, pw_probs: np.ndarray):
         t = Trellis(adj_mx=pw_probs)
@@ -383,30 +393,126 @@ class EccClusterer(object):
 
     def pred(self):
         num_ecc = len(self.ecc_constraints)
+        sdp_state = copy.deepcopy(self.cold_start_sdp_state)
 
-        # TODO: branch and bound here
+        @dataclass
+        class BnBNode:
+            forced_variables: dict
+            warm_start_state: SDPState
 
-        # Construct and solve SDP
-        start_solve_time = time.time()
-        sdp_obj_value, pw_probs = self.build_and_solve_sdp()
-        end_solve_time = time.time()
+        bnb_leaves = deque([BnBNode({}, sdp_state)])
+        pred_clustering = None
+        best_cut_obj_value = -np.inf
+        num_ecc_satisfied = 0
 
-        if len(self.ecc_constraints) > 0:
-            embed()
-            exit()
+        while len(bnb_leaves) > 0:
+            # Get the next BnB node
+            bnb_node = bnb_leaves.popleft()
+            partial_var_map = bnb_node.forced_variables
+            sdp_state = bnb_node.warm_start_state
 
-        # Build trellis
-        t = self.build_trellis(pw_probs)
+            # Construct and solve SDP
+            start_solve_time = time.time()
+            _sdp_state, _sdp_obj_value, _pw_probs = self.build_and_solve_sdp(sdp_state)
+            end_solve_time = time.time()
 
-        # Cut trellis
-        pred_clustering, cut_obj_value, num_ecc_satisfied = self.cut_trellis(t)
+            if len(partial_var_map.items()) == 0:
+                self.cold_start_sdp_state = _sdp_state
 
+            # Build trellis
+            t = self.build_trellis(_pw_probs)
+
+            # Cut trellis
+            _pred_clustering, _cut_obj_value, _num_ecc_satisfied = self.cut_trellis(t)
+
+            if len(partial_var_map) > 0:
+                embed()
+                exit()
+
+            # if there's no need to branch, just exit
+            if len(self.mixed_var_map) == 0:
+                pred_clustering = _pred_clustering
+                best_cut_obj_value = _cut_obj_value
+                sdp_obj_value = _sdp_obj_value
+                num_ecc_satisfied = _num_ecc_satisfied
+                break
+
+            if _num_ecc_satisfied == num_ecc:
+                if _cut_obj_value > best_cut_obj_value:
+                    best_cut_obj_value = _cut_obj_value
+                    pred_clustering = _pred_clustering
+                    num_ecc_satisfied = _num_ecc_satisfied
+                    sdp_obj_value = _sdp_obj_value
+
+            if _sdp_obj_value * (1+self.hparams.obj_gap_eps) >= best_cut_obj_value:
+                # only branch if there is a possibility of being better
+                for key, index_list in self.mixed_var_map.items():
+                    if key not in partial_var_map:
+                        for i in index_list:
+                            _updated_partial_var_map = copy.deepcopy(partial_var_map)
+                            _updated_partial_var_map[key] = i
+
+                            _unscaled_state = unscale_sdp_state(_sdp_state)
+                            _b_new = _unscaled_state.b.at[i].set(-1.0)
+
+                            # Update C
+                            _scaling_factor = 100.0
+                            _rows = jnp.where(_unscaled_state.A_indices == i)[0]
+                            _updated_C_indices = jnp.concatenate([
+                                _unscaled_state.C.indices,
+                                _unscaled_state.A_indices[_rows][:,1:]])
+                            _updated_C_data = jnp.concatenate([
+                                _unscaled_state.C.data,
+                                _scaling_factor * jnp.ones_like(_rows)])
+                            _C_new = BCOO((_updated_C_data, _updated_C_indices),
+                                          shape=_unscaled_state.C.shape)
+
+                            # Update primal_obj
+                            _primal_obj_new = jnp.trace(_C_new @ _unscaled_state.X)
+
+                            #_updated_sdp_state = SDPState(
+                            #        C=_C_new,
+                            #        A_indices=_unscaled_state.A_indices,
+                            #        A_data=_unscaled_state.A_data,
+                            #        b=_b_new,
+                            #        b_ineq_mask=_unscaled_state.b_ineq_mask,
+                            #        X=_unscaled_state.X,
+                            #        P=_unscaled_state.P,
+                            #        Omega=_unscaled_state.Omega,
+                            #        y=_unscaled_state.y.at[i].set(10.0 * _sdp_state.SCALE_X),
+                            #        z=_unscaled_state.z,
+                            #        tr_X=_unscaled_state.tr_X,
+                            #        primal_obj=_primal_obj_new,
+                            #        SCALE_C=_unscaled_state.SCALE_C,
+                            #        SCALE_X=_unscaled_state.SCALE_X,
+                            #        SCALE_A=_unscaled_state.SCALE_A)
+                            _updated_sdp_state = SDPState(
+                                    C=_C_new,
+                                    A_indices=_unscaled_state.A_indices,
+                                    A_data=_unscaled_state.A_data,
+                                    b=_b_new,
+                                    b_ineq_mask=_unscaled_state.b_ineq_mask,
+                                    X=jnp.zeros_like(_unscaled_state.X),
+                                    P=_unscaled_state.P,
+                                    Omega=_unscaled_state.Omega,
+                                    y=jnp.zeros_like(_unscaled_state.y),
+                                    z=jnp.zeros_like(_unscaled_state.z),
+                                    tr_X=0.0 * _unscaled_state.tr_X,
+                                    primal_obj=0.0 * _primal_obj_new,
+                                    SCALE_C=_unscaled_state.SCALE_C,
+                                    SCALE_X=_unscaled_state.SCALE_X,
+                                    SCALE_A=_unscaled_state.SCALE_A)
+                            bnb_leaves.append(
+                                BnBNode(_updated_partial_var_map,
+                                        scale_sdp_state(_updated_sdp_state))) 
+
+        assert pred_clustering is not None
         self.prev_pred_clusters = pred_clustering
 
         metrics = {
                 'sdp_solve_time': end_solve_time - start_solve_time,
                 'sdp_obj_value': sdp_obj_value,
-                'cut_obj_value': cut_obj_value,
+                'cut_obj_value': best_cut_obj_value,
                 'num_ecc_satisfied': int(num_ecc_satisfied),
                 'num_ecc': num_ecc,
                 'frac_ecc_satisfied': num_ecc_satisfied / num_ecc
