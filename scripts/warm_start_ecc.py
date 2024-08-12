@@ -398,9 +398,10 @@ class EccClusterer(object):
         @dataclass
         class BnBNode:
             forced_variables: dict
+            cold_start_state: SDPState
             warm_start_state: SDPState
 
-        bnb_leaves = deque([BnBNode({}, sdp_state)])
+        bnb_leaves = deque([BnBNode({}, sdp_state, None)])
         pred_clustering = None
         best_cut_obj_value = -np.inf
         num_ecc_satisfied = 0
@@ -409,12 +410,21 @@ class EccClusterer(object):
             # Get the next BnB node
             bnb_node = bnb_leaves.popleft()
             partial_var_map = bnb_node.forced_variables
-            sdp_state = bnb_node.warm_start_state
+            cold_sdp_state = bnb_node.cold_start_state
+            warm_sdp_state = bnb_node.warm_start_state
 
             # Construct and solve SDP
-            start_solve_time = time.time()
-            _sdp_state, _sdp_obj_value, _pw_probs = self.build_and_solve_sdp(sdp_state)
-            end_solve_time = time.time()
+            cold_start_solve_time = time.time()
+            _sdp_state, _sdp_obj_value, _pw_probs = self.build_and_solve_sdp(cold_sdp_state)
+            cold_end_solve_time = time.time()
+
+            if warm_sdp_state is not None:
+                warm_start_solve_time = time.time()
+                _sdp_state, _sdp_obj_value, _pw_probs = self.build_and_solve_sdp(warm_sdp_state)
+                warm_end_solve_time = time.time()
+
+                print("cold time: ", cold_end_solve_time - cold_start_solve_time)
+                print("warm time: ", warm_end_solve_time - warm_start_solve_time)
 
             if len(partial_var_map.items()) == 0:
                 self.cold_start_sdp_state = _sdp_state
@@ -425,9 +435,9 @@ class EccClusterer(object):
             # Cut trellis
             _pred_clustering, _cut_obj_value, _num_ecc_satisfied = self.cut_trellis(t)
 
-            if len(partial_var_map) > 0:
-                embed()
-                exit()
+            #if len(partial_var_map) > 0:
+            #    embed()
+            #    exit()
 
             # if there's no need to branch, just exit
             if len(self.mixed_var_map) == 0:
@@ -456,7 +466,8 @@ class EccClusterer(object):
                             _b_new = _unscaled_state.b.at[i].set(-1.0)
 
                             # Update C
-                            _scaling_factor = 100.0
+                            #_scaling_factor = 100.0 # works
+                            _scaling_factor = 0.0
                             _rows = jnp.where(_unscaled_state.A_indices == i)[0]
                             _updated_C_indices = jnp.concatenate([
                                 _unscaled_state.C.indices,
@@ -470,23 +481,23 @@ class EccClusterer(object):
                             # Update primal_obj
                             _primal_obj_new = jnp.trace(_C_new @ _unscaled_state.X)
 
-                            #_updated_sdp_state = SDPState(
-                            #        C=_C_new,
-                            #        A_indices=_unscaled_state.A_indices,
-                            #        A_data=_unscaled_state.A_data,
-                            #        b=_b_new,
-                            #        b_ineq_mask=_unscaled_state.b_ineq_mask,
-                            #        X=_unscaled_state.X,
-                            #        P=_unscaled_state.P,
-                            #        Omega=_unscaled_state.Omega,
-                            #        y=_unscaled_state.y.at[i].set(10.0 * _sdp_state.SCALE_X),
-                            #        z=_unscaled_state.z,
-                            #        tr_X=_unscaled_state.tr_X,
-                            #        primal_obj=_primal_obj_new,
-                            #        SCALE_C=_unscaled_state.SCALE_C,
-                            #        SCALE_X=_unscaled_state.SCALE_X,
-                            #        SCALE_A=_unscaled_state.SCALE_A)
-                            _updated_sdp_state = SDPState(
+                            warm_updated_sdp_state = SDPState(
+                                    C=_C_new,
+                                    A_indices=_unscaled_state.A_indices,
+                                    A_data=_unscaled_state.A_data,
+                                    b=_b_new,
+                                    b_ineq_mask=_unscaled_state.b_ineq_mask,
+                                    X=_unscaled_state.X,
+                                    P=_unscaled_state.P,
+                                    Omega=_unscaled_state.Omega,
+                                    y=_unscaled_state.y.at[i].set(1.0),
+                                    z=_unscaled_state.z,
+                                    tr_X=_unscaled_state.tr_X,
+                                    primal_obj=_primal_obj_new,
+                                    SCALE_C=_unscaled_state.SCALE_C,
+                                    SCALE_X=_unscaled_state.SCALE_X,
+                                    SCALE_A=_unscaled_state.SCALE_A)
+                            cold_updated_sdp_state = SDPState(
                                     C=_C_new,
                                     A_indices=_unscaled_state.A_indices,
                                     A_data=_unscaled_state.A_data,
@@ -504,13 +515,14 @@ class EccClusterer(object):
                                     SCALE_A=_unscaled_state.SCALE_A)
                             bnb_leaves.append(
                                 BnBNode(_updated_partial_var_map,
-                                        scale_sdp_state(_updated_sdp_state))) 
+                                        scale_sdp_state(cold_updated_sdp_state),
+                                        scale_sdp_state(warm_updated_sdp_state))) 
 
         assert pred_clustering is not None
         self.prev_pred_clusters = pred_clustering
 
         metrics = {
-                'sdp_solve_time': end_solve_time - start_solve_time,
+                'sdp_solve_time': cold_end_solve_time - cold_start_solve_time,
                 'sdp_obj_value': sdp_obj_value,
                 'cut_obj_value': best_cut_obj_value,
                 'num_ecc_satisfied': int(num_ecc_satisfied),
