@@ -435,10 +435,6 @@ class EccClusterer(object):
             # Cut trellis
             _pred_clustering, _cut_obj_value, _num_ecc_satisfied = self.cut_trellis(t)
 
-            #if len(partial_var_map) > 0:
-            #    embed()
-            #    exit()
-
             # if there's no need to branch, just exit
             if len(self.mixed_var_map) == 0:
                 pred_clustering = _pred_clustering
@@ -449,6 +445,7 @@ class EccClusterer(object):
 
             if _num_ecc_satisfied == num_ecc:
                 if _cut_obj_value > best_cut_obj_value:
+                    print("updating best cut: ", best_cut_obj_value, _cut_obj_value)
                     best_cut_obj_value = _cut_obj_value
                     pred_clustering = _pred_clustering
                     num_ecc_satisfied = _num_ecc_satisfied
@@ -517,6 +514,9 @@ class EccClusterer(object):
                                 BnBNode(_updated_partial_var_map,
                                         scale_sdp_state(cold_updated_sdp_state),
                                         scale_sdp_state(warm_updated_sdp_state))) 
+            else:
+                print("trimming branches here: ",  self.mixed_var_map, partial_var_map)
+
 
         assert pred_clustering is not None
         self.prev_pred_clusters = pred_clustering
