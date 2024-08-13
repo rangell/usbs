@@ -20,6 +20,7 @@ import numpy as np
 from scipy.sparse import csr_matrix, coo_matrix, dok_matrix
 from scipy.sparse import triu as sparse_triu
 from scipy.sparse import vstack as sp_vstack
+from scipy.special import softmax
 from sklearn.metrics import adjusted_rand_score as rand_idx
 from sklearn.metrics import homogeneity_completeness_v_measure as cluster_f1
 
@@ -696,9 +697,14 @@ def gen_ecc_constraint(point_feats: csr_matrix,
             np.sort(gold_and_pred),
             gold_and_pred_sfc
     )
-    sampled_overlap_feats = np.where(gold_and_pred_sfc == 1.0)[0]
-    np.random.shuffle(sampled_overlap_feats)
-    sampled_overlap_feats = sampled_overlap_feats[:max_overlap_feats]
+    #sampled_overlap_feats = np.where(gold_and_pred_sfc == 1.0)[0]
+    #np.random.shuffle(sampled_overlap_feats)
+    #sampled_overlap_feats = sampled_overlap_feats[:max_overlap_feats]
+
+    sampled_overlap_feats = np.random.choice(
+        np.arange(gold_and_pred_sfc.shape[0]),
+        size=max_overlap_feats,
+        p=softmax(gold_and_pred_sfc))
 
     # now onto postive feats
     sampled_pos_feats = []
@@ -713,7 +719,11 @@ def gen_ecc_constraint(point_feats: csr_matrix,
                 np.sort(gold_not_pred[pred_cluster_mask]),
                 gold_not_pred_sfc
         )
-        _sampled_pos_feats = np.where(gold_not_pred_sfc == np.max(gold_not_pred_sfc))[0]
+        #_sampled_pos_feats = np.where(gold_not_pred_sfc == np.max(gold_not_pred_sfc))[0]
+        _sampled_pos_feats = np.random.choice(
+            np.arange(gold_not_pred_sfc.shape[0]),
+            size=1,
+            p=softmax(gold_not_pred_sfc))
         sampled_pos_feats.append(_sampled_pos_feats[0])
     sampled_pos_feats = np.asarray(sampled_pos_feats)
 
@@ -730,7 +740,11 @@ def gen_ecc_constraint(point_feats: csr_matrix,
                 np.sort(pred_not_gold[pred_cluster_mask]),
                 pred_not_gold_sfc
         )
-        _sampled_neg_feats = np.where(pred_not_gold_sfc == np.max(pred_not_gold_sfc))[0]
+        #_sampled_neg_feats = np.where(pred_not_gold_sfc == np.max(pred_not_gold_sfc))[0]
+        _sampled_neg_feats = np.random.choice(
+            np.arange(pred_not_gold_sfc.shape[0]),
+            size=1,
+            p=softmax(pred_not_gold_sfc))
         sampled_neg_feats.append(_sampled_neg_feats[0])
     sampled_neg_feats = np.asarray(sampled_neg_feats)
 
